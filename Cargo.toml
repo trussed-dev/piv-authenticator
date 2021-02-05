@@ -1,0 +1,31 @@
+[package]
+name = "piv-authenticator"
+version = "0.0.0-unreleased"
+authors = ["Nicolas Stalder <n@stalder.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+apdu-dispatch = { path = "../apdu-dispatch" }
+delog = "0.1.0-alpha.3"
+heapless = "0.5.6"
+heapless-bytes = "0.1.0"
+interchange = "0.1.0"
+iso7816 = { path = "../iso7816" }
+serde = { version = "1.0", default-features = false }
+trussed = { git = "ssh://git@github.com/trussed-dev/trussed.git", branch = "main" }
+untrusted = "0.7.1"
+
+[features]
+default = []
+
+log-all = []
+log-none = []
+log-info = []
+log-debug = []
+log-warn = []
+log-error = []
+
+[patch.crates-io]
+heapless = { git = "https://github.com/nickray/heapless", branch = "nickray-udebug" }

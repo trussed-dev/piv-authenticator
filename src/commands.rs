@@ -6,8 +6,8 @@
 use core::convert::{TryFrom, TryInto};
 
 // use flexiber::Decodable;
+use heapless::ArrayLength;
 use iso7816::{Instruction, Status};
-use apdu_dispatch::{Command as IsoCommand, command::Data};
 
 pub use crate::{container as containers, piv_types, Pin, Puk};
 
@@ -43,7 +43,7 @@ impl<'l> Command<'l> {
     /// Core method, constructs a PIV command, if the iso7816::Command is valid.
     ///
     /// Inherent method re-exposing the `TryFrom` implementation.
-    pub fn try_from(command: &'l IsoCommand) -> Result<Self, Status> {
+    pub fn try_from<C: ArrayLength<u8>>(command: &'l iso7816::Command<C>) -> Result<Self, Status> {
         command.try_into()
     }
 }
@@ -54,12 +54,12 @@ pub struct Select<'l> {
     pub aid: &'l [u8],
 }
 
-impl<'l> TryFrom<&'l Data> for Select<'l> {
+impl<'l> TryFrom<&'l [u8]> for Select<'l> {
     type Error = Status;
     /// We allow ourselves the option of answering to more than just the official PIV AID.
     /// For instance, to offer additional functionality, under our own RID.
-    fn try_from(data: &'l Data) -> Result<Self, Self::Error> {
-        Ok(match data.as_slice() {
+    fn try_from(data: &'l [u8]) -> Result<Self, Self::Error> {
+        Ok(match data {
             crate::constants::PIV_AID => Self { aid: data },
             _ => return Err(Status::NotFound),
         })
@@ -70,9 +70,9 @@ impl<'l> TryFrom<&'l Data> for Select<'l> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GetData(containers::Container);
 
-impl TryFrom<&Data> for GetData {
+impl TryFrom<&[u8]> for GetData {
     type Error = Status;
-    fn try_from(data: &Data) -> Result<Self, Self::Error> {
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         let mut decoder = flexiber::Decoder::new(data);
         let tagged_slice: flexiber::TaggedSlice = decoder.decode().map_err(|_| Status::IncorrectDataParameter)?;
         if tagged_slice.tag() != flexiber::Tag::application(0x1C) {
@@ -135,7 +135,7 @@ impl TryFrom<u8> for VerifyLogout {
 pub struct VerifyArguments<'l> {
     pub key_reference: VerifyKeyReference,
     pub logout: VerifyLogout,
-    pub data: &'l Data
+    pub data: &'l [u8],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -161,7 +161,7 @@ impl TryFrom<VerifyArguments<'_>> for Verify {
         }
         Ok(match (logout.0, data.len()) {
             (false, 0) => Verify::Status(key_reference),
-            (false, 8) => Verify::Login(VerifyLogin::PivPin(data.as_slice().try_into().map_err(|_| Status::IncorrectDataParameter)?)),
+            (false, 8) => Verify::Login(VerifyLogin::PivPin(data.try_into().map_err(|_| Status::IncorrectDataParameter)?)),
             (false, _) => return Err(Status::IncorrectDataParameter),
             (true, 0) => Verify::Logout(key_reference),
             (true, _) => return Err(Status::IncorrectDataParameter),
@@ -192,7 +192,7 @@ impl TryFrom<u8> for ChangeReferenceKeyReference {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChangeReferenceArguments<'l> {
     pub key_reference: ChangeReferenceKeyReference,
-    pub data: &'l Data
+    pub data: &'l [u8],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -232,9 +232,9 @@ pub struct ResetPinRetries {
     pub puk: [u8;  8],
 }
 
-impl TryFrom<&Data> for ResetPinRetries {
+impl TryFrom<&[u8]> for ResetPinRetries {
     type Error = Status;
-    fn try_from(data: &Data) -> Result<Self, Self::Error> {
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         if data.len() != 16 {
             return Err(Status::IncorrectDataParameter);
         }
@@ -317,7 +317,7 @@ pub struct AuthenticateArguments<'l> {
     /// this is passed through as-is.
     pub unparsed_algorithm: u8,
     pub key_reference: AuthenticateKeyReference,
-    pub data: &'l Data
+    pub data: &'l [u8],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -326,7 +326,7 @@ pub enum Authenticate {
 
 impl TryFrom<AuthenticateArguments<'_>> for Authenticate {
     type Error = Status;
-    fn try_from(arguments: AuthenticateArguments<'_>) -> Result<Self, Self::Error> {
+    fn try_from(_arguments: AuthenticateArguments<'_>) -> Result<Self, Self::Error> {
         todo!();
     }
 }
@@ -335,9 +335,9 @@ impl TryFrom<AuthenticateArguments<'_>> for Authenticate {
 pub struct PutData {
 }
 
-impl TryFrom<&Data> for PutData {
+impl TryFrom<&[u8]> for PutData {
     type Error = Status;
-    fn try_from(data: &Data) -> Result<Self, Self::Error> {
+    fn try_from(_data: &[u8]) -> Result<Self, Self::Error> {
         todo!();
     }
 }
@@ -369,7 +369,7 @@ impl TryFrom<u8> for GenerateAsymmetricKeyReference {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GenerateAsymmetricArguments<'l> {
     pub key_reference: GenerateAsymmetricKeyReference,
-    pub data: &'l Data
+    pub data: &'l [u8],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -378,12 +378,12 @@ pub enum GenerateAsymmetric {
 
 impl TryFrom<GenerateAsymmetricArguments<'_>> for GenerateAsymmetric {
     type Error = Status;
-    fn try_from(arguments: GenerateAsymmetricArguments<'_>) -> Result<Self, Self::Error> {
+    fn try_from(_arguments: GenerateAsymmetricArguments<'_>) -> Result<Self, Self::Error> {
         todo!();
     }
 }
 
-impl<'l> TryFrom<&'l IsoCommand> for Command<'l> {
+impl<'l, C: ArrayLength<u8>> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
     type Error = Status;
     /// The first layer of unraveling the iso7816::Command onion.
     ///
@@ -391,7 +391,7 @@ impl<'l> TryFrom<&'l IsoCommand> for Command<'l> {
     /// in the "Command Syntax" boxes of NIST SP 800-73-4, and return early errors.
     ///
     /// The individual piv::Command TryFroms then further interpret these validated parameters.
-    fn try_from(command: &'l IsoCommand) -> Result<Self, Self::Error> {
+    fn try_from(command: &'l iso7816::Command<C>) -> Result<Self, Self::Error> {
         let (class, instruction, p1, p2) = (command.class(), command.instruction(), command.p1, command.p2);
         let data = command.data();
 
@@ -408,11 +408,11 @@ impl<'l> TryFrom<&'l IsoCommand> for Command<'l> {
         Ok(match (class.into_inner(), instruction, p1, p2) {
 
             (0x00, Instruction::Select, 0x04, 0x00) => {
-                Self::Select(Select::try_from(data)?)
+                Self::Select(Select::try_from(data.as_slice())?)
             }
 
             (0x00, Instruction::GetData, 0x3F, 0xFF) => {
-                Self::GetData(GetData::try_from(data)?.0)
+                Self::GetData(GetData::try_from(data.as_slice())?.0)
             }
 
             (0x00, Instruction::Verify, p1, p2) => {
@@ -427,7 +427,7 @@ impl<'l> TryFrom<&'l IsoCommand> for Command<'l> {
             }
 
             (0x00, Instruction::ResetRetryCounter, 0x00, 0x80) => {
-                Self::ResetPinRetries(ResetPinRetries::try_from(data)?)
+                Self::ResetPinRetries(ResetPinRetries::try_from(data.as_slice())?)
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
@@ -437,7 +437,7 @@ impl<'l> TryFrom<&'l IsoCommand> for Command<'l> {
             }
 
             (0x00, Instruction::PutData, 0x3F, 0xFF) => {
-                Self::PutData(PutData::try_from(data)?)
+                Self::PutData(PutData::try_from(data.as_slice())?)
             }
 
             (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {

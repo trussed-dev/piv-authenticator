@@ -19,8 +19,8 @@ pub use piv_types::{Pin, Puk};
 use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
-use iso7816::Status;
-use apdu_dispatch::{Command as IsoCommand, response};
+use heapless::ArrayLength;
+use iso7816::{Data, Status};
 use trussed::client;
 use trussed::{syscall, try_syscall};
 
@@ -28,15 +28,23 @@ use constants::*;
 
 pub type Result = iso7816::Result<()>;
 
-pub struct Authenticator<T>
+/// PIV authenticator Trussed app.
+///
+/// The `C` parameter is necessary, as PIV includes command sequences,
+/// where we need to store the previous command, so we need to know how
+/// much space to allocate.
+pub struct Authenticator<C, T>
+where
+    C: ArrayLength<u8>,
 {
-    state: state::State,
+    state: state::State<C>,
     trussed: T,
     // trussed: RefCell<Trussed>,
 }
 
-impl<T> Authenticator<T>
+impl<C, T> Authenticator<C, T>
 where
+    C: ArrayLength<u8>,
     T: client::Client + client::Ed255 + client::Tdes,
 {
     pub fn new(
@@ -59,7 +67,11 @@ where
     pub fn deselect(&mut self) {
     }
 
-    pub fn select(&mut self, _apdu: &IsoCommand, reply: &mut response::Data) -> Result {
+    pub fn select<R>(&mut self, _apdu: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+
+    {
         use piv_types::Algorithms::*;
         info_now!("selecting PIV maybe");
 
@@ -79,8 +91,12 @@ where
         Ok(())
     }
 
-    pub fn respond(&mut self, command: &IsoCommand, reply: &mut response::Data) -> Result {
-        info_now!("PIV responding to {:?}", command);
+    pub fn respond<R>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
+        // need to implement Debug on iso7816::Command
+        // info_now!("PIV responding to {:?}", command);
         let last_or_only = command.class().chain().last_or_only();
 
         // TODO: avoid owned copy?
@@ -100,7 +116,7 @@ where
 
             None => {
                 if last_or_only {
-                    // IsoCommand
+                    // iso7816::Command<C>
                     command.clone()
                 } else {
                     self.state.runtime.chained_command = Some(command.clone());
@@ -216,7 +232,7 @@ where
         return Ok(Default::default());
     }
 
-    // pub fn old_respond(&mut self, command: &IsoCommand, reply: &mut response::Data) -> Result {
+    // pub fn old_respond(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result {
 
     //     // TEMP
     //     // blocking::dbg!(self.state.persistent(&mut self.trussed).timestamp(&mut self.trussed));
@@ -246,7 +262,7 @@ where
 
     //         None => {
     //             if last_or_only {
-    //                 // IsoCommand
+    //                 // iso7816::Command<C>
     //                 command.clone()
     //             } else {
     //                 self.state.runtime.chained_command = Some(command.clone());
@@ -325,7 +341,10 @@ where
     // - 9000, 61XX for success
     // - 6982 security status
     // - 6A80, 6A86 for data, P1/P2 issue
-    fn general_authenticate(&mut self, command: &IsoCommand, reply: &mut response::Data) -> Result {
+    fn general_authenticate<R>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
 
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
         //
@@ -435,7 +454,10 @@ where
         Ok(())
     }
 
-    fn request_for_challenge(&mut self, command: &IsoCommand, remaining_data: &[u8], reply: &mut response::Data) -> Result {
+    fn request_for_challenge<R>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
         // - data is of the form
         //     00 87 03 9B 16 7C 14 80 08 99 6D 71 40 E7 05 DF 7F 81 08 6E EF 9C 02 00 69 73 E8
         // - remaining data contains <decrypted challenge> 81 08 <encrypted counter challenge>
@@ -486,7 +508,10 @@ where
         Ok(())
     }
 
-    fn request_for_witness(&mut self, command: &IsoCommand, remaining_data: &[u8], reply: &mut response::Data) -> Result {
+    fn request_for_witness<R>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
         // invariants: parsed data was '7C L1 80 00' + remaining_data
 
         if command.p1 != 0x03 || command.p2 != 0x9b {
@@ -661,7 +686,10 @@ where
     //    }
     //}
 
-    fn generate_asymmetric_keypair(&mut self, command: &IsoCommand, reply: &mut response::Data) -> Result {
+    fn generate_asymmetric_keypair<R>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
         if !self.state.runtime.app_security_status.management_verified {
             return Err(Status::SecurityStatusNotSatisfied);
         }
@@ -784,7 +812,7 @@ where
         Ok(())
     }
 
-    fn put_data(&mut self, command: &IsoCommand) -> Result {
+    fn put_data(&mut self, command: &iso7816::Command<C>) -> Result {
         info_now!("PutData");
         if command.p1 != 0x3f || command.p2 != 0xff {
             return Err(Status::IncorrectP1OrP2Parameter);
@@ -878,7 +906,10 @@ where
         // }
         // todo!();
 
-    fn get_data(&mut self, container: container::Container, reply: &mut response::Data) -> Result {
+    fn get_data<R>(&mut self, container: container::Container, reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
 
         // TODO: check security status, else return Status::SecurityStatusNotSatisfied
 
@@ -888,8 +919,7 @@ where
         match container {
             Container::DiscoveryObject => {
                 // Err(Status::InstructionNotSupportedOrInvalid)
-                let data = response::Data::try_from_slice(DISCOVERY_OBJECT).unwrap();
-                reply.extend_from_slice(&data).ok();
+                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
                 // todo!("discovery object"),
             }
 
@@ -934,7 +964,7 @@ where
 
             // // '5F FF01' (754B)
             // YubicoObjects::AttestationCertificate => {
-            //     let data = response::Data::try_from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
+            //     let data = Data<R>::try_from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
             //     reply.extend_from_slice(&data).ok();
             // }
 
@@ -943,21 +973,22 @@ where
         Ok(())
     }
 
-    fn yubico_piv_extension(&mut self, command: &IsoCommand, instruction: YubicoPivExtension, reply: &mut response::Data) -> Result {
+    fn yubico_piv_extension<R>(&mut self, command: &iso7816::Command<C>, instruction: YubicoPivExtension, reply: &mut Data<R>) -> Result
+    where
+        R: ArrayLength<u8>,
+    {
         info_now!("yubico extension: {:?}", &instruction);
         match instruction {
             YubicoPivExtension::GetSerial => {
                 // make up a 4-byte serial
-                let data = response::Data::try_from_slice(
-                    &[0x00, 0x52, 0xf7, 0x43]).unwrap();
-                reply.extend_from_slice(&data).ok();
+                reply.extend_from_slice(
+                    &[0x00, 0x52, 0xf7, 0x43]).ok();
             }
 
             YubicoPivExtension::GetVersion => {
                 // make up a version, be >= 5.0.0
-                let data = response::Data::try_from_slice(
-                    &[0x06, 0x06, 0x06]).unwrap();
-                reply.extend_from_slice(&data).ok();
+                reply.extend_from_slice(
+                    &[0x06, 0x06, 0x06]).ok();
             }
 
             YubicoPivExtension::Attest => {
@@ -968,8 +999,7 @@ where
                 let slot = command.p1;
 
                 if slot == 0x9a {
-                    let data = response::Data::try_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A).unwrap();
-                    reply.extend_from_slice(&data).ok();
+                    reply.extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A).ok();
                 } else {
 
                     return Err(Status::FunctionNotSupported)
@@ -1040,7 +1070,7 @@ where
 
 
 #[cfg(feature = "apdu-dispatch")]
-impl<T> apdu_dispatch::app::Aid for Authenticator<T> {
+impl<T> apdu_dispatch::app::Aid for Authenticator<apdu_dispatch::command::Size, T> {
 
     fn aid(&self) -> &'static [u8] {
         &constants::PIV_AID
@@ -1053,17 +1083,17 @@ impl<T> apdu_dispatch::app::Aid for Authenticator<T> {
 
 
 #[cfg(feature = "apdu-dispatch")]
-impl<T> apdu_dispatch::app::App<apdu_dispatch::command::Size, apdu_dispatch::response::Size> for Authenticator<T>
+impl<T> apdu_dispatch::app::App<apdu_dispatch::command::Size, apdu_dispatch::response::Size> for Authenticator<apdu_dispatch::command::Size, T>
 where
     T: client::Client + client::Ed255 + client::Tdes
 {
-    fn select(&mut self, apdu: &IsoCommand, reply: &mut response::Data) -> Result {
+    fn select(&mut self, apdu: &apdu_dispatch::Command, reply: &mut apdu_dispatch::response::Data) -> Result {
         self.select(apdu, reply)
     }
 
     fn deselect(&mut self) { self.deselect() }
 
-    fn call(&mut self, _: iso7816::Interface, apdu: &IsoCommand, reply: &mut response::Data) -> Result {
+    fn call(&mut self, _: iso7816::Interface, apdu: &apdu_dispatch::Command, reply: &mut apdu_dispatch::response::Data) -> Result {
         self.respond(apdu, reply)
     }
 }

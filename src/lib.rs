@@ -16,6 +16,9 @@ pub mod derp;
 pub mod piv_types;
 pub use piv_types::{Pin, Puk};
 
+#[cfg(feature = "apdu-dispatch")]
+mod apdu_dispatch;
+
 use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
@@ -1069,31 +1072,3 @@ where
 }
 
 
-#[cfg(feature = "apdu-dispatch")]
-impl<T> apdu_dispatch::app::Aid for Authenticator<apdu_dispatch::command::Size, T> {
-
-    fn aid(&self) -> &'static [u8] {
-        &constants::PIV_AID
-    }
-
-    fn right_truncated_length(&self) -> usize {
-        11
-    }
-}
-
-
-#[cfg(feature = "apdu-dispatch")]
-impl<T> apdu_dispatch::app::App<apdu_dispatch::command::Size, apdu_dispatch::response::Size> for Authenticator<apdu_dispatch::command::Size, T>
-where
-    T: client::Client + client::Ed255 + client::Tdes
-{
-    fn select(&mut self, apdu: &apdu_dispatch::Command, reply: &mut apdu_dispatch::response::Data) -> Result {
-        self.select(apdu, reply)
-    }
-
-    fn deselect(&mut self) { self.deselect() }
-
-    fn call(&mut self, _: iso7816::Interface, apdu: &apdu_dispatch::Command, reply: &mut apdu_dispatch::response::Data) -> Result {
-        self.respond(apdu, reply)
-    }
-}

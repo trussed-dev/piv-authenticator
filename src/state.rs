@@ -1,4 +1,5 @@
 use core::convert::{TryFrom, TryInto};
+use heapless::ArrayLength;
 
 use trussed::{
     block,
@@ -139,14 +140,14 @@ pub struct Keys {
 
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct State {
-    pub runtime: Runtime,
+pub struct State<C: ArrayLength<u8>> {
+    pub runtime: Runtime<C>,
     // temporary "state", to be removed again
     // pub hack: Hack,
     // trussed: RefCell<Trussed<S>>,
 }
 
-impl State {
+impl<C: ArrayLength<u8>> State<C> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -234,7 +235,7 @@ impl<T> AsRef<PersistentState> for Persistent<'_, T> {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Runtime {
+pub struct Runtime<C: ArrayLength<u8>> {
     // aid: Option<
     // consecutive_pin_mismatches: u8,
 
@@ -242,7 +243,7 @@ pub struct Runtime {
     pub currently_selected_application: SelectableAid,
     pub app_security_status: AppSecurityStatus,
     pub command_cache: Option<CommandCache>,
-    pub chained_command: Option<apdu_dispatch::Command>,
+    pub chained_command: Option<iso7816::Command<C>>,
 }
 
 pub trait Aid {
@@ -549,8 +550,5 @@ where
         self.state.timestamp
     }
 
-}
-
-impl Runtime {
 }
 

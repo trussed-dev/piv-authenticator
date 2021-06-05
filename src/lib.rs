@@ -11,13 +11,13 @@ pub mod commands;
 pub use commands::Command;
 pub mod constants;
 pub mod container;
+#[cfg(feature = "apdu-dispatch")]
+mod dispatch;
 pub mod state;
 pub mod derp;
 pub mod piv_types;
 pub use piv_types::{Pin, Puk};
 
-#[cfg(feature = "apdu-dispatch")]
-mod apdu_dispatch;
 
 use core::convert::TryInto;
 
@@ -929,6 +929,14 @@ where
             Container::BiometricInformationTemplatesGroupTemplate => {
                 return Err(Status::InstructionNotSupportedOrInvalid)
                 // todo!("biometric information template"),
+            }
+
+            // '5FC1 07' (351B)
+            Container::CardCapabilityContainer => {
+                piv_types::CardCapabilityContainer::default()
+                    .encode_to_heapless_vec(reply)
+                    .unwrap();
+                info_now!("returning CCC {}", hex_str!(reply));
             }
 
             // '5FC1 02' (351B)

@@ -194,55 +194,6 @@ impl TryFrom<Tag<'_>> for Container {
     }
 }
 
-// pub mod container {
-
-    #[derive(Decodable, Encodable)]
-    #[tlv(application, number = "0x13")]
-    pub struct CardHolderUniqueIdentifier {
-        #[tlv(slice, simple = "0x30")]
-        fasc_n: [u8; 25],
-        #[tlv(slice, simple = "0x33")]
-        duns: [u8; 9],
-        #[tlv(slice, simple = "0x34")]
-        guid: [u8; 16],
-        #[tlv(slice, simple = "0x35")]
-        expiration_date: [u8; 8], // YYYYMMDD
-        #[tlv(slice, simple = "0x3E")]
-        issuer_asymmetric_signature: [u8; 1],
-        #[tlv(slice, simple = "0xFE")]
-        error_detection_code: [u8; 0],
-    }
-
-    #[derive(Decodable, Encodable)]
-    #[tlv(application,  number = "0x1E")]  // = 0x7E
-    pub struct DiscoveryObject {
-        #[tlv(slice, application, number = "0xF")]
-        piv_card_application_aid: [u8; 11], // tag: 0x4F, max bytes = 12,
-        #[tlv(slice, application, number = "0x2f")]
-        pin_usage_policy: [u8; 2], // tag: 0x5F2F, max bytes = 2,
-    }
-
-
-            // // '5FC1 02' (351B)
-            // DataObjects::CardHolderUniqueIdentifier => {
-            //     // pivy: https://git.io/JfzBo
-            //     // https://www.idmanagement.gov/wp-content/uploads/sites/1171/uploads/TIG_SCEPACS_v2.3.pdf
-            //     let mut der = Der::<consts::U1024>::default();
-            //     der.nested(0x53, |der| {
-            //         // der.raw_tlv(0x30, FASC_N)?; // pivy: 26B, TIG: 25B
-            //         der.raw_tlv(0x30, &[0x99, 0x99])?; // 9999 = non-federal; pivy: 26B, TIG: 25B
-            //         // der.raw_tlv(0x34, DUNS)?; // ? - pivy skips
-            //         der.raw_tlv(0x34, GUID)?; // 16B type 1,2,4 UUID
-            //         // der.raw_tlv(0x35, EXPIRATION_DATE)?; // [u8; 8], YYYYMMDD
-            //         der.raw_tlv(0x35, b"22220101")?; // [u8; 8], YYYYMMDD
-            //         // der.raw_tlv(0x36, CARDHOLDER_UUID)?; // 16B, like GUID
-            //         // der.raw_tlv(0x3E, SIGNATURE)?; // ? - pivy only checks for non-zero entry
-            //         der.raw_tlv(0x3E, b" ")?; // ? - pivy only checks for non-zero entry
-            //         Ok(())
-            //     }).unwrap();
-
-            //     Ok(der.to_bytes())
-            // }
 
     // #[derive(Clone, Copy, PartialEq)]
     // pub struct CertInfo {

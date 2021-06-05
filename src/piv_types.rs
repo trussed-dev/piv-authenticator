@@ -252,6 +252,23 @@ pub struct CardHolderUniqueIdentifier<'l> {
     error_detection_code: [u8; 0],
 }
 
+// #[derive(Decodable, Encodable)]
+// #[tlv(application, number = "0x13")]
+// pub struct CardHolderUniqueIdentifier {
+//     #[tlv(slice, simple = "0x30")]
+//     fasc_n: [u8; 25],
+//     // #[tlv(slice, simple = "0x33")]
+//     // duns: [u8; 9],
+//     #[tlv(slice, simple = "0x34")]
+//     guid: [u8; 16],
+//     #[tlv(slice, simple = "0x35")]
+//     expiration_date: [u8; 8], // YYYYMMDD
+//     #[tlv(slice, simple = "0x3E")]
+//     issuer_asymmetric_signature: [u8; 1],
+//     #[tlv(slice, simple = "0xFE")]
+//     error_detection_code: [u8; 0],
+// }
+
 impl Default for CardHolderUniqueIdentifier<'static> {
     fn default() -> Self {
         Self {
@@ -274,3 +291,68 @@ impl CardHolderUniqueIdentifier<'_> {
         modified_self
     }
 }
+
+#[derive(Clone, Copy, Encodable, Eq, PartialEq)]
+#[tlv(application, number = "0x13")]
+pub struct CardCapabilityContainer {
+    #[tlv(slice, simple = "0xF0")]
+    card_identifier: [u8; 0],
+    #[tlv(slice, simple = "0xF1")]
+    capability_container_version: [u8; 0],
+    #[tlv(slice, simple = "0xF2")]
+    capability_container_grammar: [u8; 0],
+    #[tlv(slice, simple = "0xF3")]
+    application_card_url: [u8; 0],
+    #[tlv(slice, simple = "0xF4")]
+    pkcs_15: [u8; 0],
+
+    #[tlv(slice, simple = "0xF5")]
+    /// This is the only one that needs
+    /// to be filled, namely with 0x10
+    registered_data_model_number: [u8; 1],
+
+    #[tlv(slice, simple = "0xF6")]
+    access_control_rule_table: [u8; 0],
+    #[tlv(slice, simple = "0xF7")]
+    card_apdus: [u8; 0],
+    #[tlv(slice, simple = "0xFA")]
+    redirection_tag: [u8; 0],
+    #[tlv(slice, simple = "0xFB")]
+    capability_tuples: [u8; 0],
+    #[tlv(slice, simple = "0xFC")]
+    status_tuples: [u8; 0],
+    #[tlv(slice, simple = "0xFD")]
+    next_ccc: [u8; 0],
+    #[tlv(slice, simple = "0xFE")]
+    error_detection_code: [u8; 0],
+}
+
+impl Default for CardCapabilityContainer {
+    fn default() -> Self {
+        Self {
+            card_identifier: [],
+            capability_container_version: [],
+            capability_container_grammar: [],
+            application_card_url: [],
+            pkcs_15: [],
+            registered_data_model_number: [0x10],
+            access_control_rule_table: [],
+            card_apdus: [],
+            redirection_tag: [],
+            capability_tuples: [],
+            status_tuples: [],
+            next_ccc: [],
+            error_detection_code: [],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Encodable, Eq, PartialEq)]
+#[tlv(application, number = "0x13")]
+pub struct DiscoveryObject {
+    #[tlv(slice, application, number = "0xF")]
+    piv_card_application_aid: [u8; 11], // tag: 0x4F, max bytes = 12,
+    #[tlv(slice, application, number = "0x2f")]
+    pin_usage_policy: [u8; 2], // tag: 0x5F2F, max bytes = 2,
+}
+

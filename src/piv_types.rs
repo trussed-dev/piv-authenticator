@@ -53,10 +53,26 @@ impl TryFrom<&[u8]> for Puk {
 #[repr(u8)]
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Algorithms {
+    Tdes = 0x3,
+    Rsa1k = 0x6,
+    Rsa2k = 0x7,
+    Aes128 = 0x8,
+    Aes192 = 0xA,
     Aes256 = 0xC,
     P256 = 0x11,
-    /// non-standard!
+    P384 = 0x14,
+
+    /// non-standard! in piv-go though!
     Ed255 = 0x22,
+    /// non-standard!
+    X255 = 0x23,
+
+    /// non-standard! picked by Alex, but maybe due for removal
+    P256Sha1 = 0xF0,
+    P256Sha256 = 0xF1,
+    P384Sha1 = 0xF2,
+    P384Sha256 = 0xF3,
+    P384Sha384 = 0xF4,
 }
 
 /// TODO:

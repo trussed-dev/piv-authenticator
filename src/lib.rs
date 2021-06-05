@@ -82,9 +82,12 @@ where
             .with_application_label(APPLICATION_LABEL)
             .with_application_url(APPLICATION_URL)
             .with_supported_cryptographic_algorithms(&[
+                Tdes,
+                Aes128,
                 Aes256,
                 P256,
                 Ed255,
+                X255,
             ]);
 
         application_property_template

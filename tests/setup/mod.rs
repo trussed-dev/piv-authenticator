@@ -4,12 +4,15 @@ trussed::platform!(Platform,
     UI: ui::UserInterface,
 );
 
+const COMMAND_SIZE: usize = 3072;
+
 #[macro_export]
 macro_rules! cmd {
-    ($tt:tt) => { iso7816::Command::try_from(&hex_literal::hex!($tt)).unwrap() }
+    ($tt:tt) => { iso7816::Command::<3072>::try_from(&hex_literal::hex!($tt)).unwrap() }
 }
 
-pub type Piv<'service> = piv_authenticator::Authenticator<trussed::ClientImplementation<&'service mut trussed::service::Service<Platform>>>;
+pub type Piv<'service> = piv_authenticator::Authenticator<
+    trussed::ClientImplementation<&'service mut trussed::service::Service<Platform>>, COMMAND_SIZE>;
 
 pub fn piv<R>(test: impl FnOnce(&mut Piv) -> R) -> R {
     use trussed::Interchange as _;
@@ -52,8 +55,7 @@ pub mod ui {
 }
 
 pub mod store {
-    pub use heapless::consts;
-    use littlefs2::{const_ram_storage, fs::{Allocation, Filesystem}};
+    use littlefs2::{const_ram_storage, consts, fs::{Allocation, Filesystem}};
     use trussed::types::{LfsResult, LfsStorage};
 
     const_ram_storage!(InternalStorage, 8192);

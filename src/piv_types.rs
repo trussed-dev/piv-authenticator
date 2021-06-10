@@ -52,6 +52,11 @@ impl TryFrom<&[u8]> for Puk {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Eq, PartialEq)]
+// As additional reference, see:
+// https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
+//
+// This GP ISO standard contains PIV types as subset (although SM is not quite clear),
+// references Opacity ZKM.
 pub enum Algorithms {
     Tdes = 0x3,
     Rsa1k = 0x6,
@@ -62,12 +67,20 @@ pub enum Algorithms {
     P256 = 0x11,
     P384 = 0x14,
 
-    /// non-standard! in piv-go though!
-    Ed255 = 0x22,
-    /// non-standard!
-    X255 = 0x23,
+    // // non-standard! in piv-go though!
+    // Ed255_prev = 0x22,
 
-    /// non-standard! picked by Alex, but maybe due for removal
+    // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
+    P521 = 0x15,
+    // non-standard!
+    Rsa3k = 0xE0,
+    Rsa4k = 0xE1,
+    Ed255 = 0xE2,
+    X255 = 0xE3,
+    Ed448 = 0xE4,
+    X448 = 0xE5,
+
+    // non-standard! picked by Alex, but maybe due for removal
     P256Sha1 = 0xF0,
     P256Sha256 = 0xF1,
     P384Sha1 = 0xF2,

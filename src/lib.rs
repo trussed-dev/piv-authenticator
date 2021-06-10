@@ -22,7 +22,6 @@ pub use piv_types::{Pin, Puk};
 use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
-use heapless::ArrayLength;
 use iso7816::{Data, Status};
 use trussed::client;
 use trussed::{syscall, try_syscall};
@@ -36,18 +35,21 @@ pub type Result = iso7816::Result<()>;
 /// The `C` parameter is necessary, as PIV includes command sequences,
 /// where we need to store the previous command, so we need to know how
 /// much space to allocate.
-pub struct Authenticator<C, T>
-where
-    C: ArrayLength<u8>,
+pub struct Authenticator<T, const C: usize>
 {
     state: state::State<C>,
     trussed: T,
-    // trussed: RefCell<Trussed>,
 }
 
-impl<C, T> Authenticator<C, T>
+impl<T, const C: usize> iso7816::App for Authenticator<T, C>
+{
+    fn aid(&self) -> iso7816::Aid {
+        crate::constants::PIV_AID
+    }
+}
+
+impl<T, const C: usize> Authenticator<T, C>
 where
-    C: ArrayLength<u8>,
     T: client::Client + client::Ed255 + client::Tdes,
 {
     pub fn new(
@@ -70,10 +72,7 @@ where
     pub fn deselect(&mut self) {
     }
 
-    pub fn select<R>(&mut self, _apdu: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
-
+    pub fn select<const R: usize>(&mut self, _apdu: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
     {
         use piv_types::Algorithms::*;
         info_now!("selecting PIV maybe");
@@ -83,7 +82,6 @@ where
             .with_application_url(APPLICATION_URL)
             .with_supported_cryptographic_algorithms(&[
                 Tdes,
-                Aes128,
                 Aes256,
                 P256,
                 Ed255,
@@ -97,9 +95,7 @@ where
         Ok(())
     }
 
-    pub fn respond<R>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    pub fn respond<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
     {
         // need to implement Debug on iso7816::Command
         // info_now!("PIV responding to {:?}", command);
@@ -347,9 +343,7 @@ where
     // - 9000, 61XX for success
     // - 6982 security status
     // - 6A80, 6A86 for data, P1/P2 issue
-    fn general_authenticate<R>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    fn general_authenticate<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
     {
 
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
@@ -460,9 +454,7 @@ where
         Ok(())
     }
 
-    fn request_for_challenge<R>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    fn request_for_challenge<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
     {
         // - data is of the form
         //     00 87 03 9B 16 7C 14 80 08 99 6D 71 40 E7 05 DF 7F 81 08 6E EF 9C 02 00 69 73 E8
@@ -514,9 +506,7 @@ where
         Ok(())
     }
 
-    fn request_for_witness<R>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    fn request_for_witness<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
     {
         // invariants: parsed data was '7C L1 80 00' + remaining_data
 
@@ -692,9 +682,7 @@ where
     //    }
     //}
 
-    fn generate_asymmetric_keypair<R>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    fn generate_asymmetric_keypair<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
     {
         if !self.state.runtime.app_security_status.management_verified {
             return Err(Status::SecurityStatusNotSatisfied);
@@ -868,7 +856,7 @@ where
             try_syscall!(self.trussed.write_file(
                 trussed::types::Location::Internal,
                 trussed::types::PathBuf::from(b"printed-information"),
-                trussed::types::Message::try_from_slice(data).unwrap(),
+                trussed::types::Message::from_slice(data).unwrap(),
                 None,
             )).map_err(|_| Status::NotEnoughMemory)?;
 
@@ -893,7 +881,7 @@ where
             try_syscall!(self.trussed.write_file(
                 trussed::types::Location::Internal,
                 trussed::types::PathBuf::from(b"authentication-key.x5c"),
-                trussed::types::Message::try_from_slice(data).unwrap(),
+                trussed::types::Message::from_slice(data).unwrap(),
                 None,
             )).map_err(|_| Status::NotEnoughMemory)?;
 
@@ -912,9 +900,7 @@ where
         // }
         // todo!();
 
-    fn get_data<R>(&mut self, container: container::Container, reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    fn get_data<const R: usize>(&mut self, container: container::Container, reply: &mut Data<R>) -> Result
     {
 
         // TODO: check security status, else return Status::SecurityStatusNotSatisfied
@@ -978,7 +964,7 @@ where
 
             // // '5F FF01' (754B)
             // YubicoObjects::AttestationCertificate => {
-            //     let data = Data<R>::try_from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
+            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
             //     reply.extend_from_slice(&data).ok();
             // }
 
@@ -987,9 +973,7 @@ where
         Ok(())
     }
 
-    fn yubico_piv_extension<R>(&mut self, command: &iso7816::Command<C>, instruction: YubicoPivExtension, reply: &mut Data<R>) -> Result
-    where
-        R: ArrayLength<u8>,
+    fn yubico_piv_extension<const R: usize>(&mut self, command: &iso7816::Command<C>, instruction: YubicoPivExtension, reply: &mut Data<R>) -> Result
     {
         info_now!("yubico extension: {:?}", &instruction);
         match instruction {

@@ -18,7 +18,8 @@ pub const DERIVED_PIV_PIX: [u8; 6] = hex!("0000 2000 0100");
 
 pub const PIV_TRUNCATED_AID: [u8; 9] = hex!("A000000308 00001000");
 
-pub const PIV_AID: &[u8] = &hex!("A000000308 00001000 0100");
+// pub const PIV_AID: &[u8] = &hex!("A000000308 00001000 0100");
+pub const PIV_AID: iso7816::Aid = iso7816::Aid::new_truncatable(&hex!("A000000308 00001000 0100"), 9);
 
 pub const DERIVED_PIV_AID: [u8; 11] = hex!("A000000308 00002000 0100");
 
@@ -29,7 +30,7 @@ pub const APPLICATION_URL: &[u8] = b"https://github.com/solokeys/piv-authenticat
 
 // https://git.io/JfWuD
 pub const YUBICO_OTP_PIX: [u8; 3] = hex!("200101");
-pub const YUBICO_OTP_AID: [u8; 8] = hex!("A000000527 200101");
+pub const YUBICO_OTP_AID: iso7816::Aid = iso7816::Aid::new(&hex!("A000000527 200101"));
 // they use it to "deauthenticate user PIN and mgmt key": https://git.io/JfWgN
 pub const YUBICO_MGMT_PIX: [u8; 3] = hex!("471117");
 pub const YUBICO_MGMT_AID: [u8; 8] = hex!("A000000527 471117");

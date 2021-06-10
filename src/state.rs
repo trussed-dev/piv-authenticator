@@ -1,5 +1,4 @@
 use core::convert::{TryFrom, TryInto};
-use heapless::ArrayLength;
 
 use trussed::{
     block,
@@ -140,14 +139,14 @@ pub struct Keys {
 
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct State<C: ArrayLength<u8>> {
+pub struct State<const C: usize> {
     pub runtime: Runtime<C>,
     // temporary "state", to be removed again
     // pub hack: Hack,
     // trussed: RefCell<Trussed<S>>,
 }
 
-impl<C: ArrayLength<u8>> State<C> {
+impl<const C: usize> State<C> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -196,7 +195,7 @@ impl<C: ArrayLength<u8>> State<C> {
 //         if valid_bytes {
 //             Ok(Self {
 //                 // padded_pin: padded_pin.try_into().unwrap(),
-//                 pin: Bytes::try_from_slice(padded_pin).unwrap(),//padded_pin.try_into().unwrap(),
+//                 pin: Bytes::from_slice(padded_pin).unwrap(),//padded_pin.try_into().unwrap(),
 //             })
 //         } else {
 //             Err(())
@@ -235,69 +234,69 @@ impl<T> AsRef<PersistentState> for Persistent<'_, T> {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Runtime<C: ArrayLength<u8>> {
+pub struct Runtime<const C: usize> {
     // aid: Option<
     // consecutive_pin_mismatches: u8,
 
     pub global_security_status: GlobalSecurityStatus,
-    pub currently_selected_application: SelectableAid,
+    // pub currently_selected_application: SelectableAid,
     pub app_security_status: AppSecurityStatus,
     pub command_cache: Option<CommandCache>,
     pub chained_command: Option<iso7816::Command<C>>,
 }
 
-pub trait Aid {
-    const AID: &'static [u8];
-    const RIGHT_TRUNCATED_LENGTH: usize;
+// pub trait Aid {
+//     const AID: &'static [u8];
+//     const RIGHT_TRUNCATED_LENGTH: usize;
 
-    fn len() -> usize {
-        Self::AID.len()
-    }
+//     fn len() -> usize {
+//         Self::AID.len()
+//     }
 
-    fn full() -> &'static [u8] {
-        Self::AID
-    }
+//     fn full() -> &'static [u8] {
+//         Self::AID
+//     }
 
-    fn right_truncated() -> &'static [u8] {
-        &Self::AID[..Self::RIGHT_TRUNCATED_LENGTH]
-    }
+//     fn right_truncated() -> &'static [u8] {
+//         &Self::AID[..Self::RIGHT_TRUNCATED_LENGTH]
+//     }
 
-    fn pix() -> &'static [u8] {
-        &Self::AID[5..]
-    }
+//     fn pix() -> &'static [u8] {
+//         &Self::AID[5..]
+//     }
 
-    fn rid() -> &'static [u8] {
-        &Self::AID[..5]
-    }
-}
+//     fn rid() -> &'static [u8] {
+//         &Self::AID[..5]
+//     }
+// }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SelectableAid {
-    Piv(PivAid),
-    YubicoOtp(YubicoOtpAid),
-}
+// #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+// pub enum SelectableAid {
+//     Piv(PivAid),
+//     YubicoOtp(YubicoOtpAid),
+// }
 
-impl Default for SelectableAid {
-    fn default() -> Self {
-        Self::Piv(Default::default())
-    }
-}
+// impl Default for SelectableAid {
+//     fn default() -> Self {
+//         Self::Piv(Default::default())
+//     }
+// }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct PivAid {}
+// #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+// pub struct PivAid {}
 
-impl Aid for PivAid {
-    const AID: &'static [u8] = &PIV_AID;
-    const RIGHT_TRUNCATED_LENGTH: usize = 9;
-}
+// impl Aid for PivAid {
+//     const AID: &'static [u8] = &PIV_AID;
+//     const RIGHT_TRUNCATED_LENGTH: usize = 9;
+// }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct YubicoOtpAid {}
+// #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+// pub struct YubicoOtpAid {}
 
-impl Aid for YubicoOtpAid {
-    const AID: &'static [u8] = &YUBICO_OTP_AID;
-    const RIGHT_TRUNCATED_LENGTH: usize = 8;
-}
+// impl Aid for YubicoOtpAid {
+//     const AID: &'static [u8] = &YUBICO_OTP_AID;
+//     const RIGHT_TRUNCATED_LENGTH: usize = 8;
+// }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {

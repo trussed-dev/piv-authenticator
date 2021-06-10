@@ -6,7 +6,6 @@
 use core::convert::{TryFrom, TryInto};
 
 // use flexiber::Decodable;
-use heapless::ArrayLength;
 use iso7816::{Instruction, Status};
 
 pub use crate::{container as containers, piv_types, Pin, Puk};
@@ -43,7 +42,7 @@ impl<'l> Command<'l> {
     /// Core method, constructs a PIV command, if the iso7816::Command is valid.
     ///
     /// Inherent method re-exposing the `TryFrom` implementation.
-    pub fn try_from<C: ArrayLength<u8>>(command: &'l iso7816::Command<C>) -> Result<Self, Status> {
+    pub fn try_from<const C: usize>(command: &'l iso7816::Command<C>) -> Result<Self, Status> {
         command.try_into()
     }
 }
@@ -59,10 +58,11 @@ impl<'l> TryFrom<&'l [u8]> for Select<'l> {
     /// We allow ourselves the option of answering to more than just the official PIV AID.
     /// For instance, to offer additional functionality, under our own RID.
     fn try_from(data: &'l [u8]) -> Result<Self, Self::Error> {
-        Ok(match data {
-            crate::constants::PIV_AID => Self { aid: data },
-            _ => return Err(Status::NotFound),
-        })
+        if crate::constants::PIV_AID.matches(data) {
+            Ok(Self { aid: data })
+        } else {
+            Err(Status::NotFound)
+        }
     }
 }
 
@@ -383,7 +383,7 @@ impl TryFrom<GenerateAsymmetricArguments<'_>> for GenerateAsymmetric {
     }
 }
 
-impl<'l, C: ArrayLength<u8>> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
+impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
     type Error = Status;
     /// The first layer of unraveling the iso7816::Command onion.
     ///

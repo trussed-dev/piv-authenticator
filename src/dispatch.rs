@@ -1,6 +1,6 @@
-use crate::{Authenticator, constants::PIV_AID, Result};
+use crate::{Authenticator, /*constants::PIV_AID,*/ Result};
 
-use apdu_dispatch::{app::App, command, Command, response, Response};
+use apdu_dispatch::{app::App, command, Command, response};
 use trussed::client;
 
 #[cfg(feature = "apdu-dispatch")]

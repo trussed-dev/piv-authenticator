@@ -1,5 +1,5 @@
 use core::convert::TryFrom;
-use flexiber::{Decodable, Encodable};
+// use flexiber::{Decodable, Encodable};
 
 pub struct Tag<'a>(&'a [u8]);
 impl<'a> Tag<'a> {

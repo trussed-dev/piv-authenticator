@@ -343,7 +343,7 @@ where
     // - 9000, 61XX for success
     // - 6982 security status
     // - 6A80, 6A86 for data, P1/P2 issue
-    fn general_authenticate<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
+    pub fn general_authenticate<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
     {
 
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
@@ -454,7 +454,7 @@ where
         Ok(())
     }
 
-    fn request_for_challenge<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
+    pub fn request_for_challenge<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
     {
         // - data is of the form
         //     00 87 03 9B 16 7C 14 80 08 99 6D 71 40 E7 05 DF 7F 81 08 6E EF 9C 02 00 69 73 E8
@@ -506,7 +506,7 @@ where
         Ok(())
     }
 
-    fn request_for_witness<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
+    pub fn request_for_witness<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
     {
         // invariants: parsed data was '7C L1 80 00' + remaining_data
 
@@ -682,7 +682,7 @@ where
     //    }
     //}
 
-    fn generate_asymmetric_keypair<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
+    pub fn generate_asymmetric_keypair<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
     {
         if !self.state.runtime.app_security_status.management_verified {
             return Err(Status::SecurityStatusNotSatisfied);
@@ -806,7 +806,7 @@ where
         Ok(())
     }
 
-    fn put_data(&mut self, command: &iso7816::Command<C>) -> Result {
+    pub fn put_data(&mut self, command: &iso7816::Command<C>) -> Result {
         info_now!("PutData");
         if command.p1 != 0x3f || command.p2 != 0xff {
             return Err(Status::IncorrectP1OrP2Parameter);
@@ -973,7 +973,7 @@ where
         Ok(())
     }
 
-    fn yubico_piv_extension<const R: usize>(&mut self, command: &iso7816::Command<C>, instruction: YubicoPivExtension, reply: &mut Data<R>) -> Result
+    pub fn yubico_piv_extension<const R: usize>(&mut self, command: &iso7816::Command<C>, instruction: YubicoPivExtension, reply: &mut Data<R>) -> Result
     {
         info_now!("yubico extension: {:?}", &instruction);
         match instruction {

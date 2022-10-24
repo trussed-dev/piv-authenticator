@@ -24,9 +24,9 @@ impl TryFrom<&[u8]> for Pin {
         match unpadded_pin.len() {
             len @ 6..=8 => {
                 let verifier = if cfg!(feature = "strict-pin") {
-                    |&byte| byte >= b'0' && byte <= b'9'
+                    |&byte| (b'0'..=b'9').contains(&byte)
                 } else {
-                    |&byte| byte >= 32 && byte <= 127
+                    |&byte| (32..=127).contains(&byte)
                 };
                 if unpadded_pin.iter().all(verifier) {
                     Ok(Pin { padded_pin, len })

@@ -41,9 +41,9 @@ pub fn init_platform() -> Platform {
     );
     let ui = ui::UserInterface::new();
 
-    let platform = Platform::new(rng, store, ui);
+    
 
-    platform
+    Platform::new(rng, store, ui)
 }
 
 pub mod ui {
@@ -79,8 +79,7 @@ pub mod ui {
 
 pub mod store {
     use littlefs2::{
-        const_ram_storage, consts,
-        fs::{Allocation, Filesystem},
+        const_ram_storage,
     };
     use trussed::types::{LfsResult, LfsStorage};
 

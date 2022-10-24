@@ -66,7 +66,7 @@ pub struct RetiredSlotIndex(u8);
 impl core::convert::TryFrom<u8> for RetiredSlotIndex {
     type Error = u8;
     fn try_from(i: u8) -> core::result::Result<Self, Self::Error> {
-        if 1 <= i && i <= 20 {
+        if (1..=20).contains(&i) {
             Ok(Self(i))
         } else {
             Err(i)
@@ -477,7 +477,7 @@ where
 
         let keys = Keys {
             authentication_key: None,
-            management_key: management_key,
+            management_key,
             signature_key: None,
             encryption_key: None,
             pinless_authentication_key: None,
@@ -500,20 +500,19 @@ where
         state
     }
 
+    #[allow(clippy::result_unit_err)]
     pub fn load(trussed: &'t mut T) -> Result<Self> {
         let data = block!(trussed
             .read_file(Location::Internal, PathBuf::from(Self::FILENAME),)
             .unwrap())
-        .map_err(|e| {
-            info!("loading error: {:?}", &e);
-            drop(e)
+        .map_err(|_err| {
+            info!("loading error: {_err:?}");
         })?
         .data;
 
-        let previous_state: PersistentState = trussed::cbor_deserialize(&data).map_err(|e| {
-            info!("cbor deser error: {:?}", e);
+        let previous_state: PersistentState = trussed::cbor_deserialize(&data).map_err(|_err| {
+            info!("cbor deser error: {_err:?}");
             info!("data: {:X?}", &data);
-            drop(e)
         })?;
         // horrible deser bug to forget Ok here :)
         Ok(Self {
@@ -527,10 +526,9 @@ where
         let data =
             try_syscall!(trussed.read_file(Location::Internal, PathBuf::from(Self::FILENAME)));
         if let Ok(data) = data {
-            let previous_state = trussed::cbor_deserialize(&data.data).map_err(|e| {
-                info!("cbor deser error: {:?}", e);
+            let previous_state = trussed::cbor_deserialize(&data.data).map_err(|_err| {
+                info!("cbor deser error: {_err:?}", e);
                 info!("data: {:X?}", &data);
-                drop(e)
             });
             if let Ok(state) = previous_state {
                 // horrible deser bug to forget Ok here :)

@@ -107,7 +107,7 @@ where
                     self.state.runtime.chained_command = None;
                     entire_command
                 } else {
-                    return Ok(Default::default());
+                    return Ok(());
                 }
             }
 
@@ -117,7 +117,7 @@ where
                     command.clone()
                 } else {
                     self.state.runtime.chained_command = Some(command.clone());
-                    return Ok(Default::default());
+                    return Ok(());
                 }
             }
         };
@@ -174,13 +174,13 @@ where
                     return Err(Status::FunctionNotSupported);
                 }
                 if self.state.runtime.app_security_status.pin_verified {
-                    return Ok(());
+                    Ok(())
                 } else {
                     let retries = self
                         .state
                         .persistent(&mut self.trussed)
                         .remaining_pin_retries();
-                    return Err(Status::RemainingRetries(retries));
+                    Err(Status::RemainingRetries(retries))
                 }
             }
         }
@@ -209,7 +209,7 @@ where
         persistent_state.reset_consecutive_pin_mismatches();
         persistent_state.set_pin(new_pin);
         self.state.runtime.app_security_status.pin_verified = true;
-        return Ok(Default::default());
+        Ok(())
     }
 
     pub fn change_puk(&mut self, old_puk: commands::Puk, new_puk: commands::Puk) -> Result {
@@ -227,7 +227,7 @@ where
         persistent_state.reset_consecutive_puk_mismatches();
         persistent_state.set_puk(new_puk);
         self.state.runtime.app_security_status.puk_verified = true;
-        return Ok(Default::default());
+        Ok(())
     }
 
     // pub fn old_respond(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result {
@@ -379,10 +379,12 @@ where
             panic!("unhandled >1B lengths");
         }
         if data[1] == 0x81 {
-            data[2] as usize;
+            // FIXME: Proper length parsing and avoid panics
+            // data[2] as usize;
             data = &data[3..];
         } else {
-            data[1] as usize; // ~158 for ssh ed25519 signatures (which have a ~150B commitment)
+            // FIXME: Proper length parsing and avoid panics
+            // data[1] as usize; // ~158 for ssh ed25519 signatures (which have a ~150B commitment)
             data = &data[2..];
         };
 
@@ -492,7 +494,7 @@ where
         // no retries ;)
         self.state.runtime.command_cache = None;
 
-        if &our_challenge != response {
+        if our_challenge != response {
             debug_now!("{:?}", &our_challenge);
             debug_now!("{:?}", &response);
             return Err(Status::IncorrectDataParameter);
@@ -502,7 +504,7 @@ where
 
         // B) encrypt their challenge
         let (header, challenge) = data.split_at(2);
-        if header != &[0x81, 0x08] {
+        if header != [0x81, 0x08] {
             return Err(Status::IncorrectDataParameter);
         }
 
@@ -748,7 +750,7 @@ where
         // }
 
         // TODO: iterate on this, don't expect tags..
-        let input = derp::Input::from(&command.data());
+        let input = derp::Input::from(command.data());
         // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
         let (mechanism, _pin_policy, _touch_policy) = input
             .read_all(derp::Error::Read, |input| {
@@ -772,7 +774,7 @@ where
 
         // if mechanism != &[0x11] {
         // HA! patch in Ed255
-        if mechanism != &[0x22] {
+        if mechanism != [0x22] {
             return Err(Status::InstructionNotSupportedOrInvalid);
         }
 
@@ -830,7 +832,7 @@ where
         let serialized_public_key = syscall!(self.trussed.serialize_key(
             // trussed::types::Mechanism::P256,
             trussed::types::Mechanism::Ed255,
-            public_key.clone(),
+            public_key,
             trussed::types::KeySerialization::Raw,
         ))
         .serialized_key;
@@ -870,7 +872,7 @@ where
         //       88 1A 89 18 AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
         //
 
-        let input = derp::Input::from(&command.data());
+        let input = derp::Input::from(command.data());
         let (data_object, data) = input
             .read_all(derp::Error::Read, |input| {
                 let data_object = derp::expect_tag_and_get_value(input, 0x5c)?;
@@ -885,7 +887,7 @@ where
 
         // info_now!("PutData in {:?}: {:?}", data_object, data);
 
-        if data_object == &[0x5f, 0xc1, 0x09] {
+        if data_object == [0x5f, 0xc1, 0x09] {
             // "Printed Information", supposedly
             // Yubico uses this to store its "Metadata"
             //
@@ -910,7 +912,7 @@ where
             return Ok(());
         }
 
-        if data_object == &[0x5f, 0xc1, 0x05] {
+        if data_object == [0x5f, 0xc1, 0x05] {
             // "X.509 Certificate for PIV Authentication", supposedly
             // IOW, the cert for "authentication key"
             // Yubico uses this to store its "Metadata"
@@ -933,7 +935,7 @@ where
             ))
             .map_err(|_| Status::NotEnoughMemory)?;
 
-            return Ok(Default::default());
+            return Ok(());
         }
 
         Err(Status::IncorrectDataParameter)
@@ -1105,7 +1107,7 @@ where
                     return Err(Status::IncorrectDataParameter);
                 }
                 let (prefix, new_management_key) = data.split_at(3);
-                if prefix != &[0x03, 0x9b, 0x18] {
+                if prefix != [0x03, 0x9b, 0x18] {
                     return Err(Status::IncorrectDataParameter);
                 }
                 let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();

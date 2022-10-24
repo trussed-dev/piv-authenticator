@@ -16,7 +16,7 @@ mod setup;
 
 #[test]
 fn put_data() {
-    setup::piv(|piv| {
+    setup::piv(|_piv| {
 
         // let mut response = iso7816::Data::<16>::default();
         // piv.respond(&cmd!(

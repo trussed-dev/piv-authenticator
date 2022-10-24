@@ -1,10 +1,9 @@
 use core::convert::{TryFrom, TryInto};
 
 use trussed::{
-    block,
+    block, syscall, try_syscall,
+    types::{KeyId, Location, PathBuf},
     Client as TrussedClient,
-    syscall, try_syscall,
-    types::{KeyId, PathBuf, Location},
 };
 
 use crate::constants::*;
@@ -37,7 +36,10 @@ pub struct Slot {
 
 impl Default for Slot {
     fn default() -> Self {
-        Self { key: None, pin_policy: PinPolicy::Once, /*touch_policy: TouchPolicy::Never*/ }
+        Self {
+            key: None,
+            pin_policy: PinPolicy::Once, /*touch_policy: TouchPolicy::Never*/
+        }
     }
 }
 
@@ -46,10 +48,15 @@ impl Slot {
         use SlotName::*;
         match name {
             // Management => Slot { pin_policy: PinPolicy::Never, ..Default::default() },
-            Signature => Slot { pin_policy: PinPolicy::Always, ..Default::default() },
-            Pinless => Slot { pin_policy: PinPolicy::Never, ..Default::default() },
+            Signature => Slot {
+                pin_policy: PinPolicy::Always,
+                ..Default::default()
+            },
+            Pinless => Slot {
+                pin_policy: PinPolicy::Never,
+                ..Default::default()
+            },
             _ => Default::default(),
-
         }
     }
 }
@@ -68,9 +75,9 @@ impl core::convert::TryFrom<u8> for RetiredSlotIndex {
 }
 pub enum SlotName {
     Identity,
-    Management,  // Personalization? Administration?
+    Management, // Personalization? Administration?
     Signature,
-    Decryption,  // Management after all?
+    Decryption, // Management after all?
     Pinless,
     Retired(RetiredSlotIndex),
     Attestation,
@@ -78,8 +85,8 @@ pub enum SlotName {
 
 impl SlotName {
     pub fn default_pin_policy(&self) -> PinPolicy {
-        use SlotName::*;
         use PinPolicy::*;
+        use SlotName::*;
         match *self {
             Signature => Always,
             Pinless | Management | Attestation => Never,
@@ -88,7 +95,10 @@ impl SlotName {
     }
 
     pub fn default_slot(&self) -> Slot {
-        Slot { key: None, pin_policy: self.default_pin_policy() }
+        Slot {
+            key: None,
+            pin_policy: self.default_pin_policy(),
+        }
     }
 
     pub fn reference(&self) -> u8 {
@@ -137,7 +147,6 @@ pub struct Keys {
     pub retired_keys: [Option<KeyId>; 20],
 }
 
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct State<const C: usize> {
     pub runtime: Runtime<C>,
@@ -156,8 +165,8 @@ impl<const C: usize> State<C> {
     // TODO: it is really not good to overwrite user data on failure to decode old state.
     // To fix this, need a flag to detect if we're "fresh", and/or initialize state in factory.
     pub fn persistent<'t, T>(&mut self, trussed: &'t mut T) -> Persistent<'t, T>
-    where T: TrussedClient
-        + trussed::client::Tdes
+    where
+        T: TrussedClient + trussed::client::Tdes,
     {
         Persistent::load_or_initialize(trussed)
     }
@@ -237,7 +246,6 @@ impl<T> AsRef<PersistentState> for Persistent<'_, T> {
 pub struct Runtime<const C: usize> {
     // aid: Option<
     // consecutive_pin_mismatches: u8,
-
     pub global_security_status: GlobalSecurityStatus,
     // pub currently_selected_application: SelectableAid,
     pub app_security_status: AppSecurityStatus,
@@ -299,8 +307,7 @@ pub struct Runtime<const C: usize> {
 // }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct GlobalSecurityStatus {
-}
+pub struct GlobalSecurityStatus {}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SecurityStatus {
@@ -328,10 +335,8 @@ pub enum CommandCache {
     AuthenticateManagement(AuthenticateManagement),
 }
 
-
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GetData {
-}
+pub struct GetData {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthenticateManagement {
@@ -342,7 +347,6 @@ impl<'t, T> Persistent<'t, T>
 where
     T: TrussedClient + trussed::client::Tdes,
 {
-
     pub const PIN_RETRIES_DEFAULT: u8 = 3;
     // hmm...!
     pub const PUK_RETRIES_DEFAULT: u8 = 5;
@@ -444,10 +448,10 @@ where
 
     pub fn set_management_key(&mut self, management_key: &[u8; 24]) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
-        let new_management_key = syscall!(self.trussed.unsafe_inject_shared_key(
-            management_key,
-            trussed::types::Location::Internal,
-        )).key;
+        let new_management_key = syscall!(self
+            .trussed
+            .unsafe_inject_shared_key(management_key, trussed::types::Location::Internal,))
+        .key;
         let old_management_key = self.state.keys.management_key;
         self.state.keys.management_key = new_management_key;
         self.save();
@@ -459,7 +463,8 @@ where
         let management_key = syscall!(trussed.unsafe_inject_shared_key(
             YUBICO_DEFAULT_MANAGEMENT_KEY,
             trussed::types::Location::Internal,
-        )).key;
+        ))
+        .key;
 
         let mut guid: [u8; 16] = syscall!(trussed.random_bytes(16))
             .bytes
@@ -489,21 +494,21 @@ where
                 puk: Puk::try_from(Self::DEFAULT_PUK).unwrap(),
                 timestamp: 0,
                 guid,
-            }
+            },
         };
         state.save();
         state
     }
 
     pub fn load(trussed: &'t mut T) -> Result<Self> {
-        let data = block!(trussed.read_file(
-                Location::Internal,
-                PathBuf::from(Self::FILENAME),
-            ).unwrap()
-        ).map_err(|e| {
+        let data = block!(trussed
+            .read_file(Location::Internal, PathBuf::from(Self::FILENAME),)
+            .unwrap())
+        .map_err(|e| {
             info!("loading error: {:?}", &e);
             drop(e)
-        })?.data;
+        })?
+        .data;
 
         let previous_state: PersistentState = trussed::cbor_deserialize(&data).map_err(|e| {
             info!("cbor deser error: {:?}", e);
@@ -511,12 +516,16 @@ where
             drop(e)
         })?;
         // horrible deser bug to forget Ok here :)
-        Ok(Self { trussed, state: previous_state })
+        Ok(Self {
+            trussed,
+            state: previous_state,
+        })
     }
 
     pub fn load_or_initialize(trussed: &'t mut T) -> Self {
         // todo: can't seem to combine load + initialize without code repetition
-        let data = try_syscall!(trussed.read_file(Location::Internal, PathBuf::from(Self::FILENAME)));
+        let data =
+            try_syscall!(trussed.read_file(Location::Internal, PathBuf::from(Self::FILENAME)));
         if let Ok(data) = data {
             let previous_state = trussed::cbor_deserialize(&data.data).map_err(|e| {
                 info!("cbor deser error: {:?}", e);
@@ -524,8 +533,8 @@ where
                 drop(e)
             });
             if let Ok(state) = previous_state {
-            // horrible deser bug to forget Ok here :)
-                return Self { trussed, state }
+                // horrible deser bug to forget Ok here :)
+                return Self { trussed, state };
             }
         }
 
@@ -548,6 +557,4 @@ where
         self.save();
         self.state.timestamp
     }
-
 }
-

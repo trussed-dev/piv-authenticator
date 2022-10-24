@@ -11,13 +11,12 @@ pub mod commands;
 pub use commands::Command;
 pub mod constants;
 pub mod container;
+pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
-pub mod state;
-pub mod derp;
 pub mod piv_types;
+pub mod state;
 pub use piv_types::{Pin, Puk};
-
 
 use core::convert::TryInto;
 
@@ -35,14 +34,12 @@ pub type Result = iso7816::Result<()>;
 /// The `C` parameter is necessary, as PIV includes command sequences,
 /// where we need to store the previous command, so we need to know how
 /// much space to allocate.
-pub struct Authenticator<T, const C: usize>
-{
+pub struct Authenticator<T, const C: usize> {
     state: state::State<C>,
     trussed: T,
 }
 
-impl<T, const C: usize> iso7816::App for Authenticator<T, C>
-{
+impl<T, const C: usize> iso7816::App for Authenticator<T, C> {
     fn aid(&self) -> iso7816::Aid {
         crate::constants::PIV_AID
     }
@@ -52,11 +49,7 @@ impl<T, const C: usize> Authenticator<T, C>
 where
     T: client::Client + client::Ed255 + client::Tdes,
 {
-    pub fn new(
-        trussed: T,
-    )
-        -> Self
-    {
+    pub fn new(trussed: T) -> Self {
         // seems like RefCell is not the right thing, we want something like `Rc` instead,
         // which can be cloned and injected into other parts of the App that use Trussed.
         // let trussed = RefCell::new(trussed);
@@ -69,24 +62,20 @@ where
 
     // TODO: we'd like to listen on multiple AIDs.
     // The way apdu-dispatch currently works, this would deselect, resetting security indicators.
-    pub fn deselect(&mut self) {
-    }
+    pub fn deselect(&mut self) {}
 
-    pub fn select<const R: usize>(&mut self, _apdu: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    {
+    pub fn select<const R: usize>(
+        &mut self,
+        _apdu: &iso7816::Command<C>,
+        reply: &mut Data<R>,
+    ) -> Result {
         use piv_types::Algorithms::*;
         info_now!("selecting PIV maybe");
 
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
             .with_application_label(APPLICATION_LABEL)
             .with_application_url(APPLICATION_URL)
-            .with_supported_cryptographic_algorithms(&[
-                Tdes,
-                Aes256,
-                P256,
-                Ed255,
-                X255,
-            ]);
+            .with_supported_cryptographic_algorithms(&[Tdes, Aes256, P256, Ed255, X255]);
 
         application_property_template
             .encode_to_heapless_vec(reply)
@@ -95,8 +84,11 @@ where
         Ok(())
     }
 
-    pub fn respond<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    {
+    pub fn respond<const R: usize>(
+        &mut self,
+        command: &iso7816::Command<C>,
+        reply: &mut Data<R>,
+    ) -> Result {
         // need to implement Debug on iso7816::Command
         // info_now!("PIV responding to {:?}", command);
         let last_or_only = command.class().chain().last_or_only();
@@ -105,7 +97,10 @@ where
         let entire_command = match self.state.runtime.chained_command.as_mut() {
             Some(command_so_far) => {
                 // TODO: make sure the header matches, e.g. '00 DB 3F FF'
-                command_so_far.data_mut().extend_from_slice(command.data()).unwrap();
+                command_so_far
+                    .data_mut()
+                    .extend_from_slice(command.data())
+                    .unwrap();
 
                 if last_or_only {
                     let entire_command = command_so_far.clone();
@@ -142,7 +137,6 @@ where
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
-
             // the actual PIN verification
             let mut persistent_state = self.state.persistent(&mut self.trussed);
 
@@ -154,7 +148,6 @@ where
                 persistent_state.reset_consecutive_pin_mismatches();
                 self.state.runtime.app_security_status.pin_verified = true;
                 Ok(())
-
             } else {
                 let remaining = persistent_state.increment_consecutive_pin_mismatches();
                 // should we logout here?
@@ -181,9 +174,12 @@ where
                     return Err(Status::FunctionNotSupported);
                 }
                 if self.state.runtime.app_security_status.pin_verified {
-                    return Ok(())
+                    return Ok(());
                 } else {
-                    let retries = self.state.persistent(&mut self.trussed).remaining_pin_retries();
+                    let retries = self
+                        .state
+                        .persistent(&mut self.trussed)
+                        .remaining_pin_retries();
                     return Err(Status::RemainingRetries(retries));
                 }
             }
@@ -343,9 +339,11 @@ where
     // - 9000, 61XX for success
     // - 6982 security status
     // - 6A80, 6A86 for data, P1/P2 issue
-    pub fn general_authenticate<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    {
-
+    pub fn general_authenticate<const R: usize>(
+        &mut self,
+        command: &iso7816::Command<C>,
+        reply: &mut Data<R>,
+    ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
         //
         // ins = 87 = general authenticate
@@ -432,7 +430,13 @@ where
         }
 
         info_now!("looking for keyreference");
-        let key_handle = match self.state.persistent(&mut self.trussed).state.keys.authentication_key {
+        let key_handle = match self
+            .state
+            .persistent(&mut self.trussed)
+            .state
+            .keys
+            .authentication_key
+        {
             Some(key) => key,
             None => return Err(Status::KeyReferenceNotFound),
         };
@@ -442,8 +446,8 @@ where
             .map_err(|_error| {
                 // NoSuchKey
                 debug_now!("{:?}", &_error);
-                Status::UnspecifiedNonpersistentExecutionError }
-            )?
+                Status::UnspecifiedNonpersistentExecutionError
+            })?
             .signature;
 
         piv_types::DynamicAuthenticationTemplate::with_response(&signature)
@@ -454,8 +458,12 @@ where
         Ok(())
     }
 
-    pub fn request_for_challenge<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
-    {
+    pub fn request_for_challenge<const R: usize>(
+        &mut self,
+        command: &iso7816::Command<C>,
+        remaining_data: &[u8],
+        reply: &mut Data<R>,
+    ) -> Result {
         // - data is of the form
         //     00 87 03 9B 16 7C 14 80 08 99 6D 71 40 E7 05 DF 7F 81 08 6E EF 9C 02 00 69 73 E8
         // - remaining data contains <decrypted challenge> 81 08 <encrypted counter challenge>
@@ -474,9 +482,12 @@ where
 
         use state::{AuthenticateManagement, CommandCache};
         let our_challenge = match self.state.runtime.command_cache {
-            Some(CommandCache::AuthenticateManagement(AuthenticateManagement { challenge } ))
-                => challenge,
-            _ => { return Err(Status::InstructionNotSupportedOrInvalid); }
+            Some(CommandCache::AuthenticateManagement(AuthenticateManagement { challenge })) => {
+                challenge
+            }
+            _ => {
+                return Err(Status::InstructionNotSupportedOrInvalid);
+            }
         };
         // no retries ;)
         self.state.runtime.command_cache = None;
@@ -495,7 +506,12 @@ where
             return Err(Status::IncorrectDataParameter);
         }
 
-        let key = self.state.persistent(&mut self.trussed).state.keys.management_key;
+        let key = self
+            .state
+            .persistent(&mut self.trussed)
+            .state
+            .keys
+            .management_key;
 
         let encrypted_challenge = syscall!(self.trussed.encrypt_tdes(key, challenge)).ciphertext;
 
@@ -506,8 +522,12 @@ where
         Ok(())
     }
 
-    pub fn request_for_witness<const R: usize>(&mut self, command: &iso7816::Command<C>, remaining_data: &[u8], reply: &mut Data<R>) -> Result
-    {
+    pub fn request_for_witness<const R: usize>(
+        &mut self,
+        command: &iso7816::Command<C>,
+        remaining_data: &[u8],
+        reply: &mut Data<R>,
+    ) -> Result {
         // invariants: parsed data was '7C L1 80 00' + remaining_data
 
         if command.p1 != 0x03 || command.p2 != 0x9b {
@@ -518,11 +538,19 @@ where
             return Err(Status::IncorrectDataParameter);
         }
 
-        let key = self.state.persistent(&mut self.trussed).state.keys.management_key;
+        let key = self
+            .state
+            .persistent(&mut self.trussed)
+            .state
+            .keys
+            .management_key;
 
         let challenge = syscall!(self.trussed.random_bytes(8)).bytes;
-        let command_cache = state::AuthenticateManagement { challenge: challenge[..].try_into().unwrap() };
-        self.state.runtime.command_cache = Some(state::CommandCache::AuthenticateManagement(command_cache));
+        let command_cache = state::AuthenticateManagement {
+            challenge: challenge[..].try_into().unwrap(),
+        };
+        self.state.runtime.command_cache =
+            Some(state::CommandCache::AuthenticateManagement(command_cache));
 
         let encrypted_challenge = syscall!(self.trussed.encrypt_tdes(key, &challenge)).ciphertext;
 
@@ -531,7 +559,6 @@ where
             .unwrap();
 
         Ok(())
-
     }
 
     //fn change_reference_data(&mut self, command: &Command) -> Result {
@@ -617,7 +644,6 @@ where
     //        return Ok(());
     //    }
 
-
     //    Err(Status::KeyReferenceNotFound)
     //}
 
@@ -682,8 +708,11 @@ where
     //    }
     //}
 
-    pub fn generate_asymmetric_keypair<const R: usize>(&mut self, command: &iso7816::Command<C>, reply: &mut Data<R>) -> Result
-    {
+    pub fn generate_asymmetric_keypair<const R: usize>(
+        &mut self,
+        command: &iso7816::Command<C>,
+        reply: &mut Data<R>,
+    ) -> Result {
         if !self.state.runtime.app_security_status.management_verified {
             return Err(Status::SecurityStatusNotSatisfied);
         }
@@ -721,23 +750,25 @@ where
         // TODO: iterate on this, don't expect tags..
         let input = derp::Input::from(&command.data());
         // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
-        let (mechanism, _pin_policy, _touch_policy) = input.read_all(derp::Error::Read, |input| {
-            derp::nested(input, 0xac, |input| {
-                let mechanism = derp::expect_tag_and_get_value(input, 0x80)?;
-                // let parameter = derp::expect_tag_and_get_value(input, 0x81)?;
-                let pin_policy = derp::expect_tag_and_get_value(input, 0xaa)?;
-                let touch_policy = derp::expect_tag_and_get_value(input, 0xab)?;
-                // Ok((mechanism.as_slice_less_safe(), parameter.as_slice_less_safe()))
-                Ok((
-                    mechanism.as_slice_less_safe(),
-                    pin_policy.as_slice_less_safe(),
-                    touch_policy.as_slice_less_safe(),
-                ))
+        let (mechanism, _pin_policy, _touch_policy) = input
+            .read_all(derp::Error::Read, |input| {
+                derp::nested(input, 0xac, |input| {
+                    let mechanism = derp::expect_tag_and_get_value(input, 0x80)?;
+                    // let parameter = derp::expect_tag_and_get_value(input, 0x81)?;
+                    let pin_policy = derp::expect_tag_and_get_value(input, 0xaa)?;
+                    let touch_policy = derp::expect_tag_and_get_value(input, 0xab)?;
+                    // Ok((mechanism.as_slice_less_safe(), parameter.as_slice_less_safe()))
+                    Ok((
+                        mechanism.as_slice_less_safe(),
+                        pin_policy.as_slice_less_safe(),
+                        touch_policy.as_slice_less_safe(),
+                    ))
+                })
             })
-        }).map_err(|_e| {
+            .map_err(|_e| {
                 info_now!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
                 Status::IncorrectDataParameter
-        })?;
+            })?;
 
         // if mechanism != &[0x11] {
         // HA! patch in Ed255
@@ -747,16 +778,22 @@ where
 
         // ble policy
 
-        if let Some(key) = self.state.persistent(&mut self.trussed).state.keys.authentication_key {
+        if let Some(key) = self
+            .state
+            .persistent(&mut self.trussed)
+            .state
+            .keys
+            .authentication_key
+        {
             syscall!(self.trussed.delete(key));
         }
 
         // let key = syscall!(self.trussed.generate_p256_private_key(
         // let key = syscall!(self.trussed.generate_p256_private_key(
-        let key = syscall!(self.trussed.generate_ed255_private_key(
-            trussed::types::Location::Internal,
-        )).key;
-
+        let key = syscall!(self
+            .trussed
+            .generate_ed255_private_key(trussed::types::Location::Internal,))
+        .key;
 
         // // TEMP
         // let mechanism = trussed::types::Mechanism::P256Prehashed;
@@ -777,21 +814,26 @@ where
         //     .signature;
         // blocking::dbg!(&signature);
 
-        self.state.persistent(&mut self.trussed).state.keys.authentication_key = Some(key);
+        self.state
+            .persistent(&mut self.trussed)
+            .state
+            .keys
+            .authentication_key = Some(key);
         self.state.persistent(&mut self.trussed).save();
 
         // let public_key = syscall!(self.trussed.derive_p256_public_key(
-        let public_key = syscall!(self.trussed.derive_ed255_public_key(
-            key,
-            trussed::types::Location::Volatile,
-        )).key;
+        let public_key = syscall!(self
+            .trussed
+            .derive_ed255_public_key(key, trussed::types::Location::Volatile,))
+        .key;
 
         let serialized_public_key = syscall!(self.trussed.serialize_key(
             // trussed::types::Mechanism::P256,
             trussed::types::Mechanism::Ed255,
             public_key.clone(),
             trussed::types::KeySerialization::Raw,
-        )).serialized_key;
+        ))
+        .serialized_key;
 
         // info_now!("supposed SEC1 pubkey, len {}: {:X?}", serialized_public_key.len(), &serialized_public_key);
 
@@ -800,7 +842,9 @@ where
         let l2 = 32;
         let l1 = l2 + 2;
 
-        reply.extend_from_slice(&[0x7f, 0x49, l1, 0x86, l2]).unwrap();
+        reply
+            .extend_from_slice(&[0x7f, 0x49, l1, 0x86, l2])
+            .unwrap();
         reply.extend_from_slice(&serialized_public_key).unwrap();
 
         Ok(())
@@ -827,15 +871,17 @@ where
         //
 
         let input = derp::Input::from(&command.data());
-        let (data_object, data) = input.read_all(derp::Error::Read, |input| {
-            let data_object = derp::expect_tag_and_get_value(input, 0x5c)?;
-            let data = derp::expect_tag_and_get_value(input, 0x53)?;
-            Ok((data_object.as_slice_less_safe(), data.as_slice_less_safe()))
-        // }).unwrap();
-        }).map_err(|_e| {
+        let (data_object, data) = input
+            .read_all(derp::Error::Read, |input| {
+                let data_object = derp::expect_tag_and_get_value(input, 0x5c)?;
+                let data = derp::expect_tag_and_get_value(input, 0x53)?;
+                Ok((data_object.as_slice_less_safe(), data.as_slice_less_safe()))
+                // }).unwrap();
+            })
+            .map_err(|_e| {
                 info_now!("error parsing PutData: {:?}", &_e);
                 Status::IncorrectDataParameter
-        })?;
+            })?;
 
         // info_now!("PutData in {:?}: {:?}", data_object, data);
 
@@ -858,7 +904,8 @@ where
                 trussed::types::PathBuf::from(b"printed-information"),
                 trussed::types::Message::from_slice(data).unwrap(),
                 None,
-            )).map_err(|_| Status::NotEnoughMemory)?;
+            ))
+            .map_err(|_| Status::NotEnoughMemory)?;
 
             return Ok(());
         }
@@ -883,7 +930,8 @@ where
                 trussed::types::PathBuf::from(b"authentication-key.x5c"),
                 trussed::types::Message::from_slice(data).unwrap(),
                 None,
-            )).map_err(|_| Status::NotEnoughMemory)?;
+            ))
+            .map_err(|_| Status::NotEnoughMemory)?;
 
             return Ok(Default::default());
         }
@@ -891,18 +939,19 @@ where
         Err(Status::IncorrectDataParameter)
     }
 
+    // match container {
+    //     containers::Container::CardHolderUniqueIdentifier =>
+    //         piv_types::CardHolderUniqueIdentifier::default()
+    //         .encode
+    //     _ => todo!(),
+    // }
+    // todo!();
 
-        // match container {
-        //     containers::Container::CardHolderUniqueIdentifier =>
-        //         piv_types::CardHolderUniqueIdentifier::default()
-        //         .encode
-        //     _ => todo!(),
-        // }
-        // todo!();
-
-    fn get_data<const R: usize>(&mut self, container: container::Container, reply: &mut Data<R>) -> Result
-    {
-
+    fn get_data<const R: usize>(
+        &mut self,
+        container: container::Container,
+        reply: &mut Data<R>,
+    ) -> Result {
         // TODO: check security status, else return Status::SecurityStatusNotSatisfied
 
         // Table 3, Part 1, SP 800-73-4
@@ -916,7 +965,7 @@ where
             }
 
             Container::BiometricInformationTemplatesGroupTemplate => {
-                return Err(Status::InstructionNotSupportedOrInvalid)
+                return Err(Status::InstructionNotSupportedOrInvalid);
                 // todo!("biometric information template"),
             }
 
@@ -967,26 +1016,27 @@ where
             //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
             //     reply.extend_from_slice(&data).ok();
             // }
-
             _ => return Err(Status::NotFound),
         }
         Ok(())
     }
 
-    pub fn yubico_piv_extension<const R: usize>(&mut self, command: &iso7816::Command<C>, instruction: YubicoPivExtension, reply: &mut Data<R>) -> Result
-    {
+    pub fn yubico_piv_extension<const R: usize>(
+        &mut self,
+        command: &iso7816::Command<C>,
+        instruction: YubicoPivExtension,
+        reply: &mut Data<R>,
+    ) -> Result {
         info_now!("yubico extension: {:?}", &instruction);
         match instruction {
             YubicoPivExtension::GetSerial => {
                 // make up a 4-byte serial
-                reply.extend_from_slice(
-                    &[0x00, 0x52, 0xf7, 0x43]).ok();
+                reply.extend_from_slice(&[0x00, 0x52, 0xf7, 0x43]).ok();
             }
 
             YubicoPivExtension::GetVersion => {
                 // make up a version, be >= 5.0.0
-                reply.extend_from_slice(
-                    &[0x06, 0x06, 0x06]).ok();
+                reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
             }
 
             YubicoPivExtension::Attest => {
@@ -997,10 +1047,11 @@ where
                 let slot = command.p1;
 
                 if slot == 0x9a {
-                    reply.extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A).ok();
+                    reply
+                        .extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A)
+                        .ok();
                 } else {
-
-                    return Err(Status::FunctionNotSupported)
+                    return Err(Status::FunctionNotSupported);
                 }
             }
 
@@ -1012,7 +1063,9 @@ where
                 // TODO: find out what all needs resetting :)
                 self.state.persistent(&mut self.trussed).reset_pin();
                 self.state.persistent(&mut self.trussed).reset_puk();
-                self.state.persistent(&mut self.trussed).reset_management_key();
+                self.state
+                    .persistent(&mut self.trussed)
+                    .reset_management_key();
                 self.state.runtime.app_security_status.pin_verified = false;
                 self.state.runtime.app_security_status.puk_verified = false;
                 self.state.runtime.app_security_status.management_verified = false;
@@ -1020,13 +1073,14 @@ where
                 try_syscall!(self.trussed.remove_file(
                     trussed::types::Location::Internal,
                     trussed::types::PathBuf::from(b"printed-information"),
-                )).ok();
+                ))
+                .ok();
 
                 try_syscall!(self.trussed.remove_file(
                     trussed::types::Location::Internal,
                     trussed::types::PathBuf::from(b"authentication-key.x5c"),
-                )).ok();
-
+                ))
+                .ok();
             }
 
             YubicoPivExtension::SetManagementKey => {
@@ -1055,15 +1109,13 @@ where
                     return Err(Status::IncorrectDataParameter);
                 }
                 let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
-                self.state.persistent(&mut self.trussed).set_management_key(&new_management_key);
-
+                self.state
+                    .persistent(&mut self.trussed)
+                    .set_management_key(&new_management_key);
             }
 
             _ => return Err(Status::FunctionNotSupported),
         }
         Ok(())
     }
-
 }
-
-

@@ -18,8 +18,7 @@ hex-literal = "0.3"
 interchange = "0.2.2"
 iso7816 = "0.1"
 serde = { version = "1", default-features = false }
-trussed = { git = "https://github.com/trussed-dev/trussed" }
-# trussed = { path = "../../../trussed" }
+trussed = "0.1"
 untrusted = "0.9"
 
 [dev-dependencies]
@@ -36,3 +35,6 @@ log-info = []
 log-debug = []
 log-warn = []
 log-error = []
+
+[patch.crates-io]
+trussed = { git = "https://github.com/trussed-dev/trussed", rev = "28478f8abed11d78c51e6a6a32326821ed61957a"}

@@ -29,7 +29,6 @@ pub enum KeyReference {
 
     // 20x
     RetiredKeyManagement(RetiredIndex),
-
 }
 
 impl From<KeyReference> for u8 {
@@ -85,7 +84,7 @@ impl From<Container> for ContainerId {
         use Container::*;
         Self(match container {
             CardCapabilityContainer => 0xDB00,
-            CardHolderUniqueIdentifier =>0x3000,
+            CardHolderUniqueIdentifier => 0x3000,
             X509CertificateFor9A => 0x0101,
             CardholderFingerprints => 0x6010,
             SecurityObject => 0x9000,
@@ -194,64 +193,63 @@ impl TryFrom<Tag<'_>> for Container {
     }
 }
 
+// #[derive(Clone, Copy, PartialEq)]
+// pub struct CertInfo {
+//     compressed: bool,
+// }
 
-    // #[derive(Clone, Copy, PartialEq)]
-    // pub struct CertInfo {
-    //     compressed: bool,
-    // }
+// impl From<CertInfo> for u8 {
+//     fn from(cert_info: CertInfo) -> Self {
+//         cert_info.compressed as u8
+//     }
+// }
 
-    // impl From<CertInfo> for u8 {
-    //     fn from(cert_info: CertInfo) -> Self {
-    //         cert_info.compressed as u8
-    //     }
-    // }
+// impl Encodable for CertInfo {
+//     fn encoded_len(&self) -> der::Result<der::Length> {
+//         Length::from(1)
+//     }
 
-    // impl Encodable for CertInfo {
-    //     fn encoded_len(&self) -> der::Result<der::Length> {
-    //         Length::from(1)
-    //     }
+//     fn encode(&self, encoder: &mut Encoder<'_>) -> der::Result<()> {
+//         encoder.encode(der::Any::new(0x71, &[u8::from(self)]))
+//     }
+// }
 
-    //     fn encode(&self, encoder: &mut Encoder<'_>) -> der::Result<()> {
-    //         encoder.encode(der::Any::new(0x71, &[u8::from(self)]))
-    //     }
-    // }
+// pub struct Certificate<'a> {
+//     // max bytes: 1856
+//     certificate: &'a [u8],  // tag: 0x70
+//     // 1B
+//     cert_info: CertInfo,  // tag: 0x71
+//     // 38
+//     // mscuid: ?, // tag: 0x72
+//     error_detection_code: [u8; 0], // tag: 0xFE
+// }
 
-    // pub struct Certificate<'a> {
-    //     // max bytes: 1856
-    //     certificate: &'a [u8],  // tag: 0x70
-    //     // 1B
-    //     cert_info: CertInfo,  // tag: 0x71
-    //     // 38
-    //     // mscuid: ?, // tag: 0x72
-    //     error_detection_code: [u8; 0], // tag: 0xFE
-    // }
+// impl Encodable for CertInfo {
+//     fn encoded_len(&self) -> der::Result<der::Length> {
+//         Length::from(1)
+//     }
 
-    // impl Encodable for CertInfo {
-    //     fn encoded_len(&self) -> der::Result<der::Length> {
-    //         Length::from(1)
-    //     }
+//     fn encode(&self, encoder: &mut Encoder<'_>) -> der::Result<()> {
+//         encoder.encode(der::Any::new(0x71, &[u8::from(self)]))
+//     }
+// }
 
-    //     fn encode(&self, encoder: &mut Encoder<'_>) -> der::Result<()> {
-    //         encoder.encode(der::Any::new(0x71, &[u8::from(self)]))
-    //     }
-    // }
+// #[derive(Encodable)]
+// pub struct DiscoveryObject<'a> {
+//     #[tlv(tag = "0x4F")]
+//     piv_card_application_aid: &'a [u8; 11], // tag: 0x4F, max bytes = 12,
+//     #[tlv(tag = 0x5F2f)]
+//     pin_usage_policy: [u8; 2], // tag: 0x5F2F, max bytes = 2,
+// }
 
-    // #[derive(Encodable)]
-    // pub struct DiscoveryObject<'a> {
-    //     #[tlv(tag = "0x4F")]
-    //     piv_card_application_aid: &'a [u8; 11], // tag: 0x4F, max bytes = 12,
-    //     #[tlv(tag = 0x5F2f)]
-    //     pin_usage_policy: [u8; 2], // tag: 0x5F2F, max bytes = 2,
-    // }
+// impl Encodable for CertInfo {
+//     fn encoded_len(&self) -> der::Result<der::Length> {
+//         Length::from(1)
+//     }
 
-    // impl Encodable for CertInfo {
-    //     fn encoded_len(&self) -> der::Result<der::Length> {
-    //         Length::from(1)
-    //     }
-
-    //     fn encode(&self, encoder: &mut Encoder<'_>) -> der::Result<()> {
-    //         encoder.encode(der::Any::new(0x71, &[u8::from(self)]))
-    //     }
-    // }
+//     fn encode(&self, encoder: &mut Encoder<'_>) -> der::Result<()> {
+//         encoder.encode(der::Any::new(0x71, &[u8::from(self)]))
+//     }
+// }
 
 // }

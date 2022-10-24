@@ -19,14 +19,14 @@ pub const DERIVED_PIV_PIX: [u8; 6] = hex!("0000 2000 0100");
 pub const PIV_TRUNCATED_AID: [u8; 9] = hex!("A000000308 00001000");
 
 // pub const PIV_AID: &[u8] = &hex!("A000000308 00001000 0100");
-pub const PIV_AID: iso7816::Aid = iso7816::Aid::new_truncatable(&hex!("A000000308 00001000 0100"), 9);
+pub const PIV_AID: iso7816::Aid =
+    iso7816::Aid::new_truncatable(&hex!("A000000308 00001000 0100"), 9);
 
 pub const DERIVED_PIV_AID: [u8; 11] = hex!("A000000308 00002000 0100");
 
 pub const APPLICATION_LABEL: &[u8] = b"SoloKeys PIV";
 pub const APPLICATION_URL: &[u8] = b"https://github.com/solokeys/piv-authenticator";
 // pub const APPLICATION_URL: &[u8] = b"https://piv.is/SoloKeys/PIV/1.0.0-alpha1";
-
 
 // https://git.io/JfWuD
 pub const YUBICO_OTP_PIX: [u8; 3] = hex!("200101");
@@ -84,7 +84,7 @@ pub const SELECT: (u8, u8, u8, u8) = (
     // p2: i think this is dummy here
     0x00, // b2, b1 zero means "file occurence": first/only occurence,
           // b4, b3 zero means "file control information": return FCI template
-    // 256,
+          // 256,
 );
 
 //
@@ -101,12 +101,11 @@ pub const SELECT: (u8, u8, u8, u8) = (
 pub const GET_DATA: (u8, u8, u8, u8) = (
     0x00, // as before, would be 0x0C for secure messaging
     0xCB, // GET DATA. There's also `CA`, setting bit 1 here
-          // means (7816-4, sec. 5.1.2): use BER-TLV, as opposed
-          // to "no indication provided".
+    // means (7816-4, sec. 5.1.2): use BER-TLV, as opposed
+    // to "no indication provided".
     // P1, P2: 7816-4, sec. 7.4.1: bit 1 of INS set => P1,P2 identifies
     // a file. And 0x3FFF identifies current DF
-    0x3F,
-    0xFF,
+    0x3F, 0xFF,
     // 256,
 );
 
@@ -232,7 +231,6 @@ pub const GET_DATA: (u8, u8, u8, u8) = (
 //        sw.to_be_bytes()
 //    }
 //}
-
 
 // 6A, 80 incorrect parameter in command data field
 // 6A, 81 function not supported
@@ -420,13 +418,13 @@ pub const YUBICO_ATTESTATION_CERTIFICATE_FOR_9A: &'static [u8; 584] = &[
 ];
 // pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &'static [u8; 24] = b"123456781234567812345678";
 pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &'static [u8; 24] = &[
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 ];
 
 // stolen from le yubico
-pub const DISCOVERY_OBJECT: &'static [u8; 20] = b"~\x12O\x0b\xa0\x00\x00\x03\x08\x00\x00\x10\x00\x01\x00_/\x02@\x00";
+pub const DISCOVERY_OBJECT: &'static [u8; 20] =
+    b"~\x12O\x0b\xa0\x00\x00\x03\x08\x00\x00\x10\x00\x01\x00_/\x02@\x00";
 
 // import secrets; secrets.token_bytes(16)
 pub const GUID: &'static [u8; 16] = b"\x0c\x92\xc9\x04\xd0\xdeL\xd9\xf6\xd1\xa2\x9fE3\xca\xeb";

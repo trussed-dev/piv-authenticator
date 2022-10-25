@@ -6,6 +6,7 @@ mod setup;
 
 use std::borrow::Cow;
 
+use hex_literal::hex;
 use serde::Deserialize;
 
 // iso7816::Status doesn't support serde
@@ -197,6 +198,14 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    VerifyDefaultApplicationPin {
+        #[serde(default)]
+        expected_status: Status,
+    },
+    VerifyDefaultGlobalPin {
+        #[serde(default)]
+        expected_status: Status,
+    },
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
@@ -209,6 +218,12 @@ impl IoCmd {
                 output,
                 expected_status,
             } => Self::run_iodata(input, output, *expected_status, card),
+            Self::VerifyDefaultApplicationPin { expected_status } => {
+                Self::run_verify_default_application_pin(*expected_status, card)
+            }
+            Self::VerifyDefaultGlobalPin { expected_status } => {
+                Self::run_verify_default_global_pin(*expected_status, card)
+            }
         }
     }
 
@@ -247,6 +262,23 @@ impl IoCmd {
         card: &mut setup::Piv,
     ) {
         Self::run_bytes(&parse_hex(input), output, expected_status, card)
+    }
+
+    fn run_verify_default_global_pin(expected_status: Status, card: &mut setup::Piv) {
+        Self::run_bytes(
+            &hex!("00 20 00 00 08 313233343536FFFF"),
+            &MATCH_EMPTY,
+            expected_status,
+            card,
+        )
+    }
+    fn run_verify_default_application_pin(expected_status: Status, card: &mut setup::Piv) {
+        Self::run_bytes(
+            &hex!("00 20 00 80 08 313233343536FFFF"),
+            &MATCH_EMPTY,
+            expected_status,
+            card,
+        )
     }
 }
 

@@ -83,7 +83,7 @@ impl TryFrom<&[u8]> for GetData {
             .try_into()
             .map_err(|_| Status::IncorrectDataParameter)?;
 
-        info_now!("request to GetData for container {:?}", container);
+        info!("request to GetData for container {:?}", container);
         Ok(Self(container))
     }
 }

@@ -1,8 +1,11 @@
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
+#[cfg(not(feature = "delog"))]
 #[macro_use]
-extern crate delog;
-generate_macros!();
+extern crate log;
+
+#[cfg(feature = "delog")]
+delog::generate_macros!();
 
 #[macro_use(hex)]
 extern crate hex_literal;
@@ -17,6 +20,9 @@ mod dispatch;
 pub mod piv_types;
 pub mod state;
 pub use piv_types::{Pin, Puk};
+
+#[cfg(feature = "virtual")]
+pub mod vpicc;
 
 use core::convert::TryInto;
 
@@ -70,7 +76,7 @@ where
         reply: &mut Data<R>,
     ) -> Result {
         use piv_types::Algorithms::*;
-        info_now!("selecting PIV maybe");
+        info!("selecting PIV maybe");
 
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
             .with_application_label(APPLICATION_LABEL)
@@ -80,7 +86,7 @@ where
         application_property_template
             .encode_to_heapless_vec(reply)
             .unwrap();
-        info_now!("returning: {}", hex_str!(reply));
+        info!("returning: {:02X?}", reply);
         Ok(())
     }
 
@@ -90,7 +96,7 @@ where
         reply: &mut Data<R>,
     ) -> Result {
         // need to implement Debug on iso7816::Command
-        // info_now!("PIV responding to {:?}", command);
+        // info!("PIV responding to {:?}", command);
         let last_or_only = command.class().chain().last_or_only();
 
         // TODO: avoid owned copy?
@@ -124,7 +130,7 @@ where
 
         // parse Iso7816Command as PivCommand
         let command: Command = (&entire_command).try_into()?;
-        info_now!("parsed: {:?}", &command);
+        info!("parsed: {:?}", &command);
 
         match command {
             Command::Verify(verify) => self.verify(verify),
@@ -281,14 +287,14 @@ where
     //         return Err(Status::LogicalChannelNotSupported);
     //     }
 
-    //     // info_now!("CLA = {:?}", &command.class());
-    //     info_now!("INS = {:?}, P1 = {:X}, P2 = {:X}",
+    //     // info!("CLA = {:?}", &command.class());
+    //     info!("INS = {:?}, P1 = {:X}, P2 = {:X}",
     //               &command.instruction(),
     //               command.p1, command.p2,
     //               );
-    //     // info_now!("extended = {:?}", command.extended);
+    //     // info!("extended = {:?}", command.extended);
 
-    //     // info_now!("INS = {:?}" &command.instruction());
+    //     // info!("INS = {:?}" &command.instruction());
     //     match command.instruction() {
     //         Instruction::GetData => self.get_data(command, reply),
     //         Instruction::PutData => self.put_data(command),
@@ -431,7 +437,7 @@ where
             return Err(Status::IncorrectDataParameter);
         }
 
-        info_now!("looking for keyreference");
+        info!("looking for keyreference");
         let key_handle = match self
             .state
             .persistent(&mut self.trussed)
@@ -447,7 +453,7 @@ where
         let signature = try_syscall!(self.trussed.sign_ed255(key_handle, commitment))
             .map_err(|_error| {
                 // NoSuchKey
-                debug_now!("{:?}", &_error);
+                debug!("{:?}", &_error);
                 Status::UnspecifiedNonpersistentExecutionError
             })?
             .signature;
@@ -495,8 +501,8 @@ where
         self.state.runtime.command_cache = None;
 
         if our_challenge != response {
-            debug_now!("{:?}", &our_challenge);
-            debug_now!("{:?}", &response);
+            debug!("{:?}", &our_challenge);
+            debug!("{:?}", &response);
             return Err(Status::IncorrectDataParameter);
         }
 
@@ -768,7 +774,7 @@ where
                 })
             })
             .map_err(|_e| {
-                info_now!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
+                info!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
                 Status::IncorrectDataParameter
             })?;
 
@@ -837,7 +843,7 @@ where
         ))
         .serialized_key;
 
-        // info_now!("supposed SEC1 pubkey, len {}: {:X?}", serialized_public_key.len(), &serialized_public_key);
+        // info!("supposed SEC1 pubkey, len {}: {:X?}", serialized_public_key.len(), &serialized_public_key);
 
         // P256 SEC1 has 65 bytes, Ed255 pubkeys have 32
         // let l2 = 65;
@@ -853,7 +859,7 @@ where
     }
 
     pub fn put_data(&mut self, command: &iso7816::Command<C>) -> Result {
-        info_now!("PutData");
+        info!("PutData");
         if command.p1 != 0x3f || command.p2 != 0xff {
             return Err(Status::IncorrectP1OrP2Parameter);
         }
@@ -881,11 +887,11 @@ where
                 // }).unwrap();
             })
             .map_err(|_e| {
-                info_now!("error parsing PutData: {:?}", &_e);
+                info!("error parsing PutData: {:?}", &_e);
                 Status::IncorrectDataParameter
             })?;
 
-        // info_now!("PutData in {:?}: {:?}", data_object, data);
+        // info!("PutData in {:?}: {:?}", data_object, data);
 
         if data_object == [0x5f, 0xc1, 0x09] {
             // "Printed Information", supposedly
@@ -976,7 +982,7 @@ where
                 piv_types::CardCapabilityContainer::default()
                     .encode_to_heapless_vec(reply)
                     .unwrap();
-                info_now!("returning CCC {}", hex_str!(reply));
+                info!("returning CCC {:02X?}", reply);
             }
 
             // '5FC1 02' (351B)
@@ -986,14 +992,14 @@ where
                     .with_guid(guid)
                     .encode_to_heapless_vec(reply)
                     .unwrap();
-                info_now!("returning CHUID {}", hex_str!(reply));
+                info!("returning CHUID {:02X?}", reply);
             }
 
             // // '5FC1 05' (351B)
             // Container::X509CertificateForPivAuthentication => {
             //     // return Err(Status::NotFound);
 
-            //     // info_now!("loading 9a cert");
+            //     // info!("loading 9a cert");
             //     // it seems like fetching this certificate is the way Filo's agent decides
             //     // whether the key is "already setup":
             //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
@@ -1001,7 +1007,7 @@ where
             //         trussed::types::Location::Internal,
             //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
             //     )).map_err(|_| {
-            //         // info_now!("error loading: {:?}", &e);
+            //         // info!("error loading: {:?}", &e);
             //         Status::NotFound
             //     } )?.data;
 
@@ -1029,7 +1035,7 @@ where
         instruction: YubicoPivExtension,
         reply: &mut Data<R>,
     ) -> Result {
-        info_now!("yubico extension: {:?}", &instruction);
+        info!("yubico extension: {:?}", &instruction);
         match instruction {
             YubicoPivExtension::GetSerial => {
                 // make up a 4-byte serial

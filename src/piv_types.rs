@@ -1,6 +1,7 @@
 use core::convert::{TryFrom, TryInto};
 
 use flexiber::Encodable;
+use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 
 /// According to spec, a PIN must be 6-8 digits, padded to 8 bytes with 0xFF.

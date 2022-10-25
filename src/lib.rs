@@ -7,9 +7,6 @@ extern crate log;
 #[cfg(feature = "delog")]
 delog::generate_macros!();
 
-#[macro_use(hex)]
-extern crate hex_literal;
-
 pub mod commands;
 pub use commands::Command;
 pub mod constants;

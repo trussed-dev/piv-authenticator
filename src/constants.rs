@@ -1,5 +1,7 @@
 // https://developers.yubico.com/PIV/Introduction/Yubico_extensions.html
 
+use hex_literal::hex;
+
 pub const RID_LENGTH: usize = 5;
 
 // top nibble of first byte is "category", here "A" = International

@@ -1,7 +1,5 @@
 mod setup;
 
-
-
 // example: 00 47 00 9A 0B
 //   AC 09
 //      # P256

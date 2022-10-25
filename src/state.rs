@@ -459,7 +459,7 @@ where
     }
 
     pub fn initialize(trussed: &'t mut T) -> Self {
-        info_now!("initializing PIV state");
+        info!("initializing PIV state");
         let management_key = syscall!(trussed.unsafe_inject_shared_key(
             YUBICO_DEFAULT_MANAGEMENT_KEY,
             trussed::types::Location::Internal,
@@ -527,7 +527,7 @@ where
             try_syscall!(trussed.read_file(Location::Internal, PathBuf::from(Self::FILENAME)));
         if let Ok(data) = data {
             let previous_state = trussed::cbor_deserialize(&data.data).map_err(|_err| {
-                info!("cbor deser error: {_err:?}", e);
+                info!("cbor deser error: {_err:?}");
                 info!("data: {:X?}", &data);
             });
             if let Ok(state) = previous_state {

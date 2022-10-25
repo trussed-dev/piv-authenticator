@@ -92,8 +92,7 @@ where
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
     ) -> Result {
-        // need to implement Debug on iso7816::Command
-        // info!("PIV responding to {:?}", command);
+        info!("PIV responding to {:?}", command);
         let last_or_only = command.class().chain().last_or_only();
 
         // TODO: avoid owned copy?

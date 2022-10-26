@@ -206,6 +206,7 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    Select,
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
@@ -224,6 +225,7 @@ impl IoCmd {
             Self::VerifyDefaultGlobalPin { expected_status } => {
                 Self::run_verify_default_global_pin(*expected_status, card)
             }
+            Self::Select => Self::run_select(card),
         }
     }
 
@@ -277,6 +279,37 @@ impl IoCmd {
             &hex!("00 20 00 80 08 313233343536FFFF"),
             &MATCH_EMPTY,
             expected_status,
+            card,
+        )
+    }
+
+    fn run_select(card: &mut setup::Piv) {
+        let matcher = OutputMatcher::Bytes(Cow::Borrowed(&hex!(
+            "
+            61 63 // Card application property template
+                4f 06 000010000100 // Application identifier
+                50 0c 536f6c6f4b65797320504956 // Application label = b\"Solokeys PIV\"
+
+                // URL = b\"https://github.com/solokeys/piv-authenticator\"
+                5f50 2d 68747470733a2f2f6769746875622e636f6d2f736f6c6f6b6579732f7069762d61757468656e74696361746f72 
+            
+                // Cryptographic Algorithm Identifier Template
+                ac 12 
+                    80 01 03 // TDES - ECB
+                    80 01 0c // AES256 - ECB
+                    80 01 11 // P-256
+                    80 01 e2 // Ed25519
+                    80 01 e3 // X25519
+                    06 01 00
+                // Coexistent Tag Allocation Authority Template 
+                79 07 
+                    4f 05 a000000308    
+        "
+        )));
+        Self::run_bytes(
+            &hex!("00 A4 04 00 0C A000000308000010000100 00"),
+            &matcher,
+            Status::Success,
             card,
         )
     }

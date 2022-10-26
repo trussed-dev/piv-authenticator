@@ -69,7 +69,7 @@ where
 
     pub fn select<const R: usize>(
         &mut self,
-        _apdu: &iso7816::Command<C>,
+        _aid: commands::Select<'_>,
         reply: &mut Data<R>,
     ) -> Result {
         use piv_types::Algorithms::*;
@@ -132,6 +132,7 @@ where
             Command::Verify(verify) => self.verify(verify),
             Command::ChangeReference(change_reference) => self.change_reference(change_reference),
             Command::GetData(container) => self.get_data(container, reply),
+            Command::Select(aid) => self.select(aid, reply),
             _ => todo!(),
         }
     }

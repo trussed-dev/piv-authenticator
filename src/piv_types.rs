@@ -268,12 +268,13 @@ impl<'a> DynamicAuthenticationTemplate<'a> {
 ///
 /// We remove the deprecated data elements.
 // pivy: https://git.io/JfzBo
-// https://www.idmanagement.gov/wp-content/uploads/sites/1171/uploads/TIG_SCEPACS_v2.3.pdf
+// https://www.idmanagement.gov/wp-content/uploads/sites/1171/uploads/TIG_SCEPACS_v2.3.pdf FIXME: dead link
 #[derive(Clone, Copy, Encodable, Eq, PartialEq)]
 #[tlv(application, primitive, number = "0x13")] // = 0x53
 pub struct CardHolderUniqueIdentifier<'l> {
     #[tlv(simple = "0x30")]
     // pivy: 26B, TIG: 25B
+    // https://www.idmanagement.gov/docs/pacs-tig-scepacs.pdf
     fasc_n: &'l [u8],
 
     #[tlv(simple = "0x34")]
@@ -324,8 +325,21 @@ pub struct CardHolderUniqueIdentifier<'l> {
 impl Default for CardHolderUniqueIdentifier<'static> {
     fn default() -> Self {
         Self {
-            // 9999 = non-federal
-            fasc_n: &[0x99, 0x99],
+            // Corresponds to bit string in CBD (see https://www.idmanagement.gov/docs/pacs-tig-scepacs.pdf)
+            // 11010_10011_10011_10011_10011_10110_00001_00001_00001_00001
+            // 10110_00001_00001_00001_00001_00001_00001_10110_00001_10110
+            // 00001_10110_00001_00001_00001_00001_00001_00001_00001_00001
+            // 00001_00001_10000_00001_00001_00001_00001_10000_11111_10011
+            // AGENCY CODE = 9999 (non federal)
+            // SYSTEM CODE = 0000
+            // CREDENTIAL# = 000000
+            // CS = 0
+            // ICI = 0
+            // PI = 0000000000
+            // OC= 1
+            // OI=0000
+            // POA=1
+            fasc_n: &hex!("D4E739D821086C1084210D8360D8210842108421804210C3F3"),
             guid: hex!("00000000000040008000000000000000"),
             expiration_date: *b"99991231",
             // cardholder_uuid: None,

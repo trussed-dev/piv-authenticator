@@ -8,5 +8,11 @@
             VerifyDefaultApplicationPin(),
             VerifyDefaultGlobalPin(expected_status: FunctionNotSupported)
         ]
-    )
+    ),
+    IoTest(
+        name: "Select",
+        cmd_resp: [
+            Select
+        ]
+    ),
 ]

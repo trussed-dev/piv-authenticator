@@ -8,7 +8,7 @@ impl<T> App<{ command::SIZE }, { response::SIZE }> for Authenticator<T, { comman
 where
     T: client::Client + client::Ed255 + client::Tdes,
 {
-    fn select(&mut self, apdu: &Command, reply: &mut response::Data) -> Result {
+    fn select(&mut self, _apdu: &Command, reply: &mut response::Data) -> Result {
         self.select(reply)
     }
 

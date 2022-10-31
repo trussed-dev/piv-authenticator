@@ -67,11 +67,7 @@ where
     // The way apdu-dispatch currently works, this would deselect, resetting security indicators.
     pub fn deselect(&mut self) {}
 
-    pub fn select<const R: usize>(
-        &mut self,
-        _aid: commands::Select<'_>,
-        reply: &mut Data<R>,
-    ) -> Result {
+    pub fn select<const R: usize>(&mut self, reply: &mut Data<R>) -> Result {
         use piv_types::Algorithms::*;
         info!("selecting PIV maybe");
 
@@ -132,7 +128,7 @@ where
             Command::Verify(verify) => self.verify(verify),
             Command::ChangeReference(change_reference) => self.change_reference(change_reference),
             Command::GetData(container) => self.get_data(container, reply),
-            Command::Select(aid) => self.select(aid, reply),
+            Command::Select(_aid) => self.select(reply),
             _ => todo!(),
         }
     }

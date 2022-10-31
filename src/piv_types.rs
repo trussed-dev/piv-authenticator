@@ -344,9 +344,7 @@ impl Default for CardHolderUniqueIdentifier<'static> {
             fasc_n: DEFAULT_FASC_N,
             guid: hex!("00000000000040008000000000000000"),
             expiration_date: *b"99991231",
-            // cardholder_uuid: None,
-            // at least pivy only checks for non-empty entry
-            issuer_asymmetric_signature: b" ",
+            issuer_asymmetric_signature: b"",
             error_detection_code: [0u8; 0],
         }
     }

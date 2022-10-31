@@ -89,39 +89,7 @@ where
         reply: &mut Data<R>,
     ) -> Result {
         info!("PIV responding to {:?}", command);
-        let last_or_only = command.class().chain().last_or_only();
-
-        // TODO: avoid owned copy?
-        let entire_command = match self.state.runtime.chained_command.as_mut() {
-            Some(command_so_far) => {
-                // TODO: make sure the header matches, e.g. '00 DB 3F FF'
-                command_so_far
-                    .data_mut()
-                    .extend_from_slice(command.data())
-                    .unwrap();
-
-                if last_or_only {
-                    let entire_command = command_so_far.clone();
-                    self.state.runtime.chained_command = None;
-                    entire_command
-                } else {
-                    return Ok(());
-                }
-            }
-
-            None => {
-                if last_or_only {
-                    // iso7816::Command<C>
-                    command.clone()
-                } else {
-                    self.state.runtime.chained_command = Some(command.clone());
-                    return Ok(());
-                }
-            }
-        };
-
-        // parse Iso7816Command as PivCommand
-        let command: Command = (&entire_command).try_into()?;
+        let command: Command = command.try_into()?;
         info!("parsed: {:?}", &command);
 
         match command {

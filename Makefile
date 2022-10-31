@@ -15,7 +15,7 @@ check:
 	cargo fmt --check
 	cargo check --all-targets --all-features
 	cargo check --target thumbv7em-none-eabi
-	cargo clippy -- -Dwarnings
+	cargo clippy --all-targets --all-features -- -Dwarnings
 	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
 	
 .PHONY: tarpaulin

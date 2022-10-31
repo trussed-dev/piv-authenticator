@@ -52,6 +52,7 @@ fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
     buf
 }
 
+#[allow(unused)]
 fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     let mut buf = Vec::from(tag);
     buf.extend_from_slice(&serialize_len(data.len()));
@@ -59,6 +60,7 @@ fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     buf
 }
 
+#[allow(unused)]
 fn build_command(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8], le: u16) -> Vec<u8> {
     let mut res = vec![cla, ins, p1, p2];
     let lc = data.len();
@@ -322,9 +324,9 @@ fn command_response() {
     for t in tests {
         println!("\n\n===========================================================",);
         println!("Running {}", t.name);
-        setup::piv(|mut card| {
+        setup::piv(|card| {
             for io in t.cmd_resp {
-                io.run(&mut card);
+                io.run(card);
             }
         });
     }

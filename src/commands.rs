@@ -105,14 +105,10 @@ impl TryFrom<u8> for VerifyKeyReference {
         // then no other key reference shall be able to be verified by the PIV Card Application VERIFY command.
         match p2 {
             0x00 => Ok(Self::GlobalPin),
-            // 0x00 => Err(Status::FunctionNotSupported),
             0x80 => Ok(Self::PivPin),
             0x96 => Ok(Self::PrimaryFingerOcc),
             0x97 => Ok(Self::SecondaryFingerOcc),
             0x98 => Ok(Self::PairingCode),
-            // 0x96 => Err(Status::FunctionNotSupported),
-            // 0x97 => Err(Status::FunctionNotSupported),
-            // 0x98 => Err(Status::FunctionNotSupported),
             _ => Err(Status::KeyReferenceNotFound),
         }
     }

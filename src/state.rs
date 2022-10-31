@@ -172,46 +172,6 @@ impl<const C: usize> State<C> {
     }
 }
 
-// #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-// pub struct Pin {
-//     // padded_pin: [u8; 8]
-//     pin: heapless_bytes::Bytes<heapless::consts::U8>,
-// }
-
-// impl Default for Pin {
-//     /// Default is "202020"
-//     /// But right now we have to use "123456" cause.. Filo
-//     fn default() -> Self {
-//         // Self::try_new(b"202020\xff\xff").unwrap()
-//         Self::try_new(b"123456\xff\xff").unwrap()
-//     }
-// }
-
-// impl Pin {
-//     pub fn try_new(padded_pin: &[u8]) -> Result<Self> {
-//         if padded_pin.len() != 8 {
-//             return Err(());
-//         }
-//         let first_pad_byte = padded_pin.iter().position(|&b| b == 0xff);
-//         let unpadded_pin = match first_pad_byte {
-//             Some(l) => &padded_pin[..l],
-//             None => padded_pin,
-//         };
-//         if unpadded_pin.len() < 6 {
-//             return Err(());
-//         }
-//         let valid_bytes = unpadded_pin.iter().all(|&b| b >= b'0' && b <= b'9');
-//         if valid_bytes {
-//             Ok(Self {
-//                 // padded_pin: padded_pin.try_into().unwrap(),
-//                 pin: Bytes::from_slice(padded_pin).unwrap(),//padded_pin.try_into().unwrap(),
-//             })
-//         } else {
-//             Err(())
-//         }
-//     }
-// }
-
 #[derive(Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct PersistentState {
     pub keys: Keys,

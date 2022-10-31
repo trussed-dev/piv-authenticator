@@ -305,23 +305,6 @@ pub struct CardHolderUniqueIdentifier<'l> {
     error_detection_code: [u8; 0],
 }
 
-// #[derive(Decodable, Encodable)]
-// #[tlv(application, number = "0x13")]
-// pub struct CardHolderUniqueIdentifier {
-//     #[tlv(slice, simple = "0x30")]
-//     fasc_n: [u8; 25],
-//     // #[tlv(slice, simple = "0x33")]
-//     // duns: [u8; 9],
-//     #[tlv(slice, simple = "0x34")]
-//     guid: [u8; 16],
-//     #[tlv(slice, simple = "0x35")]
-//     expiration_date: [u8; 8], // YYYYMMDD
-//     #[tlv(slice, simple = "0x3E")]
-//     issuer_asymmetric_signature: [u8; 1],
-//     #[tlv(slice, simple = "0xFE")]
-//     error_detection_code: [u8; 0],
-// }
-
 /// Corresponds to bit string in CBD (see https://www.idmanagement.gov/docs/pacs-tig-scepacs.pdf)
 /// 11010_10011_10011_10011_10011_10110_00001_00001_00001_00001
 /// 10110_00001_00001_00001_00001_00001_00001_10110_00001_10110

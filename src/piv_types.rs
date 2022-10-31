@@ -322,24 +322,26 @@ pub struct CardHolderUniqueIdentifier<'l> {
 //     error_detection_code: [u8; 0],
 // }
 
+/// Corresponds to bit string in CBD (see https://www.idmanagement.gov/docs/pacs-tig-scepacs.pdf)
+/// 11010_10011_10011_10011_10011_10110_00001_00001_00001_00001
+/// 10110_00001_00001_00001_00001_00001_00001_10110_00001_10110
+/// 00001_10110_00001_00001_00001_00001_00001_00001_00001_00001
+/// 00001_00001_10000_00001_00001_00001_00001_10000_11111_10011
+/// AGENCY CODE = 9999 (non federal)
+/// SYSTEM CODE = 0000
+/// CREDENTIAL# = 000000
+/// CS = 0
+/// ICI = 0
+/// PI = 0000000000
+/// OC= 1
+/// OI=0000
+/// POA=1
+const DEFAULT_FASC_N: &[u8] = &hex!("D4E739D821086C1084210D8360D8210842108421804210C3F3");
+
 impl Default for CardHolderUniqueIdentifier<'static> {
     fn default() -> Self {
         Self {
-            // Corresponds to bit string in CBD (see https://www.idmanagement.gov/docs/pacs-tig-scepacs.pdf)
-            // 11010_10011_10011_10011_10011_10110_00001_00001_00001_00001
-            // 10110_00001_00001_00001_00001_00001_00001_10110_00001_10110
-            // 00001_10110_00001_00001_00001_00001_00001_00001_00001_00001
-            // 00001_00001_10000_00001_00001_00001_00001_10000_11111_10011
-            // AGENCY CODE = 9999 (non federal)
-            // SYSTEM CODE = 0000
-            // CREDENTIAL# = 000000
-            // CS = 0
-            // ICI = 0
-            // PI = 0000000000
-            // OC= 1
-            // OI=0000
-            // POA=1
-            fasc_n: &hex!("D4E739D821086C1084210D8360D8210842108421804210C3F3"),
+            fasc_n: DEFAULT_FASC_N,
             guid: hex!("00000000000040008000000000000000"),
             expiration_date: *b"99991231",
             // cardholder_uuid: None,

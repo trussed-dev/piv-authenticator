@@ -985,7 +985,10 @@ where
             //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
             //     reply.extend_from_slice(&data).ok();
             // }
-            _ => return Err(Status::NotFound),
+            _ => {
+                warn!("Unimplemented GET DATA object: {container:?}");
+                return Err(Status::FunctionNotSupported);
+            }
         }
         Ok(())
     }

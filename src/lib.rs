@@ -74,7 +74,7 @@ where
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
             .with_application_label(APPLICATION_LABEL)
             .with_application_url(APPLICATION_URL)
-            .with_supported_cryptographic_algorithms(&[Tdes, Aes256, P256, Ed255, X255]);
+            .with_supported_cryptographic_algorithms(&[Tdes, Aes256, P256, Ed25519, X25519]);
 
         application_property_template
             .encode_to_heapless_vec(reply)

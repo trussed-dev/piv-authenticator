@@ -13,9 +13,9 @@ use crate::{Pin, Puk};
 pub type Result<T> = core::result::Result<T, ()>;
 
 pub enum Key {
-    Ed255(KeyId),
+    Ed25519(KeyId),
     P256(KeyId),
-    X255(KeyId),
+    X25519(KeyId),
 }
 pub enum PinPolicy {
     Never,

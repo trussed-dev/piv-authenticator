@@ -9,7 +9,7 @@ where
     T: client::Client + client::Ed255 + client::Tdes,
 {
     fn select(&mut self, apdu: &Command, reply: &mut response::Data) -> Result {
-        self.select(apdu, reply)
+        self.select(reply)
     }
 
     fn deselect(&mut self) {

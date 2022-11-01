@@ -8,7 +8,21 @@ use core::convert::{TryFrom, TryInto};
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
+use crate::state::TouchPolicy;
 pub use crate::{container as containers, piv_types, Pin, Puk};
+
+// https://developers.yubico.com/PIV/Introduction/Yubico_extensions.html
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum YubicoPivExtension {
+    SetManagementKey(TouchPolicy),
+    ImportAsymmetricKey,
+    GetVersion,
+    Reset,
+    SetPinRetries,
+    Attest,
+    GetSerial, // also used via 0x01
+    GetMetadata,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Command<'l> {
@@ -36,6 +50,9 @@ pub enum Command<'l> {
     /// Store a data object / container.
     PutData(PutData),
     GenerateAsymmetric(GenerateAsymmetric),
+
+    /* Yubico commands */
+    YkExtension(YubicoPivExtension),
 }
 
 impl<'l> Command<'l> {
@@ -127,7 +144,6 @@ impl TryFrom<u8> for VerifyLogout {
         }
     }
 }
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VerifyArguments<'l> {
     pub key_reference: VerifyKeyReference,
@@ -469,6 +485,39 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
                         data,
                     },
                 )?)
+            }
+            // (0x00, 0x01, 0x10, 0x00)
+            (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::GetSerial)
+            }
+            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFE) => {
+                Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Never))
+            }
+            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFF) => {
+                Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Always))
+            }
+            (0x00, Instruction::Unknown(0xfe), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::ImportAsymmetricKey)
+            }
+            (0x00, Instruction::Unknown(0xfd), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::GetVersion)
+            }
+            (0x00, Instruction::Unknown(0xfb), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::Reset)
+            }
+            (0x00, Instruction::Unknown(0xfa), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::SetPinRetries)
+            }
+            // (0x00, 0xf9, 0x9a, 0x00)
+            (0x00, Instruction::Unknown(0xf9), _, _) => {
+                Self::YkExtension(YubicoPivExtension::Attest)
+            }
+            // (0x00, 0xf8, 0x00, 0x00)
+            (0x00, Instruction::Unknown(0xf8), _, _) => {
+                Self::YkExtension(YubicoPivExtension::GetSerial)
+            }
+            (0x00, Instruction::Unknown(0xf7), _, _) => {
+                Self::YkExtension(YubicoPivExtension::GetMetadata)
             }
 
             _ => return Err(Status::FunctionNotSupported),

@@ -52,7 +52,7 @@ impl TryFrom<&[u8]> for Puk {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 // As additional reference, see:
 // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
 //

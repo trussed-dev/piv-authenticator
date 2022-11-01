@@ -8,7 +8,7 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
-pub use commands::Command;
+pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
 pub mod container;
 pub mod derp;
@@ -89,14 +89,17 @@ where
         reply: &mut Data<R>,
     ) -> Result {
         info!("PIV responding to {:?}", command);
-        let command: Command = command.try_into()?;
-        info!("parsed: {:?}", &command);
+        let parsed_command: Command = command.try_into()?;
+        info!("parsed: {:?}", &parsed_command);
 
-        match command {
+        match parsed_command {
             Command::Verify(verify) => self.verify(verify),
             Command::ChangeReference(change_reference) => self.change_reference(change_reference),
             Command::GetData(container) => self.get_data(container, reply),
             Command::Select(_aid) => self.select(reply),
+            Command::YkExtension(yk_command) => {
+                self.yubico_piv_extension(command, yk_command, reply)
+            }
             _ => todo!(),
         }
     }
@@ -827,7 +830,7 @@ where
                 .ok();
             }
 
-            YubicoPivExtension::SetManagementKey => {
+            YubicoPivExtension::SetManagementKey(_touch_policy) => {
                 // cmd := apdu{
                 //     instruction: insSetMGMKey,
                 //     param1:      0xff,

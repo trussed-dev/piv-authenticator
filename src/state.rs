@@ -22,6 +22,8 @@ pub enum PinPolicy {
     Once,
     Always,
 }
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum TouchPolicy {
     Never,
     Always,

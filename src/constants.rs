@@ -135,41 +135,6 @@ impl YubicoObjects {
     pub const AttestationCertificate: &'static [u8] = b"\x5f\xff\x01";
 }
 
-// https://developers.yubico.com/PIV/Introduction/Yubico_extensions.html
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum YubicoPivExtension {
-    SetManagementKey = 0xff,
-    ImportAsymmetricKey = 0xfe,
-    GetVersion = 0xfd,
-    Reset = 0xfb,
-    SetPinRetries = 0xfa,
-    Attest = 0xf9,
-    GetSerial = 0xf8, // also used via 0x01
-    GetMetadata = 0xf7,
-}
-
-impl core::convert::TryFrom<u8> for YubicoPivExtension {
-    type Error = ();
-    fn try_from(ins: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match ins {
-            // (0x00, 0x01, 0x10, 0x00)
-            0x01 => YubicoPivExtension::GetSerial,
-            0xff => YubicoPivExtension::SetManagementKey,
-            0xfe => YubicoPivExtension::ImportAsymmetricKey,
-            0xfd => YubicoPivExtension::GetVersion,
-            0xfb => YubicoPivExtension::Reset,
-            0xfa => YubicoPivExtension::SetPinRetries,
-            // (0x00, 0xf9, 0x9a, 0x00)
-            0xf9 => YubicoPivExtension::Attest,
-            // (0x00, 0xf8, 0x00, 0x00)
-            0xf8 => YubicoPivExtension::GetSerial,
-            0xf7 => YubicoPivExtension::GetMetadata,
-            _ => return Err(()),
-        })
-    }
-}
-
 pub const YUBICO_PIV_AUTHENTICATION_CERTIFICATE: &[u8; 351] = &[
     0x53, 0x82, 0x01, 0x5b, 0x70, 0x82, 0x01, 0x52, 0x30, 0x82, 0x01, 0x4e, 0x30, 0x81, 0xf5, 0xa0,
     0x03, 0x02, 0x01, 0x02, 0x02, 0x11, 0x00, 0x8e, 0x46, 0x32, 0xd8, 0xf0, 0xc1, 0xf7, 0xc1, 0x4d,

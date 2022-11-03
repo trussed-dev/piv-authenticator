@@ -46,13 +46,19 @@ pub enum Command<'l> {
     /// The most general purpose method, performing actual cryptographic operations
     ///
     /// In particular, this can also decrypt or similar.
-    Authenticate(Authenticate),
+    GeneralAuthenticate(GeneralAuthenticate),
     /// Store a data object / container.
     PutData(PutData),
     GenerateAsymmetric(GenerateAsymmetric),
 
     /* Yubico commands */
     YkExtension(YubicoPivExtension),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GeneralAuthenticate {
+    algorithm: piv_types::Algorithms,
+    key_reference: AuthenticateKeyReference,
 }
 
 impl<'l> Command<'l> {
@@ -346,16 +352,6 @@ pub struct AuthenticateArguments<'l> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Authenticate {}
-
-impl TryFrom<AuthenticateArguments<'_>> for Authenticate {
-    type Error = Status;
-    fn try_from(_arguments: AuthenticateArguments<'_>) -> Result<Self, Self::Error> {
-        todo!();
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PutData {}
 
 impl TryFrom<&[u8]> for PutData {
@@ -464,13 +460,12 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
-                let unparsed_algorithm = p1;
+                let algorithm = p1.try_into()?;
                 let key_reference = AuthenticateKeyReference::try_from(p2)?;
-                Self::Authenticate(Authenticate::try_from(AuthenticateArguments {
-                    unparsed_algorithm,
+                Self::GeneralAuthenticate(GeneralAuthenticate {
+                    algorithm,
                     key_reference,
-                    data,
-                })?)
+                })
             }
 
             (0x00, Instruction::PutData, 0x3F, 0xFF) => {

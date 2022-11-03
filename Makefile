@@ -14,7 +14,6 @@ test:
 check:
 	cargo fmt --check
 	cargo check --all-targets --all-features
-	cargo check --target thumbv7em-none-eabi
 	cargo clippy --all-targets --all-features -- -Dwarnings
 	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
 	
@@ -25,3 +24,7 @@ tarpaulin:
 .PHONY: example
 example:
 	cargo run --example virtual --features virtual 
+	
+.PHONY: ci
+ci: check tarpaulin
+	

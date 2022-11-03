@@ -2,7 +2,38 @@ use core::convert::{TryFrom, TryInto};
 
 use flexiber::Encodable;
 use hex_literal::hex;
+use iso7816::Status;
 use serde::{Deserialize, Serialize};
+
+macro_rules! enum_u8 {
+    (
+        $(#[$outer:meta])*
+        $vis:vis enum $name:ident {
+            $($var:ident = $num:expr),+
+            $(,)*
+        }
+    ) => {
+        $(#[$outer])*
+        #[repr(u8)]
+        $vis enum $name {
+            $(
+                $var = $num,
+            )*
+        }
+
+        impl TryFrom<u8> for $name {
+            type Error = Status;
+            fn try_from(val: u8) -> Result<Self, Self::Error> {
+                match val {
+                    $(
+                        $num => Ok($name::$var),
+                    )*
+                    _ => Err(Status::KeyReferenceNotFound)
+                }
+            }
+        }
+    }
+}
 
 /// According to spec, a PIN must be 6-8 digits, padded to 8 bytes with 0xFF.
 ///
@@ -51,44 +82,44 @@ impl TryFrom<&[u8]> for Puk {
     }
 }
 
-#[repr(u8)]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-// As additional reference, see:
-// https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
-//
-// This GP ISO standard contains PIV types as subset (although SM is not quite clear),
-// references Opacity ZKM.
-pub enum Algorithms {
-    Tdes = 0x3,
-    Rsa1024 = 0x6,
-    Rsa2048 = 0x7,
-    Aes128 = 0x8,
-    Aes192 = 0xA,
-    Aes256 = 0xC,
-    P256 = 0x11,
-    P384 = 0x14,
-
-    // // non-standard! in piv-go though!
-    // Ed255_prev = 0x22,
-
+enum_u8! {
+    #[derive(Clone, Copy, Eq, PartialEq, Debug)]
+    // As additional reference, see:
     // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
-    P521 = 0x15,
-    // non-standard!
-    Rsa3072 = 0xE0,
-    Rsa4096 = 0xE1,
-    Ed25519 = 0xE2,
-    X25519 = 0xE3,
-    Ed448 = 0xE4,
-    X448 = 0xE5,
+    //
+    // This GP ISO standard contains PIV types as subset (although SM is not quite clear),
+    // references Opacity ZKM.
+    pub enum Algorithms {
+        Tdes = 0x3,
+        Rsa1024 = 0x6,
+        Rsa2048 = 0x7,
+        Aes128 = 0x8,
+        Aes192 = 0xA,
+        Aes256 = 0xC,
+        P256 = 0x11,
+        P384 = 0x14,
 
-    // non-standard! picked by Alex, but maybe due for removal
-    P256Sha1 = 0xF0,
-    P256Sha256 = 0xF1,
-    P384Sha1 = 0xF2,
-    P384Sha256 = 0xF3,
-    P384Sha384 = 0xF4,
+        // // non-standard! in piv-go though!
+        // Ed255_prev = 0x22,
+
+        // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
+        P521 = 0x15,
+        // non-standard!
+        Rsa3072 = 0xE0,
+        Rsa4096 = 0xE1,
+        Ed25519 = 0xE2,
+        X25519 = 0xE3,
+        Ed448 = 0xE4,
+        X448 = 0xE5,
+
+        // non-standard! picked by Alex, but maybe due for removal
+        P256Sha1 = 0xF0,
+        P256Sha256 = 0xF1,
+        P384Sha1 = 0xF2,
+        P384Sha256 = 0xF3,
+        P384Sha384 = 0xF4,
+    }
 }
-
 /// TODO:
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct CryptographicAlgorithmTemplate<'a> {

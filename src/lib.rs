@@ -8,6 +8,7 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
+use commands::GeneralAuthenticate;
 pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
 pub mod container;
@@ -16,6 +17,9 @@ pub mod derp;
 mod dispatch;
 pub mod piv_types;
 pub mod state;
+mod tlv;
+use tlv::take_do;
+
 pub use piv_types::{Pin, Puk};
 
 #[cfg(feature = "virtual")]
@@ -97,6 +101,9 @@ where
             Command::ChangeReference(change_reference) => self.change_reference(change_reference),
             Command::GetData(container) => self.get_data(container, reply),
             Command::Select(_aid) => self.select(reply),
+            Command::GeneralAuthenticate(authenticate) => {
+                self.general_authenticate(authenticate, command.data(), reply)
+            }
             Command::YkExtension(yk_command) => {
                 self.yubico_piv_extension(command, yk_command, reply)
             }
@@ -230,7 +237,8 @@ where
     // - 6A80, 6A86 for data, P1/P2 issue
     pub fn general_authenticate<const R: usize>(
         &mut self,
-        command: &iso7816::Command<C>,
+        auth: GeneralAuthenticate,
+        data: &[u8],
         reply: &mut Data<R>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
@@ -250,206 +258,59 @@ where
         //
         // expected response: "7C L1 82 L2 SEQ(INT r, INT s)"
 
-        let _alg = command.p1;
-        let _slot = command.p2;
-        let mut data = command.data().as_slice();
-
         // refine as we gain more capability
         if data.len() < 2 {
             return Err(Status::IncorrectDataParameter);
         }
 
-        let tag = data[0];
-        if tag != 0x7c {
+        let Some((tag,data, [])) = take_do(data) else {
             return Err(Status::IncorrectDataParameter);
-        }
-
-        if data[1] > 0x81 {
-            panic!("unhandled >1B lengths");
-        }
-        if data[1] == 0x81 {
-            // FIXME: Proper length parsing and avoid panics
-            // data[2] as usize;
-            data = &data[3..];
-        } else {
-            // FIXME: Proper length parsing and avoid panics
-            // data[1] as usize; // ~158 for ssh ed25519 signatures (which have a ~150B commitment)
-            data = &data[2..];
         };
 
-        // step 1 of piv-go/ykAuthenticate
-        // https://github.com/go-piv/piv-go/blob/d5ec95eb3bec9c20d60611fb77b7caeed7d886b6/piv/piv.go#L359-L384
-        if data.starts_with(&[0x80, 0x00]) {
-            // "request for witness"
-            // hint that this is an attempt to SetManagementKey
-            data = &data[2..];
-            return self.request_for_witness(command, data, reply);
+        // part 2 table 7
+        match tag {
+            0x80 => self.request_for_witness(auth, data, reply),
+            0x81 => self.request_for_challenge(auth, data, reply),
+            0x82 => self.request_for_response(auth, data, reply),
+            0x85 => self.request_for_exponentiation(auth, data, reply),
+            _ => Err(Status::IncorrectDataParameter),
         }
+    }
 
-        // step 2 of piv-go/ykAuthenticate
-        // https://github.com/go-piv/piv-go/blob/d5ec95eb3bec9c20d60611fb77b7caeed7d886b6/piv/piv.go#L415-L420
-        if data.starts_with(&[0x80, 0x08]) {
-            data = &data[2..];
-            return self.request_for_challenge(command, data, reply);
-        }
+    pub fn request_for_response<const R: usize>(
+        &mut self,
+        _auth: GeneralAuthenticate,
+        _data: &[u8],
+        _reply: &mut Data<R>,
+    ) -> Result {
+        todo!()
+    }
 
-        // expect '82 00'
-        if !data.starts_with(&[0x82, 0x00]) {
-            return Err(Status::IncorrectDataParameter);
-        }
-        data = &data[2..];
-
-        // // expect '81 20'
-        // if !data.starts_with(&[0x81, 0x20]) {
-        //     return Err(Status::IncorrectDataParameter);
-        // }
-        // data = &data[2..];
-
-        // expect '81 81 96'
-        // if !data.starts_with(&[0x81, 0x81, 0x96]) {
-        if !data.starts_with(&[0x81, 0x81]) {
-            return Err(Status::IncorrectDataParameter);
-        }
-        let len = data[2] as usize;
-        data = &data[3..];
-
-        // if data.len() != 32 {
-        //     return Err(Status::IncorrectDataParameter);
-        // }
-        if data.len() != len {
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        info!("looking for keyreference");
-        let key_handle = match self
-            .state
-            .persistent(&mut self.trussed)
-            .state
-            .keys
-            .authentication_key
-        {
-            Some(key) => key,
-            None => return Err(Status::KeyReferenceNotFound),
-        };
-
-        let commitment = data; // 32B of data // 150B for ed25519
-        let signature = try_syscall!(self.trussed.sign_ed255(key_handle, commitment))
-            .map_err(|_error| {
-                // NoSuchKey
-                debug!("{:?}", &_error);
-                Status::UnspecifiedNonpersistentExecutionError
-            })?
-            .signature;
-
-        piv_types::DynamicAuthenticationTemplate::with_response(&signature)
-            .encode_to_heapless_vec(reply)
-            // todo: come up with error handling (in this case, shouldn't fail)
-            .unwrap();
-
-        Ok(())
+    pub fn request_for_exponentiation<const R: usize>(
+        &mut self,
+        _auth: GeneralAuthenticate,
+        _data: &[u8],
+        _reply: &mut Data<R>,
+    ) -> Result {
+        todo!()
     }
 
     pub fn request_for_challenge<const R: usize>(
         &mut self,
-        command: &iso7816::Command<C>,
-        remaining_data: &[u8],
-        reply: &mut Data<R>,
+        _auth: GeneralAuthenticate,
+        _data: &[u8],
+        _reply: &mut Data<R>,
     ) -> Result {
-        // - data is of the form
-        //     00 87 03 9B 16 7C 14 80 08 99 6D 71 40 E7 05 DF 7F 81 08 6E EF 9C 02 00 69 73 E8
-        // - remaining data contains <decrypted challenge> 81 08 <encrypted counter challenge>
-        // - we must a) verify the decrypted challenge, b) decrypt the counter challenge
-
-        if command.p1 != 0x03 || command.p2 != 0x9b {
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-
-        if remaining_data.len() != 8 + 2 + 8 {
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        // A) verify decrypted challenge
-        let (response, data) = remaining_data.split_at(8);
-
-        use state::{AuthenticateManagement, CommandCache};
-        let our_challenge = match self.state.runtime.command_cache {
-            Some(CommandCache::AuthenticateManagement(AuthenticateManagement { challenge })) => {
-                challenge
-            }
-            _ => {
-                return Err(Status::InstructionNotSupportedOrInvalid);
-            }
-        };
-        // no retries ;)
-        self.state.runtime.command_cache = None;
-
-        if our_challenge != response {
-            debug!("{:?}", &our_challenge);
-            debug!("{:?}", &response);
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        self.state.runtime.app_security_status.management_verified = true;
-
-        // B) encrypt their challenge
-        let (header, challenge) = data.split_at(2);
-        if header != [0x81, 0x08] {
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        let key = self
-            .state
-            .persistent(&mut self.trussed)
-            .state
-            .keys
-            .management_key;
-
-        let encrypted_challenge = syscall!(self.trussed.encrypt_tdes(key, challenge)).ciphertext;
-
-        piv_types::DynamicAuthenticationTemplate::with_response(&encrypted_challenge)
-            .encode_to_heapless_vec(reply)
-            .unwrap();
-
-        Ok(())
+        todo!()
     }
 
     pub fn request_for_witness<const R: usize>(
         &mut self,
-        command: &iso7816::Command<C>,
-        remaining_data: &[u8],
-        reply: &mut Data<R>,
+        _auth: GeneralAuthenticate,
+        _data: &[u8],
+        _reply: &mut Data<R>,
     ) -> Result {
-        // invariants: parsed data was '7C L1 80 00' + remaining_data
-
-        if command.p1 != 0x03 || command.p2 != 0x9b {
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-
-        if !remaining_data.is_empty() {
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        let key = self
-            .state
-            .persistent(&mut self.trussed)
-            .state
-            .keys
-            .management_key;
-
-        let challenge = syscall!(self.trussed.random_bytes(8)).bytes;
-        let command_cache = state::AuthenticateManagement {
-            challenge: challenge[..].try_into().unwrap(),
-        };
-        self.state.runtime.command_cache =
-            Some(state::CommandCache::AuthenticateManagement(command_cache));
-
-        let encrypted_challenge = syscall!(self.trussed.encrypt_tdes(key, &challenge)).ciphertext;
-
-        piv_types::DynamicAuthenticationTemplate::with_witness(&encrypted_challenge)
-            .encode_to_heapless_vec(reply)
-            .unwrap();
-
-        Ok(())
+        todo!()
     }
 
     pub fn generate_asymmetric_keypair<const R: usize>(

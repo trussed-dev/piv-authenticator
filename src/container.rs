@@ -109,6 +109,13 @@ crate::enum_u8! {
 
 enum_subset! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum AttestKeyReference: KeyReference {
+        PivAuthentication,
+    }
+}
+
+enum_subset! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum GenerateAsymmetricKeyReference: KeyReference {
         SecureMessaging,
         PivAuthentication,

@@ -115,18 +115,19 @@ where
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
             // the actual PIN verification
-            let mut persistent_state = self.state.persistent(&mut self.trussed);
+            let persistent_state = self.state.persistent(&mut self.trussed)?;
 
             if persistent_state.remaining_pin_retries() == 0 {
                 return Err(Status::OperationBlocked);
             }
 
             if persistent_state.verify_pin(&pin) {
-                persistent_state.reset_consecutive_pin_mismatches();
+                persistent_state.reset_consecutive_pin_mismatches(&mut self.trussed);
                 self.state.runtime.app_security_status.pin_verified = true;
                 Ok(())
             } else {
-                let remaining = persistent_state.increment_consecutive_pin_mismatches();
+                let remaining =
+                    persistent_state.increment_consecutive_pin_mismatches(&mut self.trussed);
                 // should we logout here?
                 self.state.runtime.app_security_status.pin_verified = false;
                 Err(Status::RemainingRetries(remaining))
@@ -155,7 +156,7 @@ where
                 } else {
                     let retries = self
                         .state
-                        .persistent(&mut self.trussed)
+                        .persistent(&mut self.trussed)?
                         .remaining_pin_retries();
                     Err(Status::RemainingRetries(retries))
                 }
@@ -172,37 +173,39 @@ where
     }
 
     pub fn change_pin(&mut self, old_pin: commands::Pin, new_pin: commands::Pin) -> Result {
-        let mut persistent_state = self.state.persistent(&mut self.trussed);
+        let persistent_state = self.state.persistent(&mut self.trussed)?;
         if persistent_state.remaining_pin_retries() == 0 {
             return Err(Status::OperationBlocked);
         }
 
         if !persistent_state.verify_pin(&old_pin) {
-            let remaining = persistent_state.increment_consecutive_pin_mismatches();
+            let remaining =
+                persistent_state.increment_consecutive_pin_mismatches(&mut self.trussed);
             self.state.runtime.app_security_status.pin_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
-        persistent_state.reset_consecutive_pin_mismatches();
-        persistent_state.set_pin(new_pin);
+        persistent_state.reset_consecutive_pin_mismatches(&mut self.trussed);
+        persistent_state.set_pin(new_pin, &mut self.trussed);
         self.state.runtime.app_security_status.pin_verified = true;
         Ok(())
     }
 
     pub fn change_puk(&mut self, old_puk: commands::Puk, new_puk: commands::Puk) -> Result {
-        let mut persistent_state = self.state.persistent(&mut self.trussed);
+        let persistent_state = self.state.persistent(&mut self.trussed)?;
         if persistent_state.remaining_puk_retries() == 0 {
             return Err(Status::OperationBlocked);
         }
 
         if !persistent_state.verify_puk(&old_puk) {
-            let remaining = persistent_state.increment_consecutive_puk_mismatches();
+            let remaining =
+                persistent_state.increment_consecutive_puk_mismatches(&mut self.trussed);
             self.state.runtime.app_security_status.puk_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
-        persistent_state.reset_consecutive_puk_mismatches();
-        persistent_state.set_puk(new_puk);
+        persistent_state.reset_consecutive_puk_mismatches(&mut self.trussed);
+        persistent_state.set_puk(new_puk, &mut self.trussed);
         self.state.runtime.app_security_status.puk_verified = true;
         Ok(())
     }
@@ -385,8 +388,7 @@ where
 
         if let Some(key) = self
             .state
-            .persistent(&mut self.trussed)
-            .state
+            .persistent(&mut self.trussed)?
             .keys
             .authentication_key
         {
@@ -418,13 +420,9 @@ where
         //     )?
         //     .signature;
         // blocking::dbg!(&signature);
-
-        self.state
-            .persistent(&mut self.trussed)
-            .state
-            .keys
-            .authentication_key = Some(key);
-        self.state.persistent(&mut self.trussed).save();
+        let persistent_state = self.state.persistent(&mut self.trussed)?;
+        persistent_state.keys.authentication_key = Some(key);
+        persistent_state.save(&mut self.trussed);
 
         // let public_key = syscall!(self.trussed.derive_p256_public_key(
         let public_key = syscall!(self
@@ -584,7 +582,7 @@ where
 
             // '5FC1 02' (351B)
             Container::CardHolderUniqueIdentifier => {
-                let guid = self.state.persistent(&mut self.trussed).guid();
+                let guid = self.state.persistent(&mut self.trussed)?.guid();
                 piv_types::CardHolderUniqueIdentifier::default()
                     .with_guid(guid)
                     .encode_to_heapless_vec(reply)
@@ -668,12 +666,12 @@ where
                     return Err(Status::IncorrectP1OrP2Parameter);
                 }
 
+                let persistent_state = self.state.persistent(&mut self.trussed)?;
+
                 // TODO: find out what all needs resetting :)
-                self.state.persistent(&mut self.trussed).reset_pin();
-                self.state.persistent(&mut self.trussed).reset_puk();
-                self.state
-                    .persistent(&mut self.trussed)
-                    .reset_management_key();
+                persistent_state.reset_pin(&mut self.trussed);
+                persistent_state.reset_puk(&mut self.trussed);
+                persistent_state.reset_management_key(&mut self.trussed);
                 self.state.runtime.app_security_status.pin_verified = false;
                 self.state.runtime.app_security_status.puk_verified = false;
                 self.state.runtime.app_security_status.management_verified = false;
@@ -718,8 +716,8 @@ where
                 }
                 let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
                 self.state
-                    .persistent(&mut self.trussed)
-                    .set_management_key(&new_management_key);
+                    .persistent(&mut self.trussed)?
+                    .set_management_key(&new_management_key, &mut self.trussed);
             }
 
             _ => return Err(Status::FunctionNotSupported),

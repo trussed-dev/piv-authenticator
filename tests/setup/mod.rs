@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub const COMMAND_SIZE: usize = 3072;
 
 #[macro_export]
@@ -9,7 +10,7 @@ macro_rules! cmd {
 
 use trussed::virt::{Client, Ram};
 
-pub type Piv = piv_authenticator::Authenticator<Client<Ram>, COMMAND_SIZE>;
+pub type Piv = piv_authenticator::Authenticator<Client<Ram>>;
 
 pub fn piv<R>(test: impl FnOnce(&mut Piv) -> R) -> R {
     trussed::virt::with_ram_client("test", |client| {

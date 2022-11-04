@@ -148,16 +148,13 @@ pub struct Keys {
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
-pub struct State<const C: usize> {
-    pub runtime: Runtime<C>,
+pub struct State {
+    pub runtime: Runtime,
     pub persistent: Option<Persistent>,
 }
 
-impl<const C: usize> State<C> {
-    pub fn load(
-        &mut self,
-        client: &mut impl trussed::Client,
-    ) -> Result<LoadedState<'_, C>, Status> {
+impl State {
+    pub fn load(&mut self, client: &mut impl trussed::Client) -> Result<LoadedState<'_>, Status> {
         if self.persistent.is_none() {
             self.persistent = Some(Persistent::load_or_initialize(client));
         }
@@ -173,18 +170,16 @@ impl<const C: usize> State<C> {
     ) -> Result<&mut Persistent, Status> {
         Ok(self.load(client)?.persistent)
     }
-}
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct LoadedState<'t, const C: usize> {
-    pub runtime: &'t mut Runtime<C>,
-    pub persistent: &'t mut Persistent,
-}
-
-impl<const C: usize> State<C> {
     pub fn new() -> Self {
         Default::default()
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct LoadedState<'t> {
+    pub runtime: &'t mut Runtime,
+    pub persistent: &'t mut Persistent,
 }
 
 #[derive(Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -206,7 +201,7 @@ pub struct Persistent {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Runtime<const C: usize> {
+pub struct Runtime {
     // aid: Option<
     // consecutive_pin_mismatches: u8,
     pub global_security_status: GlobalSecurityStatus,

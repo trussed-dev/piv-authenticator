@@ -10,7 +10,6 @@ use crate::Authenticator;
 
 const REQUEST_LEN: usize = 7609;
 const RESPONSE_LEN: usize = 7609;
-const BUFFER_LEN: usize = 7609;
 
 /// Virtual PIV smartcard implementation.
 ///
@@ -19,12 +18,12 @@ const BUFFER_LEN: usize = 7609;
 pub struct VirtualCard {
     request_buffer: RequestBuffer<REQUEST_LEN>,
     response_buffer: ResponseBuffer<RESPONSE_LEN>,
-    card: Authenticator<Client<Ram>, BUFFER_LEN>,
+    card: Authenticator<Client<Ram>>,
 }
 
 impl VirtualCard {
     /// Creates a new virtual smart card from the given card.
-    pub fn new(card: Authenticator<Client<Ram>, BUFFER_LEN>) -> Self {
+    pub fn new(card: Authenticator<Client<Ram>>) -> Self {
         Self {
             request_buffer: Default::default(),
             response_buffer: Default::default(),

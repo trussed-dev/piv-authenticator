@@ -4,7 +4,7 @@ use apdu_dispatch::{app::App, command, response, Command};
 use trussed::client;
 
 #[cfg(feature = "apdu-dispatch")]
-impl<T> App<{ command::SIZE }, { response::SIZE }> for Authenticator<T, { command::SIZE }>
+impl<T> App<{ command::SIZE }, { response::SIZE }> for Authenticator<T>
 where
     T: client::Client + client::Ed255 + client::Tdes,
 {

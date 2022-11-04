@@ -41,18 +41,18 @@ pub type Result = iso7816::Result<()>;
 /// The `C` parameter is necessary, as PIV includes command sequences,
 /// where we need to store the previous command, so we need to know how
 /// much space to allocate.
-pub struct Authenticator<T, const C: usize> {
-    state: state::State<C>,
+pub struct Authenticator<T> {
+    state: state::State,
     trussed: T,
 }
 
-impl<T, const C: usize> iso7816::App for Authenticator<T, C> {
+impl<T> iso7816::App for Authenticator<T> {
     fn aid(&self) -> iso7816::Aid {
         crate::constants::PIV_AID
     }
 }
 
-impl<T, const C: usize> Authenticator<T, C>
+impl<T> Authenticator<T>
 where
     T: client::Client + client::Ed255 + client::Tdes,
 {
@@ -87,7 +87,7 @@ where
         Ok(())
     }
 
-    pub fn respond<const R: usize>(
+    pub fn respond<const R: usize, const C: usize>(
         &mut self,
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
@@ -316,7 +316,7 @@ where
         todo!()
     }
 
-    pub fn generate_asymmetric_keypair<const R: usize>(
+    pub fn generate_asymmetric_keypair<const R: usize, const C: usize>(
         &mut self,
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
@@ -453,7 +453,7 @@ where
         Ok(())
     }
 
-    pub fn put_data(&mut self, command: &iso7816::Command<C>) -> Result {
+    pub fn put_data<const C: usize>(&mut self, command: &iso7816::Command<C>) -> Result {
         info!("PutData");
         if command.p1 != 0x3f || command.p2 != 0xff {
             return Err(Status::IncorrectP1OrP2Parameter);
@@ -627,7 +627,7 @@ where
         Ok(())
     }
 
-    pub fn yubico_piv_extension<const R: usize>(
+    pub fn yubico_piv_extension<const R: usize, const C: usize>(
         &mut self,
         command: &iso7816::Command<C>,
         instruction: YubicoPivExtension,

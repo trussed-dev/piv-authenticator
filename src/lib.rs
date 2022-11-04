@@ -494,6 +494,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         todo!()
     }
 
+    #[allow(unused)]
     pub fn generate_asymmetric_keypair<const R: usize, const C: usize>(
         &mut self,
         data: &[u8],
@@ -616,6 +617,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         Ok(())
     }
 
+    #[allow(unused)]
     pub fn put_data(&mut self, data: &[u8]) -> Result {
         info!("PutData");
 

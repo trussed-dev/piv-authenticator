@@ -18,8 +18,6 @@ pub mod derp;
 mod dispatch;
 pub mod piv_types;
 pub mod state;
-mod tlv;
-use tlv::take_do;
 
 pub use piv_types::{Pin, Puk};
 
@@ -263,11 +261,9 @@ where
         // expected response: "7C L1 82 L2 SEQ(INT r, INT s)"
 
         // refine as we gain more capability
-        if data.len() < 2 {
-            return Err(Status::IncorrectDataParameter);
-        }
+        let mut input = derp::Reader::new(derp::Input::from(data));
 
-        let Some((tag,data, [])) = take_do(data) else {
+        let Ok((tag,data)) = derp::read_tag_and_get_value(&mut input) else {
             return Err(Status::IncorrectDataParameter);
         };
 
@@ -284,7 +280,7 @@ where
     pub fn request_for_response<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
-        _data: &[u8],
+        _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
         todo!()
@@ -293,7 +289,7 @@ where
     pub fn request_for_exponentiation<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
-        _data: &[u8],
+        _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
         todo!()
@@ -302,7 +298,7 @@ where
     pub fn request_for_challenge<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
-        _data: &[u8],
+        _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
         todo!()
@@ -311,7 +307,7 @@ where
     pub fn request_for_witness<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
-        _data: &[u8],
+        _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
         todo!()

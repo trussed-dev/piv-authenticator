@@ -1,7 +1,7 @@
 [package]
 name = "piv-authenticator"
 version = "0.0.0-unreleased"
-authors = ["Nicolas Stalder <n@stalder.io>"]
+authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/solokeys/piv-authenticator"

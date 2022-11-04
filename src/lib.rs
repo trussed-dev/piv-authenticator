@@ -12,6 +12,7 @@ use commands::GeneralAuthenticate;
 pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
 pub mod container;
+use container::AttestKeyReference;
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
@@ -105,7 +106,7 @@ where
                 self.general_authenticate(authenticate, command.data(), reply)
             }
             Command::YkExtension(yk_command) => {
-                self.yubico_piv_extension(command, yk_command, reply)
+                self.yubico_piv_extension(command.data(), yk_command, reply)
             }
             _ => todo!(),
         }
@@ -627,9 +628,9 @@ where
         Ok(())
     }
 
-    pub fn yubico_piv_extension<const R: usize, const C: usize>(
+    pub fn yubico_piv_extension<const R: usize>(
         &mut self,
-        command: &iso7816::Command<C>,
+        data: &[u8],
         instruction: YubicoPivExtension,
         reply: &mut Data<R>,
     ) -> Result {
@@ -645,27 +646,15 @@ where
                 reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
             }
 
-            YubicoPivExtension::Attest => {
-                if command.p2 != 0x00 {
-                    return Err(Status::IncorrectP1OrP2Parameter);
-                }
-
-                let slot = command.p1;
-
-                if slot == 0x9a {
-                    reply
+            YubicoPivExtension::Attest(slot) => {
+                match slot {
+                    AttestKeyReference::PivAuthentication => reply
                         .extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A)
-                        .ok();
-                } else {
-                    return Err(Status::FunctionNotSupported);
-                }
+                        .ok(),
+                };
             }
 
             YubicoPivExtension::Reset => {
-                if command.p1 != 0x00 || command.p2 != 0x00 {
-                    return Err(Status::IncorrectP1OrP2Parameter);
-                }
-
                 let persistent_state = self.state.persistent(&mut self.trussed)?;
 
                 // TODO: find out what all needs resetting :)
@@ -699,11 +688,6 @@ where
                 //     }, key[:]...),
                 // }
                 // TODO check we are authenticated with old management key
-                if command.p1 != 0xff || (command.p2 != 0xff && command.p2 != 0xfe) {
-                    return Err(Status::IncorrectP1OrP2Parameter);
-                }
-
-                let data = &command.data();
 
                 // example:  03 9B 18
                 //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA

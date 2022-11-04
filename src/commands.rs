@@ -11,8 +11,8 @@ use iso7816::{Instruction, Status};
 use crate::state::TouchPolicy;
 pub use crate::{
     container::{
-        self as containers, AuthenticateKeyReference, ChangeReferenceKeyReference,
-        GenerateAsymmetricKeyReference, VerifyKeyReference,
+        self as containers, AttestKeyReference, AuthenticateKeyReference,
+        ChangeReferenceKeyReference, GenerateAsymmetricKeyReference, VerifyKeyReference,
     },
     piv_types, Pin, Puk,
 };
@@ -25,7 +25,7 @@ pub enum YubicoPivExtension {
     GetVersion,
     Reset,
     SetPinRetries,
-    Attest,
+    Attest(AttestKeyReference),
     GetSerial, // also used via 0x01
     GetMetadata,
 }
@@ -371,9 +371,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
                 Self::YkExtension(YubicoPivExtension::SetPinRetries)
             }
             // (0x00, 0xf9, 0x9a, 0x00)
-            (0x00, Instruction::Unknown(0xf9), _, _) => {
-                Self::YkExtension(YubicoPivExtension::Attest)
-            }
+            (0x00, Instruction::Unknown(0xf9), _, 0x00) => Self::YkExtension(
+                YubicoPivExtension::Attest(AttestKeyReference::try_from(p1)?),
+            ),
             // (0x00, 0xf8, 0x00, 0x00)
             (0x00, Instruction::Unknown(0xf8), _, _) => {
                 Self::YkExtension(YubicoPivExtension::GetSerial)

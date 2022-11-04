@@ -13,7 +13,7 @@ variables:
   GIT_DEPTH: 0
   GIT_SUBMODULE_STRATEGY: recursive
   REPO_NAME: piv-authenticator
-  MAIN_BRANCH: main
+  MAIN_BRANCH: initial-refacto
   COMMON_PULL: "true"
   COMMON_UPLOAD_NIGHTLY: "false"
   COMMON_GITHUB_RELEASE: "false"

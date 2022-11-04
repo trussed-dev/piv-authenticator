@@ -241,7 +241,7 @@ impl IoCmd {
         let mut rep: heapless::Vec<u8, 1024> = heapless::Vec::new();
         let cmd: iso7816::Command<{ setup::COMMAND_SIZE }> = iso7816::Command::try_from(input)
             .unwrap_or_else(|err| {
-                panic!("Bad command: {err:?}, for command: {}", hex::encode(&input))
+                panic!("Bad command: {err:?}, for command: {}", hex::encode(input))
             });
         let status: Status = card
             .respond(&cmd, &mut rep)

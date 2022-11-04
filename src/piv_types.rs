@@ -2,9 +2,9 @@ use core::convert::{TryFrom, TryInto};
 
 use flexiber::Encodable;
 use hex_literal::hex;
-use iso7816::Status;
 use serde::{Deserialize, Serialize};
 
+#[macro_export]
 macro_rules! enum_u8 {
     (
         $(#[$outer:meta])*
@@ -22,13 +22,13 @@ macro_rules! enum_u8 {
         }
 
         impl TryFrom<u8> for $name {
-            type Error = Status;
+            type Error = ::iso7816::Status;
             fn try_from(val: u8) -> Result<Self, Self::Error> {
                 match val {
                     $(
                         $num => Ok($name::$var),
                     )*
-                    _ => Err(Status::KeyReferenceNotFound)
+                    _ => Err(::iso7816::Status::KeyReferenceNotFound)
                 }
             }
         }

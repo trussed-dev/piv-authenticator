@@ -34,6 +34,7 @@ use trussed::{syscall, try_syscall};
 use constants::*;
 
 pub type Result = iso7816::Result<()>;
+use state::{LoadedState, State};
 
 /// PIV authenticator Trussed app.
 ///
@@ -41,8 +42,13 @@ pub type Result = iso7816::Result<()>;
 /// where we need to store the previous command, so we need to know how
 /// much space to allocate.
 pub struct Authenticator<T> {
-    state: state::State,
+    state: State,
     trussed: T,
+}
+
+struct LoadedAuthenticator<'a, T> {
+    state: LoadedState<'a>,
+    trussed: &'a mut T,
 }
 
 impl<T> iso7816::App for Authenticator<T> {
@@ -64,6 +70,13 @@ where
             state: Default::default(),
             trussed,
         }
+    }
+
+    fn load(&mut self) -> core::result::Result<LoadedAuthenticator<'_, T>, Status> {
+        Ok(LoadedAuthenticator {
+            state: self.state.load(&mut self.trussed)?,
+            trussed: &mut self.trussed,
+        })
     }
 
     // TODO: we'd like to listen on multiple AIDs.
@@ -96,12 +109,15 @@ where
         info!("parsed: {:?}", &parsed_command);
 
         match parsed_command {
-            Command::Verify(verify) => self.verify(verify),
-            Command::ChangeReference(change_reference) => self.change_reference(change_reference),
+            Command::Verify(verify) => self.load()?.verify(verify),
+            Command::ChangeReference(change_reference) => {
+                self.load()?.change_reference(change_reference)
+            }
             Command::GetData(container) => self.get_data(container, reply),
             Command::Select(_aid) => self.select(reply),
             Command::GeneralAuthenticate(authenticate) => {
-                self.general_authenticate(authenticate, command.data(), reply)
+                self.load()?
+                    .general_authenticate(authenticate, command.data(), reply)
             }
             Command::YkExtension(yk_command) => {
                 self.yubico_piv_extension(command.data(), yk_command, reply)
@@ -110,23 +126,185 @@ where
         }
     }
 
+    fn get_data<const R: usize>(
+        &mut self,
+        container: container::Container,
+        reply: &mut Data<R>,
+    ) -> Result {
+        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+
+        // Table 3, Part 1, SP 800-73-4
+        // https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=30
+        use crate::container::Container;
+        match container {
+            Container::DiscoveryObject => {
+                // Err(Status::InstructionNotSupportedOrInvalid)
+                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
+                // todo!("discovery object"),
+            }
+
+            Container::BiometricInformationTemplatesGroupTemplate => {
+                return Err(Status::InstructionNotSupportedOrInvalid);
+                // todo!("biometric information template"),
+            }
+
+            // '5FC1 07' (351B)
+            Container::CardCapabilityContainer => {
+                piv_types::CardCapabilityContainer::default()
+                    .encode_to_heapless_vec(reply)
+                    .unwrap();
+                info!("returning CCC {:02X?}", reply);
+            }
+
+            // '5FC1 02' (351B)
+            Container::CardHolderUniqueIdentifier => {
+                let guid = self.state.persistent(&mut self.trussed)?.guid();
+                piv_types::CardHolderUniqueIdentifier::default()
+                    .with_guid(guid)
+                    .encode_to_heapless_vec(reply)
+                    .unwrap();
+                info!("returning CHUID {:02X?}", reply);
+            }
+
+            // // '5FC1 05' (351B)
+            // Container::X509CertificateForPivAuthentication => {
+            //     // return Err(Status::NotFound);
+
+            //     // info!("loading 9a cert");
+            //     // it seems like fetching this certificate is the way Filo's agent decides
+            //     // whether the key is "already setup":
+            //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
+            //     let data = try_syscall!(self.trussed.read_file(
+            //         trussed::types::Location::Internal,
+            //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
+            //     )).map_err(|_| {
+            //         // info!("error loading: {:?}", &e);
+            //         Status::NotFound
+            //     } )?.data;
+
+            //     // todo: cleanup
+            //     let tag = flexiber::Tag::application(0x13); // 0x53
+            //     flexiber::TaggedSlice::from(tag, &data)
+            //         .unwrap()
+            //         .encode_to_heapless_vec(reply)
+            //         .unwrap();
+            // }
+
+            // // '5F FF01' (754B)
+            // YubicoObjects::AttestationCertificate => {
+            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
+            //     reply.extend_from_slice(&data).ok();
+            // }
+            _ => {
+                warn!("Unimplemented GET DATA object: {container:?}");
+                return Err(Status::FunctionNotSupported);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn yubico_piv_extension<const R: usize>(
+        &mut self,
+        data: &[u8],
+        instruction: YubicoPivExtension,
+        reply: &mut Data<R>,
+    ) -> Result {
+        info!("yubico extension: {:?}", &instruction);
+        match instruction {
+            YubicoPivExtension::GetSerial => {
+                // make up a 4-byte serial
+                reply.extend_from_slice(&[0x00, 0x52, 0xf7, 0x43]).ok();
+            }
+
+            YubicoPivExtension::GetVersion => {
+                // make up a version, be >= 5.0.0
+                reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
+            }
+
+            YubicoPivExtension::Attest(slot) => {
+                match slot {
+                    AttestKeyReference::PivAuthentication => reply
+                        .extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A)
+                        .ok(),
+                };
+            }
+
+            YubicoPivExtension::Reset => {
+                let persistent_state = self.state.persistent(&mut self.trussed)?;
+
+                // TODO: find out what all needs resetting :)
+                persistent_state.reset_pin(&mut self.trussed);
+                persistent_state.reset_puk(&mut self.trussed);
+                persistent_state.reset_management_key(&mut self.trussed);
+                self.state.runtime.app_security_status.pin_verified = false;
+                self.state.runtime.app_security_status.puk_verified = false;
+                self.state.runtime.app_security_status.management_verified = false;
+
+                try_syscall!(self.trussed.remove_file(
+                    trussed::types::Location::Internal,
+                    trussed::types::PathBuf::from(b"printed-information"),
+                ))
+                .ok();
+
+                try_syscall!(self.trussed.remove_file(
+                    trussed::types::Location::Internal,
+                    trussed::types::PathBuf::from(b"authentication-key.x5c"),
+                ))
+                .ok();
+            }
+
+            YubicoPivExtension::SetManagementKey(_touch_policy) => {
+                // cmd := apdu{
+                //     instruction: insSetMGMKey,
+                //     param1:      0xff,
+                //     param2:      0xff,
+                //     data: append([]byte{
+                //         alg3DES, keyCardManagement, 24,
+                //     }, key[:]...),
+                // }
+                // TODO check we are authenticated with old management key
+
+                // example:  03 9B 18
+                //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
+                if data.len() != 3 + 24 {
+                    return Err(Status::IncorrectDataParameter);
+                }
+                let (prefix, new_management_key) = data.split_at(3);
+                if prefix != [0x03, 0x9b, 0x18] {
+                    return Err(Status::IncorrectDataParameter);
+                }
+                let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
+                self.state
+                    .persistent(&mut self.trussed)?
+                    .set_management_key(&new_management_key, &mut self.trussed);
+            }
+
+            _ => return Err(Status::FunctionNotSupported),
+        }
+        Ok(())
+    }
+}
+
+impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
             // the actual PIN verification
-            let persistent_state = self.state.persistent(&mut self.trussed)?;
-
-            if persistent_state.remaining_pin_retries() == 0 {
+            if self.state.persistent.remaining_pin_retries() == 0 {
                 return Err(Status::OperationBlocked);
             }
 
-            if persistent_state.verify_pin(&pin) {
-                persistent_state.reset_consecutive_pin_mismatches(&mut self.trussed);
+            if self.state.persistent.verify_pin(&pin) {
+                self.state
+                    .persistent
+                    .reset_consecutive_pin_mismatches(self.trussed);
                 self.state.runtime.app_security_status.pin_verified = true;
                 Ok(())
             } else {
-                let remaining =
-                    persistent_state.increment_consecutive_pin_mismatches(&mut self.trussed);
+                let remaining = self
+                    .state
+                    .persistent
+                    .increment_consecutive_pin_mismatches(self.trussed);
                 // should we logout here?
                 self.state.runtime.app_security_status.pin_verified = false;
                 Err(Status::RemainingRetries(remaining))
@@ -153,10 +331,7 @@ where
                 if self.state.runtime.app_security_status.pin_verified {
                     Ok(())
                 } else {
-                    let retries = self
-                        .state
-                        .persistent(&mut self.trussed)?
-                        .remaining_pin_retries();
+                    let retries = self.state.persistent.remaining_pin_retries();
                     Err(Status::RemainingRetries(retries))
                 }
             }
@@ -172,39 +347,45 @@ where
     }
 
     pub fn change_pin(&mut self, old_pin: commands::Pin, new_pin: commands::Pin) -> Result {
-        let persistent_state = self.state.persistent(&mut self.trussed)?;
-        if persistent_state.remaining_pin_retries() == 0 {
+        if self.state.persistent.remaining_pin_retries() == 0 {
             return Err(Status::OperationBlocked);
         }
 
-        if !persistent_state.verify_pin(&old_pin) {
-            let remaining =
-                persistent_state.increment_consecutive_pin_mismatches(&mut self.trussed);
+        if !self.state.persistent.verify_pin(&old_pin) {
+            let remaining = self
+                .state
+                .persistent
+                .increment_consecutive_pin_mismatches(self.trussed);
             self.state.runtime.app_security_status.pin_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
-        persistent_state.reset_consecutive_pin_mismatches(&mut self.trussed);
-        persistent_state.set_pin(new_pin, &mut self.trussed);
+        self.state
+            .persistent
+            .reset_consecutive_pin_mismatches(self.trussed);
+        self.state.persistent.set_pin(new_pin, self.trussed);
         self.state.runtime.app_security_status.pin_verified = true;
         Ok(())
     }
 
     pub fn change_puk(&mut self, old_puk: commands::Puk, new_puk: commands::Puk) -> Result {
-        let persistent_state = self.state.persistent(&mut self.trussed)?;
-        if persistent_state.remaining_puk_retries() == 0 {
+        if self.state.persistent.remaining_puk_retries() == 0 {
             return Err(Status::OperationBlocked);
         }
 
-        if !persistent_state.verify_puk(&old_puk) {
-            let remaining =
-                persistent_state.increment_consecutive_puk_mismatches(&mut self.trussed);
+        if !self.state.persistent.verify_puk(&old_puk) {
+            let remaining = self
+                .state
+                .persistent
+                .increment_consecutive_puk_mismatches(self.trussed);
             self.state.runtime.app_security_status.puk_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
-        persistent_state.reset_consecutive_puk_mismatches(&mut self.trussed);
-        persistent_state.set_puk(new_puk, &mut self.trussed);
+        self.state
+            .persistent
+            .reset_consecutive_puk_mismatches(self.trussed);
+        self.state.persistent.set_puk(new_puk, self.trussed);
         self.state.runtime.app_security_status.puk_verified = true;
         Ok(())
     }
@@ -374,12 +555,7 @@ where
 
         // ble policy
 
-        if let Some(key) = self
-            .state
-            .persistent(&mut self.trussed)?
-            .keys
-            .authentication_key
-        {
+        if let Some(key) = self.state.persistent.keys.authentication_key {
             syscall!(self.trussed.delete(key));
         }
 
@@ -408,9 +584,8 @@ where
         //     )?
         //     .signature;
         // blocking::dbg!(&signature);
-        let persistent_state = self.state.persistent(&mut self.trussed)?;
-        persistent_state.keys.authentication_key = Some(key);
-        persistent_state.save(&mut self.trussed);
+        self.state.persistent.keys.authentication_key = Some(key);
+        self.state.persistent.save(self.trussed);
 
         // let public_key = syscall!(self.trussed.derive_p256_public_key(
         let public_key = syscall!(self
@@ -534,162 +709,4 @@ where
     //     _ => todo!(),
     // }
     // todo!();
-
-    fn get_data<const R: usize>(
-        &mut self,
-        container: container::Container,
-        reply: &mut Data<R>,
-    ) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
-
-        // Table 3, Part 1, SP 800-73-4
-        // https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=30
-        use crate::container::Container;
-        match container {
-            Container::DiscoveryObject => {
-                // Err(Status::InstructionNotSupportedOrInvalid)
-                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
-                // todo!("discovery object"),
-            }
-
-            Container::BiometricInformationTemplatesGroupTemplate => {
-                return Err(Status::InstructionNotSupportedOrInvalid);
-                // todo!("biometric information template"),
-            }
-
-            // '5FC1 07' (351B)
-            Container::CardCapabilityContainer => {
-                piv_types::CardCapabilityContainer::default()
-                    .encode_to_heapless_vec(reply)
-                    .unwrap();
-                info!("returning CCC {:02X?}", reply);
-            }
-
-            // '5FC1 02' (351B)
-            Container::CardHolderUniqueIdentifier => {
-                let guid = self.state.persistent(&mut self.trussed)?.guid();
-                piv_types::CardHolderUniqueIdentifier::default()
-                    .with_guid(guid)
-                    .encode_to_heapless_vec(reply)
-                    .unwrap();
-                info!("returning CHUID {:02X?}", reply);
-            }
-
-            // // '5FC1 05' (351B)
-            // Container::X509CertificateForPivAuthentication => {
-            //     // return Err(Status::NotFound);
-
-            //     // info!("loading 9a cert");
-            //     // it seems like fetching this certificate is the way Filo's agent decides
-            //     // whether the key is "already setup":
-            //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
-            //     let data = try_syscall!(self.trussed.read_file(
-            //         trussed::types::Location::Internal,
-            //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
-            //     )).map_err(|_| {
-            //         // info!("error loading: {:?}", &e);
-            //         Status::NotFound
-            //     } )?.data;
-
-            //     // todo: cleanup
-            //     let tag = flexiber::Tag::application(0x13); // 0x53
-            //     flexiber::TaggedSlice::from(tag, &data)
-            //         .unwrap()
-            //         .encode_to_heapless_vec(reply)
-            //         .unwrap();
-            // }
-
-            // // '5F FF01' (754B)
-            // YubicoObjects::AttestationCertificate => {
-            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
-            //     reply.extend_from_slice(&data).ok();
-            // }
-            _ => {
-                warn!("Unimplemented GET DATA object: {container:?}");
-                return Err(Status::FunctionNotSupported);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn yubico_piv_extension<const R: usize>(
-        &mut self,
-        data: &[u8],
-        instruction: YubicoPivExtension,
-        reply: &mut Data<R>,
-    ) -> Result {
-        info!("yubico extension: {:?}", &instruction);
-        match instruction {
-            YubicoPivExtension::GetSerial => {
-                // make up a 4-byte serial
-                reply.extend_from_slice(&[0x00, 0x52, 0xf7, 0x43]).ok();
-            }
-
-            YubicoPivExtension::GetVersion => {
-                // make up a version, be >= 5.0.0
-                reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
-            }
-
-            YubicoPivExtension::Attest(slot) => {
-                match slot {
-                    AttestKeyReference::PivAuthentication => reply
-                        .extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A)
-                        .ok(),
-                };
-            }
-
-            YubicoPivExtension::Reset => {
-                let persistent_state = self.state.persistent(&mut self.trussed)?;
-
-                // TODO: find out what all needs resetting :)
-                persistent_state.reset_pin(&mut self.trussed);
-                persistent_state.reset_puk(&mut self.trussed);
-                persistent_state.reset_management_key(&mut self.trussed);
-                self.state.runtime.app_security_status.pin_verified = false;
-                self.state.runtime.app_security_status.puk_verified = false;
-                self.state.runtime.app_security_status.management_verified = false;
-
-                try_syscall!(self.trussed.remove_file(
-                    trussed::types::Location::Internal,
-                    trussed::types::PathBuf::from(b"printed-information"),
-                ))
-                .ok();
-
-                try_syscall!(self.trussed.remove_file(
-                    trussed::types::Location::Internal,
-                    trussed::types::PathBuf::from(b"authentication-key.x5c"),
-                ))
-                .ok();
-            }
-
-            YubicoPivExtension::SetManagementKey(_touch_policy) => {
-                // cmd := apdu{
-                //     instruction: insSetMGMKey,
-                //     param1:      0xff,
-                //     param2:      0xff,
-                //     data: append([]byte{
-                //         alg3DES, keyCardManagement, 24,
-                //     }, key[:]...),
-                // }
-                // TODO check we are authenticated with old management key
-
-                // example:  03 9B 18
-                //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
-                if data.len() != 3 + 24 {
-                    return Err(Status::IncorrectDataParameter);
-                }
-                let (prefix, new_management_key) = data.split_at(3);
-                if prefix != [0x03, 0x9b, 0x18] {
-                    return Err(Status::IncorrectDataParameter);
-                }
-                let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
-                self.state
-                    .persistent(&mut self.trussed)?
-                    .set_management_key(&new_management_key, &mut self.trussed);
-            }
-
-            _ => return Err(Status::FunctionNotSupported),
-        }
-        Ok(())
-    }
 }

@@ -55,7 +55,7 @@ pub enum Command<'l> {
     GeneralAuthenticate(GeneralAuthenticate),
     /// Store a data object / container.
     PutData(PutData),
-    GenerateAsymmetric(GenerateAsymmetric),
+    GenerateAsymmetric(GenerateAsymmetricKeyReference),
 
     /* Yubico commands */
     YkExtension(YubicoPivExtension),
@@ -252,22 +252,6 @@ impl TryFrom<&[u8]> for PutData {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct GenerateAsymmetricArguments<'l> {
-    pub key_reference: GenerateAsymmetricKeyReference,
-    pub data: &'l [u8],
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum GenerateAsymmetric {}
-
-impl TryFrom<GenerateAsymmetricArguments<'_>> for GenerateAsymmetric {
-    type Error = Status;
-    fn try_from(_arguments: GenerateAsymmetricArguments<'_>) -> Result<Self, Self::Error> {
-        todo!();
-    }
-}
-
 impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
     type Error = Status;
     /// The first layer of unraveling the iso7816::Command onion.
@@ -340,13 +324,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {
-                let key_reference = GenerateAsymmetricKeyReference::try_from(p2)?;
-                Self::GenerateAsymmetric(GenerateAsymmetric::try_from(
-                    GenerateAsymmetricArguments {
-                        key_reference,
-                        data,
-                    },
-                )?)
+                Self::GenerateAsymmetric(GenerateAsymmetricKeyReference::try_from(p2)?)
             }
             // (0x00, 0x01, 0x10, 0x00)
             (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {

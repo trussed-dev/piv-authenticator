@@ -319,20 +319,11 @@ where
 
     pub fn generate_asymmetric_keypair<const R: usize, const C: usize>(
         &mut self,
-        command: &iso7816::Command<C>,
+        data: &[u8],
         reply: &mut Data<R>,
     ) -> Result {
         if !self.state.runtime.app_security_status.management_verified {
             return Err(Status::SecurityStatusNotSatisfied);
-        }
-
-        if command.p1 != 0x00 {
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-
-        if command.p2 != 0x9a {
-            // TODO: make more general
-            return Err(Status::FunctionNotSupported);
         }
 
         // example: 00 47 00 9A 0B
@@ -357,7 +348,7 @@ where
         // }
 
         // TODO: iterate on this, don't expect tags..
-        let input = derp::Input::from(command.data());
+        let input = derp::Input::from(data);
         // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
         let (mechanism, _pin_policy, _touch_policy) = input
             .read_all(derp::Error::Read, |input| {
@@ -454,11 +445,8 @@ where
         Ok(())
     }
 
-    pub fn put_data<const C: usize>(&mut self, command: &iso7816::Command<C>) -> Result {
+    pub fn put_data(&mut self, data: &[u8]) -> Result {
         info!("PutData");
-        if command.p1 != 0x3f || command.p2 != 0xff {
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
 
         // if !self.state.runtime.app_security_status.management_verified {
         //     return Err(Status::SecurityStatusNotSatisfied);
@@ -474,7 +462,7 @@ where
         //       88 1A 89 18 AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
         //
 
-        let input = derp::Input::from(command.data());
+        let input = derp::Input::from(data);
         let (data_object, data) = input
             .read_all(derp::Error::Read, |input| {
                 let data_object = derp::expect_tag_and_get_value(input, 0x5c)?;

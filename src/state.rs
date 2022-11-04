@@ -1,8 +1,11 @@
 use core::convert::{TryFrom, TryInto};
 
+use heapless_bytes::Bytes;
 use iso7816::Status;
 use trussed::{
-    block, syscall, try_syscall,
+    api::reply::Metadata,
+    config::MAX_MESSAGE_LENGTH,
+    syscall, try_syscall,
     types::{KeyId, Location, PathBuf},
 };
 
@@ -156,7 +159,7 @@ pub struct State {
 impl State {
     pub fn load(&mut self, client: &mut impl trussed::Client) -> Result<LoadedState<'_>, Status> {
         if self.persistent.is_none() {
-            self.persistent = Some(Persistent::load_or_initialize(client));
+            self.persistent = Some(Persistent::load_or_initialize(client)?);
         }
         Ok(LoadedState {
             runtime: &mut self.runtime,
@@ -463,39 +466,18 @@ impl Persistent {
         state
     }
 
-    #[allow(clippy::result_unit_err)]
-    pub fn load(client: &mut impl trussed::Client) -> Result<Self, ()> {
-        let data = block!(client
-            .read_file(Location::Internal, PathBuf::from(Self::FILENAME),)
-            .unwrap())
-        .map_err(|_err| {
-            info!("loading error: {_err:?}");
-        })?
-        .data;
-
-        let previous_state: Self = trussed::cbor_deserialize(&data).map_err(|_err| {
-            info!("cbor deser error: {_err:?}");
-            info!("data: {:X?}", &data);
-        })?;
-        Ok(previous_state)
-    }
-
-    pub fn load_or_initialize(client: &mut impl trussed::Client) -> Self {
+    pub fn load_or_initialize(client: &mut impl trussed::Client) -> Result<Self, Status> {
         // todo: can't seem to combine load + initialize without code repetition
-        let data =
-            try_syscall!(client.read_file(Location::Internal, PathBuf::from(Self::FILENAME)));
-        if let Ok(data) = data {
-            let previous_state = trussed::cbor_deserialize(&data.data).map_err(|_err| {
-                info!("cbor deser error: {_err:?}");
-                info!("data: {:X?}", &data);
-            });
-            if let Ok(state) = previous_state {
-                // horrible deser bug to forget Ok here :)
-                return state;
-            }
-        }
+        let data = load_if_exists(client, Location::Internal, &PathBuf::from(Self::FILENAME))?;
+        let Some(bytes) = data else {
+            return Ok( Self::initialize(client));
+        };
 
-        Self::initialize(client)
+        let parsed = trussed::cbor_deserialize(&bytes).map_err(|_err| {
+            error!("{_err:?}");
+            Status::UnspecifiedPersistentExecutionError
+        })?;
+        Ok(parsed)
     }
 
     pub fn save(&mut self, client: &mut impl trussed::Client) {
@@ -513,5 +495,28 @@ impl Persistent {
         self.timestamp += 1;
         self.save(client);
         self.timestamp
+    }
+}
+
+fn load_if_exists(
+    client: &mut impl trussed::Client,
+    location: Location,
+    path: &PathBuf,
+) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
+    match try_syscall!(client.read_file(location, path.clone())) {
+        Ok(r) => Ok(Some(r.data)),
+        Err(_) => match try_syscall!(client.entry_metadata(location, path.clone())) {
+            Ok(Metadata { metadata: None }) => Ok(None),
+            Ok(Metadata {
+                metadata: Some(_metadata),
+            }) => {
+                error!("File {path} exists but couldn't be read: {_metadata:?}");
+                Err(Status::UnspecifiedPersistentExecutionError)
+            }
+            Err(_err) => {
+                error!("File {path} couldn't be read: {_err:?}");
+                Err(Status::UnspecifiedPersistentExecutionError)
+            }
+        },
     }
 }

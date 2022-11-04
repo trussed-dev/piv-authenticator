@@ -148,7 +148,7 @@ where
             }
 
             Verify::Status(key_reference) => {
-                if key_reference != commands::VerifyKeyReference::PivPin {
+                if key_reference != commands::VerifyKeyReference::ApplicationPin {
                     return Err(Status::FunctionNotSupported);
                 }
                 if self.state.runtime.app_security_status.pin_verified {

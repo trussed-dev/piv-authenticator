@@ -2,6 +2,61 @@ use core::convert::TryFrom;
 
 use hex_literal::hex;
 
+macro_rules! enum_subset {
+    (
+        $(#[$outer:meta])*
+        $vis:vis enum $name:ident: $sup:ident {
+            $($var:ident),+
+            $(,)*
+        }
+    ) => {
+        $(#[$outer])*
+        #[repr(u8)]
+        $vis enum $name {
+            $(
+                $var,
+            )*
+        }
+
+        impl TryFrom<$sup> for $name
+        {
+            type Error = ::iso7816::Status;
+            fn try_from(val: $sup) -> ::core::result::Result<Self, Self::Error> {
+                match val {
+                    $(
+                        $sup::$var => Ok($name::$var),
+                    )*
+                    _ => Err(::iso7816::Status::KeyReferenceNotFound)
+                }
+            }
+        }
+
+        impl From<$name> for $sup
+        {
+            fn from(v: $name) -> $sup {
+                match v {
+                    $(
+                        $name::$var => $sup::$var,
+                    )*
+                }
+            }
+        }
+
+        impl TryFrom<u8> for $name {
+            type Error = ::iso7816::Status;
+            fn try_from(tag: u8) -> ::core::result::Result<Self, Self::Error> {
+                let v: $sup = tag.try_into()?;
+                match v {
+                    $(
+                        $sup::$var => Ok($name::$var),
+                    )*
+                    _ => Err(::iso7816::Status::KeyReferenceNotFound)
+                }
+            }
+        }
+    }
+}
+
 pub struct Tag<'a>(&'a [u8]);
 impl<'a> Tag<'a> {
     pub fn new(slice: &'a [u8]) -> Self {
@@ -12,45 +67,108 @@ impl<'a> Tag<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RetiredIndex(u8);
 
-// #[repr(u8)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum KeyReference {
-    GlobalPin,
-    ApplicationPin,
-    PinUnblockingKey,
-    PrimaryFinger,
-    SecondaryFinger,
-    PairingCode,
+crate::enum_u8! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum KeyReference {
+        GlobalPin = 0x00,
+        SecureMessaging = 0x04,
+        ApplicationPin = 0x80,
+        PinUnblockingKey = 0x81,
+        PrimaryFinger = 0x96,
+        SecondaryFinger = 0x97,
+        PairingCode = 0x98,
 
-    PivAuthentication,
-    PivCardApplicationAdministration,
-    DigitalSignature,
-    KeyManagement,
-    CardAuthentication,
+        PivAuthentication = 0x9A,
+        PivCardApplicationAdministration = 0x9B,
+        DigitalSignature = 0x9C,
+        KeyManagement = 0x9D,
+        CardAuthentication = 0x9E,
 
-    // 20x
-    RetiredKeyManagement(RetiredIndex),
+        Retired01 = 0x82,
+        Retired02 = 0x83,
+        Retired03 = 0x84,
+        Retired04 = 0x85,
+        Retired05 = 0x86,
+        Retired06 = 0x87,
+        Retired07 = 0x88,
+        Retired08 = 0x89,
+        Retired09 = 0x8A,
+        Retired10 = 0x8B,
+        Retired11 = 0x8C,
+        Retired12 = 0x8D,
+        Retired13 = 0x8E,
+        Retired14 = 0x8F,
+        Retired15 = 0x90,
+        Retired16 = 0x91,
+        Retired17 = 0x92,
+        Retired18 = 0x93,
+        Retired19 = 0x94,
+        Retired20 = 0x95,
+    }
 }
 
-impl From<KeyReference> for u8 {
-    fn from(reference: KeyReference) -> Self {
-        use KeyReference::*;
-        match reference {
-            GlobalPin => 0x00,
-            ApplicationPin => 0x80,
-            PinUnblockingKey => 0x81,
-            PrimaryFinger => 0x96,
-            SecondaryFinger => 0x97,
-            PairingCode => 0x98,
+enum_subset! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum GenerateAsymmetricKeyReference: KeyReference {
+        SecureMessaging,
+        PivAuthentication,
+        DigitalSignature,
+        KeyManagement,
+        CardAuthentication,
+    }
+}
 
-            PivAuthentication => 0x9A,
-            PivCardApplicationAdministration => 0x9B,
-            DigitalSignature => 0x9C,
-            KeyManagement => 0x9D,
-            CardAuthentication => 0x9E,
+enum_subset! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum ChangeReferenceKeyReference: KeyReference {
+        GlobalPin,
+        ApplicationPin,
+        PinUnblockingKey,
+    }
+}
 
-            RetiredKeyManagement(RetiredIndex(i)) => (0x82 - 1) + i,
-        }
+enum_subset! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum VerifyKeyReference: KeyReference {
+        GlobalPin,
+        ApplicationPin,
+        PrimaryFinger,
+        SecondaryFinger,
+        PairingCode,
+
+    }
+}
+
+enum_subset! {
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum AuthenticateKeyReference: KeyReference {
+        SecureMessaging,
+        PivAuthentication,
+        PivCardApplicationAdministration,
+        DigitalSignature,
+        KeyManagement,
+        CardAuthentication,
+        Retired01,
+        Retired02,
+        Retired03,
+        Retired04,
+        Retired05,
+        Retired06,
+        Retired07,
+        Retired08,
+        Retired09,
+        Retired10,
+        Retired11,
+        Retired12,
+        Retired13,
+        Retired14,
+        Retired15,
+        Retired16,
+        Retired17,
+        Retired18,
+        Retired19,
+        Retired20,
     }
 }
 

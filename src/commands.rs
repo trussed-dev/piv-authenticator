@@ -9,7 +9,13 @@ use core::convert::{TryFrom, TryInto};
 use iso7816::{Instruction, Status};
 
 use crate::state::TouchPolicy;
-pub use crate::{container as containers, piv_types, Pin, Puk};
+pub use crate::{
+    container::{
+        self as containers, AuthenticateKeyReference, ChangeReferenceKeyReference,
+        GenerateAsymmetricKeyReference, VerifyKeyReference,
+    },
+    piv_types, Pin, Puk,
+};
 
 // https://developers.yubico.com/PIV/Introduction/Yubico_extensions.html
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -112,32 +118,6 @@ impl TryFrom<&[u8]> for GetData {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum VerifyKeyReference {
-    GlobalPin = 0x00,
-    PivPin = 0x80,
-    PrimaryFingerOcc = 0x96,
-    SecondaryFingerOcc = 0x97,
-    PairingCode = 0x98,
-}
-
-impl TryFrom<u8> for VerifyKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        // If the PIV Card Application does not contain the Discovery Object as described in Part 1,
-        // then no other key reference shall be able to be verified by the PIV Card Application VERIFY command.
-        match p2 {
-            0x00 => Ok(Self::GlobalPin),
-            0x80 => Ok(Self::PivPin),
-            0x96 => Ok(Self::PrimaryFingerOcc),
-            0x97 => Ok(Self::SecondaryFingerOcc),
-            0x98 => Ok(Self::PairingCode),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VerifyLogout(bool);
 
 impl TryFrom<u8> for VerifyLogout {
@@ -179,7 +159,7 @@ impl TryFrom<VerifyArguments<'_>> for Verify {
             logout,
             data,
         } = arguments;
-        if key_reference != VerifyKeyReference::PivPin {
+        if key_reference != VerifyKeyReference::ApplicationPin {
             return Err(Status::FunctionNotSupported);
         }
         Ok(match (logout.0, data.len()) {
@@ -192,26 +172,6 @@ impl TryFrom<VerifyArguments<'_>> for Verify {
             (true, 0) => Verify::Logout(key_reference),
             (true, _) => return Err(Status::IncorrectDataParameter),
         })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum ChangeReferenceKeyReference {
-    GlobalPin = 0x00,
-    PivPin = 0x80,
-    Puk = 0x81,
-}
-
-impl TryFrom<u8> for ChangeReferenceKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        match p2 {
-            0x00 => Ok(Self::GlobalPin),
-            0x80 => Ok(Self::PivPin),
-            0x81 => Ok(Self::Puk),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
     }
 }
 
@@ -238,21 +198,18 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
         use ChangeReferenceKeyReference::*;
         Ok(match (key_reference, data) {
             (GlobalPin, _) => return Err(Status::FunctionNotSupported),
-            (PivPin, data) => ChangeReference::ChangePin {
+            (ApplicationPin, data) => ChangeReference::ChangePin {
                 old_pin: Pin::try_from(&data[..8]).map_err(|_| Status::IncorrectDataParameter)?,
                 new_pin: Pin::try_from(&data[8..]).map_err(|_| Status::IncorrectDataParameter)?,
             },
-            (Puk, data) => {
-                use crate::commands::Puk;
-                ChangeReference::ChangePuk {
-                    old_puk: Puk(data[..8]
-                        .try_into()
-                        .map_err(|_| Status::IncorrectDataParameter)?),
-                    new_puk: Puk(data[8..]
-                        .try_into()
-                        .map_err(|_| Status::IncorrectDataParameter)?),
-                }
-            }
+            (PinUnblockingKey, data) => ChangeReference::ChangePuk {
+                old_puk: Puk(data[..8]
+                    .try_into()
+                    .map_err(|_| Status::IncorrectDataParameter)?),
+                new_puk: Puk(data[8..]
+                    .try_into()
+                    .map_err(|_| Status::IncorrectDataParameter)?),
+            },
         })
     }
 }
@@ -277,72 +234,6 @@ impl TryFrom<&[u8]> for ResetPinRetries {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum AuthenticateKeyReference {
-    SecureMessaging = 0x04,
-    Authentication = 0x9a,
-    Administration = 0x9b,
-    Signature = 0x9c,
-    Management = 0x9d,
-    CardAuthentication = 0x9e,
-    Retired01 = 0x82,
-    Retired02 = 0x83,
-    Retired03 = 0x84,
-    Retired04 = 0x85,
-    Retired05 = 0x86,
-    Retired06 = 0x87,
-    Retired07 = 0x88,
-    Retired08 = 0x89,
-    Retired09 = 0x8A,
-    Retired10 = 0x8B,
-    Retired11 = 0x8C,
-    Retired12 = 0x8D,
-    Retired13 = 0x8E,
-    Retired14 = 0x8F,
-    Retired15 = 0x90,
-    Retired16 = 0x91,
-    Retired17 = 0x92,
-    Retired18 = 0x93,
-    Retired19 = 0x94,
-    Retired20 = 0x95,
-}
-
-impl TryFrom<u8> for AuthenticateKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        match p2 {
-            0x04 => Ok(Self::SecureMessaging),
-            0x9a => Ok(Self::Authentication),
-            0x9b => Ok(Self::Administration),
-            0x9c => Ok(Self::Signature),
-            0x9d => Ok(Self::Management),
-            0x9e => Ok(Self::CardAuthentication),
-            0x82 => Ok(Self::Retired01),
-            0x83 => Ok(Self::Retired02),
-            0x84 => Ok(Self::Retired03),
-            0x85 => Ok(Self::Retired04),
-            0x86 => Ok(Self::Retired05),
-            0x87 => Ok(Self::Retired06),
-            0x88 => Ok(Self::Retired07),
-            0x89 => Ok(Self::Retired08),
-            0x8A => Ok(Self::Retired09),
-            0x8B => Ok(Self::Retired10),
-            0x8C => Ok(Self::Retired11),
-            0x8D => Ok(Self::Retired12),
-            0x8E => Ok(Self::Retired13),
-            0x8F => Ok(Self::Retired14),
-            0x90 => Ok(Self::Retired15),
-            0x91 => Ok(Self::Retired16),
-            0x92 => Ok(Self::Retired17),
-            0x93 => Ok(Self::Retired18),
-            0x94 => Ok(Self::Retired19),
-            0x95 => Ok(Self::Retired20),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AuthenticateArguments<'l> {
     /// To allow the authenticator to have additional algorithms beyond NIST SP 800-78-4,
     /// this is passed through as-is.
@@ -358,30 +249,6 @@ impl TryFrom<&[u8]> for PutData {
     type Error = Status;
     fn try_from(_data: &[u8]) -> Result<Self, Self::Error> {
         todo!();
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum GenerateAsymmetricKeyReference {
-    SecureMessaging = 0x04,
-    Authentication = 0x9a,
-    Signature = 0x9c,
-    Management = 0x9d,
-    CardAuthentication = 0x9e,
-}
-
-impl TryFrom<u8> for GenerateAsymmetricKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        match p2 {
-            0x04 => Err(Status::FunctionNotSupported),
-            0x9a => Ok(Self::Authentication),
-            0x9c => Ok(Self::Signature),
-            0x9d => Ok(Self::Management),
-            0x9e => Ok(Self::CardAuthentication),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
     }
 }
 

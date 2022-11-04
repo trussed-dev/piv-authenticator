@@ -14,7 +14,7 @@
 fn main() {
     env_logger::init();
 
-    trussed::virt::with_ram_client("opcard", |client| {
+    trussed::virt::with_ram_client("piv-authenticator", |client| {
         let card = piv_authenticator::Authenticator::new(client);
         let mut virtual_card = piv_authenticator::vpicc::VirtualCard::new(card);
         let vpicc = vpicc::connect().expect("failed to connect to vpicc");

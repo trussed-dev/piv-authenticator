@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 use crate::{Authenticator, /*constants::PIV_AID,*/ Result};
 
 use apdu_dispatch::{app::App, command, response, Command};

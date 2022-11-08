@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 #[allow(unused)]
 pub const COMMAND_SIZE: usize = 3072;
 

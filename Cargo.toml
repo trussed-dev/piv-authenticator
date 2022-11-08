@@ -1,9 +1,12 @@
+# Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
 [package]
 name = "piv-authenticator"
 version = "0.0.0-unreleased"
 authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
-license = "Apache-2.0 OR MIT"
+license = "LGPL-3.0-only"
 repository = "https://github.com/solokeys/piv-authenticator"
 documentation = "https://docs.rs/piv-authenticator"
 

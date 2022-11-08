@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 mod setup;
 
 // use delog::hex_str;

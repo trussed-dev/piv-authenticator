@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 //! Parsed PIV commands.
 //!
 //! The types here should enforce all restrictions in the spec (such as padded_piv_pin.len() == 8),

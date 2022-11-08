@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 // https://developers.yubico.com/PIV/Introduction/Yubico_extensions.html
 
 use hex_literal::hex;

@@ -445,18 +445,30 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // expected response: "7C L1 82 L2 SEQ(INT r, INT s)"
 
         // refine as we gain more capability
-        let mut input = derp::Reader::new(derp::Input::from(data));
+        let input = derp::Input::from(data);
 
-        let Ok((tag,data)) = derp::read_tag_and_get_value(&mut input) else {
-            return Err(Status::IncorrectDataParameter);
-        };
+        let input = input
+            .read_all(derp::Error::UnexpectedEnd, |r| {
+                derp::expect_tag_and_get_value(r, 0x7C)
+            })
+            .map_err(|_err| {
+                warn!("Bad data: {_err:?}");
+                Status::IncorrectDataParameter
+            })?;
+
+        let (tag, input) = input
+            .read_all(derp::Error::UnexpectedEnd, derp::read_tag_and_get_value)
+            .map_err(|_err| {
+                warn!("Bad data: {_err:?}");
+                Status::IncorrectDataParameter
+            })?;
 
         // part 2 table 7
         match tag {
-            0x80 => self.request_for_witness(auth, data, reply),
-            0x81 => self.request_for_challenge(auth, data, reply),
-            0x82 => self.request_for_response(auth, data, reply),
-            0x85 => self.request_for_exponentiation(auth, data, reply),
+            0x80 => self.request_for_witness(auth, input, reply),
+            0x81 => self.request_for_challenge(auth, input, reply),
+            0x82 => self.request_for_response(auth, input, reply),
+            0x85 => self.request_for_exponentiation(auth, input, reply),
             _ => Err(Status::IncorrectDataParameter),
         }
     }
@@ -467,6 +479,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
+        info!("Request for response");
         todo!()
     }
 
@@ -476,6 +489,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
+        info!("Request for exponentiation");
         todo!()
     }
 
@@ -485,6 +499,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
+        info!("Request for challenge");
         todo!()
     }
 
@@ -494,6 +509,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         _data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
+        info!("Request for witness");
         todo!()
     }
 

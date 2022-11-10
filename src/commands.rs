@@ -66,7 +66,7 @@ pub enum Command<'l> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GeneralAuthenticate {
-    algorithm: piv_types::Algorithms,
+    pub algorithm: piv_types::Algorithms,
     key_reference: AuthenticateKeyReference,
 }
 

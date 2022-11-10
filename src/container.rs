@@ -45,6 +45,17 @@ macro_rules! enum_subset {
             }
         }
 
+        impl PartialEq<$sup> for $name {
+            fn eq(&self, other: &$sup) -> bool {
+                match (self,other) {
+                    $(
+                        | ($name::$var, $sup::$var)
+                    )* => true,
+                    _ => false
+                }
+            }
+        }
+
         impl TryFrom<u8> for $name {
             type Error = ::iso7816::Status;
             fn try_from(tag: u8) -> ::core::result::Result<Self, Self::Error> {

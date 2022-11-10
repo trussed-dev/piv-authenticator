@@ -9,7 +9,7 @@ use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
-    types::{KeyId, Location, PathBuf},
+    types::{KeyId, Location, Mechanism, PathBuf},
 };
 
 use crate::constants::*;
@@ -147,6 +147,13 @@ impl ManagementAlgorithm {
         match self {
             Self::Tdes => 8,
             Self::Aes256 => 16,
+        }
+    }
+
+    pub fn mechanism(self) -> Mechanism {
+        match self {
+            Self::Tdes => Mechanism::Tdes,
+            Self::Aes256 => Mechanism::Aes256Cbc,
         }
     }
 }

@@ -28,6 +28,7 @@ untrusted = "0.9"
 vpicc = { version = "0.1.0", optional = true }
 log = "0.4"
 heapless-bytes = "0.3.0"
+subtle = "2"
 
 [dev-dependencies]
 littlefs2 = "0.3.2"

@@ -474,7 +474,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
     pub fn request_for_response<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
+        auth: GeneralAuthenticate,
         data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
@@ -484,6 +484,11 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             warn!("Bad response length");
             return Err(Status::IncorrectDataParameter);
         }
+        if alg != auth.algorithm {
+            warn!("Bad algorithm");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+
         let Some(CommandCache::AuthenticateChallenge(plaintext)) = self.state.runtime.command_cache.take() else {
             warn!("Request for response without cached challenge");
             return Err(Status::ConditionsOfUseNotSatisfied);
@@ -518,24 +523,21 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
     pub fn request_for_challenge<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
+        auth: GeneralAuthenticate,
         data: derp::Input<'_>,
         reply: &mut Data<R>,
     ) -> Result {
-        if data.len() != 0 {
+        let alg = self.state.persistent.keys.management_key.alg;
+        if !data.is_empty() {
             warn!("Request for challenge with non empty data");
             return Err(Status::IncorrectDataParameter);
         }
+        if alg != auth.algorithm {
+            warn!("Bad algorithm");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
         info!("Request for challenge ");
-        let challenge = syscall!(self.trussed.random_bytes(
-            self.state
-                .persistent
-                .keys
-                .management_key
-                .alg
-                .challenge_length()
-        ))
-        .bytes;
+        let challenge = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
         self.state.runtime.command_cache = Some(CommandCache::AuthenticateChallenge(
             Bytes::from_slice(&challenge).unwrap(),
         ));

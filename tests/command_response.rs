@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Nitrokey GmbH
+// Copyright (C) 2022 Nicolas Stalder AND Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
 #![cfg(feature = "virtual")]
 
@@ -8,6 +8,7 @@ use std::borrow::Cow;
 
 use hex_literal::hex;
 use serde::Deserialize;
+use trussed::types::GenericArray;
 
 // iso7816::Status doesn't support serde
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -36,6 +37,43 @@ enum Status {
     UnspecifiedCheckingError,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Deserialize)]
+pub enum Algorithm {
+    Tdes = 0x3,
+    Rsa1024 = 0x6,
+    Rsa2048 = 0x7,
+    Aes128 = 0x8,
+    Aes192 = 0xA,
+    Aes256 = 0xC,
+    P256 = 0x11,
+    P384 = 0x14,
+
+    P521 = 0x15,
+    // non-standard!
+    Rsa3072 = 0xE0,
+    Rsa4096 = 0xE1,
+    Ed25519 = 0xE2,
+    X25519 = 0xE3,
+    Ed448 = 0xE4,
+    X448 = 0xE5,
+
+    // non-standard! picked by Alex, but maybe due for removal
+    P256Sha1 = 0xF0,
+    P256Sha256 = 0xF1,
+    P384Sha1 = 0xF2,
+    P384Sha256 = 0xF3,
+    P384Sha384 = 0xF4,
+}
+impl Algorithm {
+    pub fn challenge_len(self) -> usize {
+        match self {
+            Self::Tdes => 8,
+            Self::Aes256 => 16,
+            _ => panic!(),
+        }
+    }
+}
+
 fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
     let mut buf = heapless::Vec::new();
     if let Ok(len) = u8::try_from(len) {
@@ -52,7 +90,6 @@ fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
     buf
 }
 
-#[allow(unused)]
 fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     let mut buf = Vec::from(tag);
     buf.extend_from_slice(&serialize_len(data.len()));
@@ -60,7 +97,6 @@ fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     buf
 }
 
-#[allow(unused)]
 fn build_command(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8], le: u16) -> Vec<u8> {
     let mut res = vec![cla, ins, p1, p2];
     let lc = data.len();
@@ -208,10 +244,19 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    AuthenticateManagement {
+        algorithm: Algorithm,
+        key: String,
+        #[serde(default)]
+        expected_status_challenge: Status,
+        #[serde(default)]
+        expected_status_response: Status,
+    },
     Select,
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
+const MATCH_ANY: OutputMatcher = OutputMatcher::And(Cow::Borrowed(&[]), ());
 
 impl IoCmd {
     fn run(&self, card: &mut setup::Piv) {
@@ -227,6 +272,18 @@ impl IoCmd {
             Self::VerifyDefaultGlobalPin { expected_status } => {
                 Self::run_verify_default_global_pin(*expected_status, card)
             }
+            Self::AuthenticateManagement {
+                algorithm,
+                key,
+                expected_status_challenge,
+                expected_status_response,
+            } => Self::run_authenticate_management(
+                algorithm,
+                key,
+                *expected_status_challenge,
+                *expected_status_response,
+                card,
+            ),
             Self::Select => Self::run_select(card),
         }
     }
@@ -236,7 +293,7 @@ impl IoCmd {
         output: &OutputMatcher,
         expected_status: Status,
         card: &mut setup::Piv,
-    ) {
+    ) -> heapless::Vec<u8, 1024> {
         println!("Command: {:x?}", input);
         let mut rep: heapless::Vec<u8, 1024> = heapless::Vec::new();
         let cmd: iso7816::Command<{ setup::COMMAND_SIZE }> = iso7816::Command::try_from(input)
@@ -257,6 +314,7 @@ impl IoCmd {
         if status != expected_status {
             panic!("Bad status. Expected {:?}", expected_status);
         }
+        rep
     }
 
     fn run_iodata(
@@ -265,7 +323,37 @@ impl IoCmd {
         expected_status: Status,
         card: &mut setup::Piv,
     ) {
-        Self::run_bytes(&parse_hex(input), output, expected_status, card)
+        Self::run_bytes(&parse_hex(input), output, expected_status, card);
+    }
+
+    fn run_authenticate_management(
+        alg: &Algorithm,
+        key: &str,
+        expected_status_challenge: Status,
+        expected_status_response: Status,
+        card: &mut setup::Piv,
+    ) {
+        use des::{
+            cipher::{BlockEncrypt, KeyInit},
+            TdesEde3,
+        };
+        let command = build_command(0x00, 0x87, *alg as u8, 0x9B, &hex!("7C 02 81 00"), 0);
+        let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
+        let key = parse_hex(key);
+
+        // Remove header
+        let challenge = &mut res[6..][..alg.challenge_len()];
+        match alg {
+            Algorithm::Tdes => {
+                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
+                cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
+            }
+            Algorithm::Aes256 => todo!(),
+            _ => panic!(),
+        }
+        let second_data = tlv(&[0x7C], &tlv(&[0x82], challenge));
+        let command = build_command(0x00, 0x87, *alg as u8, 0x9B, &second_data, 0);
+        Self::run_bytes(&command, &MATCH_ANY, expected_status_response, card);
     }
 
     fn run_verify_default_global_pin(expected_status: Status, card: &mut setup::Piv) {
@@ -274,15 +362,16 @@ impl IoCmd {
             &MATCH_EMPTY,
             expected_status,
             card,
-        )
+        );
     }
+
     fn run_verify_default_application_pin(expected_status: Status, card: &mut setup::Piv) {
         Self::run_bytes(
             &hex!("00 20 00 80 08 313233343536FFFF"),
             &MATCH_EMPTY,
             expected_status,
             card,
-        )
+        );
     }
 
     fn run_select(card: &mut setup::Piv) {
@@ -313,7 +402,7 @@ impl IoCmd {
             &matcher,
             Status::Success,
             card,
-        )
+        );
     }
 }
 

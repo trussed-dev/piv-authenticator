@@ -15,4 +15,14 @@
             Select
         ]
     ),
+    // TODO: test with AES
+    IoTest(
+        name: "Default management key",
+        cmd_resp: [
+            AuthenticateManagement(
+                algorithm: Tdes,
+                key: "0102030405060708 0102030405060708 0102030405060708"
+            )
+        ]
+    ),
 ]

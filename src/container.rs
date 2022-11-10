@@ -60,6 +60,8 @@ macro_rules! enum_subset {
     }
 }
 
+pub(crate) use enum_subset;
+
 pub struct Tag<'a>(&'a [u8]);
 impl<'a> Tag<'a> {
     pub fn new(slice: &'a [u8]) -> Self {

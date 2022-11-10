@@ -5,6 +5,8 @@
 
 use hex_literal::hex;
 
+use crate::state::ManagementAlgorithm;
+
 pub const RID_LENGTH: usize = 5;
 
 // top nibble of first byte is "category", here "A" = International
@@ -268,6 +270,8 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &[u8; 24] = &hex!(
     0102030405060708
 "
 );
+
+pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: ManagementAlgorithm = ManagementAlgorithm::Tdes;
 
 // stolen from le yubico
 pub const DISCOVERY_OBJECT: &[u8; 20] =

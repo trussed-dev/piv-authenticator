@@ -30,6 +30,7 @@ pub mod vpicc;
 use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
+use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
 use trussed::client;
 use trussed::{syscall, try_syscall};
@@ -37,7 +38,9 @@ use trussed::{syscall, try_syscall};
 use constants::*;
 
 pub type Result = iso7816::Result<()>;
-use state::{LoadedState, State};
+use state::{CommandCache, LoadedState, State};
+
+use crate::piv_types::DynamicAuthenticationTemplate;
 
 /// PIV authenticator Trussed app.
 ///
@@ -496,11 +499,33 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     pub fn request_for_challenge<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        data: derp::Input<'_>,
+        reply: &mut Data<R>,
     ) -> Result {
-        info!("Request for challenge");
-        todo!()
+        if data.len() != 0 {
+            warn!("Request for challenge with non empty data");
+            return Err(Status::IncorrectDataParameter);
+        }
+        info!("Request for challenge ");
+        let challenge = syscall!(self.trussed.random_bytes(
+            self.state
+                .persistent
+                .keys
+                .management_key
+                .alg
+                .challenge_length()
+        ))
+        .bytes;
+        self.state.runtime.command_cache = Some(CommandCache::AuthenticateChallenge(
+            Bytes::from_slice(&challenge).unwrap(),
+        ));
+        let resp = DynamicAuthenticationTemplate::with_challenge(&challenge);
+        resp.encode_to_heapless_vec(reply)
+            .map_err(|_err| {
+                error!("Failed to encode challenge: {_err:?}");
+                Status::UnspecifiedNonpersistentExecutionError
+            })
+            .map(drop)
     }
 
     pub fn request_for_witness<const R: usize>(

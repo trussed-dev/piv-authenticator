@@ -13,6 +13,7 @@ use trussed::{
 };
 
 use crate::constants::*;
+use crate::piv_types::Algorithms;
 
 use crate::{Pin, Puk};
 
@@ -133,13 +134,36 @@ impl SlotName {
     }
 }
 
+crate::container::enum_subset! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+    pub enum ManagementAlgorithm: Algorithms {
+        Tdes,
+        Aes256
+    }
+}
+
+impl ManagementAlgorithm {
+    pub fn challenge_length(self) -> usize {
+        match self {
+            Self::Tdes => 8,
+            Self::Aes256 => 16,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ManagementKey {
+    pub id: KeyId,
+    pub alg: ManagementAlgorithm,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Keys {
     // 9a "PIV Authentication Key" (YK: PIV Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authentication_key: Option<KeyId>,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
-    pub management_key: KeyId,
+    pub management_key: ManagementKey,
     // 9c "Digital Signature Key" (YK: Digital Signature)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature_key: Option<KeyId>,
@@ -295,16 +319,11 @@ pub struct AppSecurityStatus {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandCache {
     GetData(GetData),
-    AuthenticateManagement(AuthenticateManagement),
+    AuthenticateChallenge(Bytes<16>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GetData {}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AuthenticateManagement {
-    pub challenge: [u8; 8],
-}
 
 impl Persistent {
     pub const PIN_RETRIES_DEFAULT: u8 = 3;
@@ -424,19 +443,22 @@ impl Persistent {
             syscall!(client
                 .unsafe_inject_shared_key(management_key, trussed::types::Location::Internal,))
             .key;
-        let old_management_key = self.keys.management_key;
-        self.keys.management_key = new_management_key;
+        let old_management_key = self.keys.management_key.id;
+        self.keys.management_key.id = new_management_key;
         self.save(client);
         syscall!(client.delete(old_management_key));
     }
 
     pub fn initialize(client: &mut impl trussed::Client) -> Self {
         info!("initializing PIV state");
-        let management_key = syscall!(client.unsafe_inject_shared_key(
-            YUBICO_DEFAULT_MANAGEMENT_KEY,
-            trussed::types::Location::Internal,
-        ))
-        .key;
+        let management_key = ManagementKey {
+            id: syscall!(client.unsafe_inject_shared_key(
+                YUBICO_DEFAULT_MANAGEMENT_KEY,
+                trussed::types::Location::Internal,
+            ))
+            .key,
+            alg: YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
+        };
 
         let mut guid: [u8; 16] = syscall!(client.random_bytes(16))
             .bytes

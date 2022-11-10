@@ -450,17 +450,13 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // refine as we gain more capability
         let input = derp::Input::from(data);
 
-        let input = input
+        let (tag, input) = input
             .read_all(derp::Error::UnexpectedEnd, |r| {
                 derp::expect_tag_and_get_value(r, 0x7C)
             })
-            .map_err(|_err| {
-                warn!("Bad data: {_err:?}");
-                Status::IncorrectDataParameter
-            })?;
-
-        let (tag, input) = input
-            .read_all(derp::Error::UnexpectedEnd, derp::read_tag_and_get_value)
+            .and_then(|input| {
+                input.read_all(derp::Error::UnexpectedEnd, derp::read_tag_and_get_value)
+            })
             .map_err(|_err| {
                 warn!("Bad data: {_err:?}");
                 Status::IncorrectDataParameter
@@ -479,11 +475,35 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     pub fn request_for_response<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
+        data: derp::Input<'_>,
         _reply: &mut Data<R>,
     ) -> Result {
         info!("Request for response");
-        todo!()
+        let alg = self.state.persistent.keys.management_key.alg;
+        if data.len() != alg.challenge_length() {
+            warn!("Bad response length");
+            return Err(Status::IncorrectDataParameter);
+        }
+        let Some(CommandCache::AuthenticateChallenge(plaintext)) = self.state.runtime.command_cache.take() else {
+            warn!("Request for response without cached challenge");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+        let ciphertext = syscall!(self.trussed.encrypt(
+            alg.mechanism(),
+            self.state.persistent.keys.management_key.id,
+            &plaintext,
+            &[],
+            None
+        ))
+        .ciphertext;
+
+        use subtle::ConstantTimeEq;
+        if data.as_slice_less_safe().ct_eq(&ciphertext).into() {
+            self.state.runtime.app_security_status.management_verified = true;
+            Ok(())
+        } else {
+            Err(Status::SecurityStatusNotSatisfied)
+        }
     }
 
     pub fn request_for_exponentiation<const R: usize>(

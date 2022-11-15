@@ -440,11 +440,7 @@ impl Persistent {
         self.set_management_key(YUBICO_DEFAULT_MANAGEMENT_KEY, client);
     }
 
-    pub fn set_management_key(
-        &mut self,
-        management_key: &[u8; 24],
-        client: &mut impl trussed::Client,
-    ) {
+    pub fn set_management_key(&mut self, management_key: &[u8], client: &mut impl trussed::Client) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
         let new_management_key =
             syscall!(client

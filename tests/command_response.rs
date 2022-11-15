@@ -6,6 +6,7 @@ mod setup;
 
 use std::borrow::Cow;
 
+use aes::Aes256Enc;
 use hex_literal::hex;
 use serde::Deserialize;
 use trussed::types::GenericArray;
@@ -348,7 +349,10 @@ impl IoCmd {
                 let cipher = TdesEde3::new(GenericArray::from_slice(&key));
                 cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
             }
-            Algorithm::Aes256 => todo!(),
+            Algorithm::Aes256 => {
+                let cipher = Aes256Enc::new(GenericArray::from_slice(&key));
+                cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
+            }
             _ => panic!(),
         }
         let second_data = tlv(&[0x7C], &tlv(&[0x82], challenge));

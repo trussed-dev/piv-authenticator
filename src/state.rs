@@ -9,7 +9,7 @@ use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
-    types::{KeyId, Location, Mechanism, PathBuf},
+    types::{KeyId, KeySerialization, Location, Mechanism, PathBuf},
 };
 
 use crate::constants::*;
@@ -455,9 +455,11 @@ impl Persistent {
     pub fn initialize(client: &mut impl trussed::Client) -> Self {
         info!("initializing PIV state");
         let management_key = ManagementKey {
-            id: syscall!(client.unsafe_inject_shared_key(
+            id: syscall!(client.unsafe_inject_key(
+                YUBICO_DEFAULT_MANAGEMENT_KEY_ALG.mechanism(),
                 YUBICO_DEFAULT_MANAGEMENT_KEY,
                 trussed::types::Location::Internal,
+                KeySerialization::Raw
             ))
             .key,
             alg: YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,

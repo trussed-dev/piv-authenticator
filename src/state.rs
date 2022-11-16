@@ -437,17 +437,26 @@ impl Persistent {
     }
 
     pub fn reset_management_key(&mut self, client: &mut impl trussed::Client) {
-        self.set_management_key(YUBICO_DEFAULT_MANAGEMENT_KEY, client);
+        self.set_management_key(
+            YUBICO_DEFAULT_MANAGEMENT_KEY,
+            YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
+            client,
+        );
     }
 
-    pub fn set_management_key(&mut self, management_key: &[u8], client: &mut impl trussed::Client) {
+    pub fn set_management_key(
+        &mut self,
+        management_key: &[u8],
+        alg: ManagementAlgorithm,
+        client: &mut impl trussed::Client,
+    ) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
-        let new_management_key =
+        let id =
             syscall!(client
                 .unsafe_inject_shared_key(management_key, trussed::types::Location::Internal,))
             .key;
         let old_management_key = self.keys.management_key.id;
-        self.keys.management_key.id = new_management_key;
+        self.keys.management_key = ManagementKey { id, alg };
         self.save(client);
         syscall!(client.delete(old_management_key));
     }

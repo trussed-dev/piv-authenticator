@@ -38,7 +38,7 @@ use trussed::{syscall, try_syscall};
 use constants::*;
 
 pub type Result = iso7816::Result<()>;
-use state::{CommandCache, LoadedState, State};
+use state::{CommandCache, LoadedState, ManagementAlgorithm, State, TouchPolicy};
 
 use crate::piv_types::DynamicAuthenticationTemplate;
 
@@ -259,30 +259,9 @@ where
                 .ok();
             }
 
-            YubicoPivExtension::SetManagementKey(_touch_policy) => {
-                // cmd := apdu{
-                //     instruction: insSetMGMKey,
-                //     param1:      0xff,
-                //     param2:      0xff,
-                //     data: append([]byte{
-                //         alg3DES, keyCardManagement, 24,
-                //     }, key[:]...),
-                // }
-                // TODO check we are authenticated with old management key
-
-                // example:  03 9B 18
-                //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
-                if data.len() != 3 + 24 {
-                    return Err(Status::IncorrectDataParameter);
-                }
-                let (prefix, new_management_key) = data.split_at(3);
-                if prefix != [0x03, 0x9b, 0x18] {
-                    return Err(Status::IncorrectDataParameter);
-                }
-                let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
-                self.state
-                    .persistent(&mut self.trussed)?
-                    .set_management_key(&new_management_key, &mut self.trussed);
+            YubicoPivExtension::SetManagementKey(touch_policy) => {
+                self.load()?
+                    .yubico_set_management_key(data, touch_policy, reply)?;
             }
 
             _ => return Err(Status::FunctionNotSupported),
@@ -292,6 +271,43 @@ where
 }
 
 impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
+    pub fn yubico_set_management_key<const R: usize>(
+        &mut self,
+        data: &[u8],
+        _touch_policy: TouchPolicy,
+        reply: &mut Data<R>,
+    ) -> Result {
+        // cmd := apdu{
+        //     instruction: insSetMGMKey,
+        //     param1:      0xff,
+        //     param2:      0xff,
+        //     data: append([]byte{
+        //         alg3DES, keyCardManagement, 24,
+        //     }, key[:]...),
+        // }
+
+        if !self.state.runtime.app_security_status.management_verified {
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        // example:  03 9B 18
+        //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
+        if data.len() != 3 + 24 {
+            return Err(Status::IncorrectDataParameter);
+        }
+        let (prefix, new_management_key) = data.split_at(3);
+        if prefix != [0x03, 0x9b, 0x18] {
+            return Err(Status::IncorrectDataParameter);
+        }
+        let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
+        self.state.persistent.set_management_key(
+            &new_management_key,
+            ManagementAlgorithm::Tdes,
+            self.trussed,
+        );
+        Ok(())
+    }
+
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {

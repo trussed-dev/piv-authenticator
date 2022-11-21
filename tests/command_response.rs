@@ -73,6 +73,14 @@ impl Algorithm {
             _ => panic!(),
         }
     }
+
+    pub fn key_len(self) -> usize {
+        match self {
+            Self::Tdes => 24,
+            Self::Aes256 => 32,
+            _ => panic!(),
+        }
+    }
 }
 
 fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
@@ -229,6 +237,13 @@ impl OutputMatcher {
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+struct ManagementKey {
+    algorithm: Algorithm,
+    key: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 enum IoCmd {
     IoData {
         input: String,
@@ -245,9 +260,13 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    SetManagementKey {
+        key: ManagementKey,
+        #[serde(default)]
+        expected_status: Status,
+    },
     AuthenticateManagement {
-        algorithm: Algorithm,
-        key: String,
+        key: ManagementKey,
         #[serde(default)]
         expected_status_challenge: Status,
         #[serde(default)]
@@ -274,19 +293,40 @@ impl IoCmd {
                 Self::run_verify_default_global_pin(*expected_status, card)
             }
             Self::AuthenticateManagement {
-                algorithm,
                 key,
                 expected_status_challenge,
                 expected_status_response,
             } => Self::run_authenticate_management(
-                algorithm,
-                key,
+                key.algorithm,
+                &key.key,
                 *expected_status_challenge,
                 *expected_status_response,
                 card,
             ),
+            Self::SetManagementKey {
+                key,
+                expected_status,
+            } => Self::run_set_management_key(key.algorithm, &key.key, *expected_status, card),
             Self::Select => Self::run_select(card),
         }
+    }
+
+    fn run_set_management_key(
+        alg: Algorithm,
+        key: &str,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        let mut key_data = parse_hex(key);
+        let mut data = vec![alg as u8, 0x9b, key_data.len() as u8];
+        data.append(&mut key_data);
+
+        Self::run_bytes(
+            &build_command(0x00, 0xff, 0xff, 0xff, &data, 0),
+            &MATCH_ANY,
+            expected_status,
+            card,
+        );
     }
 
     fn run_bytes(
@@ -328,7 +368,7 @@ impl IoCmd {
     }
 
     fn run_authenticate_management(
-        alg: &Algorithm,
+        alg: Algorithm,
         key: &str,
         expected_status_challenge: Status,
         expected_status_response: Status,
@@ -338,9 +378,12 @@ impl IoCmd {
             cipher::{BlockEncrypt, KeyInit},
             TdesEde3,
         };
-        let command = build_command(0x00, 0x87, *alg as u8, 0x9B, &hex!("7C 02 81 00"), 0);
+        let command = build_command(0x00, 0x87, alg as u8, 0x9B, &hex!("7C 02 81 00"), 0);
         let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
         let key = parse_hex(key);
+        if expected_status_challenge != Status::Success && res.is_empty() {
+            res = heapless::Vec::from_slice(&vec![0; alg.challenge_len() + 6]).unwrap();
+        }
 
         // Remove header
         let challenge = &mut res[6..][..alg.challenge_len()];
@@ -356,7 +399,7 @@ impl IoCmd {
             _ => panic!(),
         }
         let second_data = tlv(&[0x7C], &tlv(&[0x82], challenge));
-        let command = build_command(0x00, 0x87, *alg as u8, 0x9B, &second_data, 0);
+        let command = build_command(0x00, 0x87, alg as u8, 0x9B, &second_data, 0);
         Self::run_bytes(&command, &MATCH_ANY, expected_status_response, card);
     }
 

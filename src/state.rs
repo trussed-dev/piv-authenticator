@@ -156,6 +156,13 @@ impl ManagementAlgorithm {
             Self::Aes256 => Mechanism::Aes256Cbc,
         }
     }
+
+    pub fn key_len(self) -> usize {
+        match self {
+            Self::Tdes => 24,
+            Self::Aes256 => 32,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -451,10 +458,13 @@ impl Persistent {
         client: &mut impl trussed::Client,
     ) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
-        let id =
-            syscall!(client
-                .unsafe_inject_shared_key(management_key, trussed::types::Location::Internal,))
-            .key;
+        let id = syscall!(client.unsafe_inject_key(
+            alg.mechanism(),
+            management_key,
+            trussed::types::Location::Internal,
+            KeySerialization::Raw
+        ))
+        .key;
         let old_management_key = self.keys.management_key.id;
         self.keys.management_key = ManagementKey { id, alg };
         self.save(client);

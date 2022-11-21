@@ -15,13 +15,57 @@
             Select
         ]
     ),
-    // TODO: test with AES
     IoTest(
         name: "Default management key",
         cmd_resp: [
             AuthenticateManagement(
-                algorithm: Tdes,
-                key: "0102030405060708 0102030405060708 0102030405060708"
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            )
+        ]
+    ),
+    IoTest(
+        name: "Aes management key",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                )
+            )
+        ]
+    ),
+    IoTest(
+        name: "unauthenticated set management key",
+        cmd_resp: [
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status: SecurityStatusNotSatisfied,
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status_challenge: IncorrectP1OrP2Parameter,
+                expected_status_response: IncorrectDataParameter,
             )
         ]
     ),

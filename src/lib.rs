@@ -11,6 +11,7 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
+use commands::containers::KeyReference;
 use commands::GeneralAuthenticate;
 pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
@@ -275,7 +276,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         data: &[u8],
         _touch_policy: TouchPolicy,
-        reply: &mut Data<R>,
+        _reply: &mut Data<R>,
     ) -> Result {
         // cmd := apdu{
         //     instruction: insSetMGMKey,
@@ -286,25 +287,43 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         //     }, key[:]...),
         // }
 
+        // TODO _touch_policy
+
         if !self.state.runtime.app_security_status.management_verified {
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
         // example:  03 9B 18
         //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
-        if data.len() != 3 + 24 {
+        if data.len() < 4 {
+            warn!("Set management key with incorrect data");
             return Err(Status::IncorrectDataParameter);
         }
-        let (prefix, new_management_key) = data.split_at(3);
-        if prefix != [0x03, 0x9b, 0x18] {
+
+        let key_data = &data[3..];
+
+        let Ok(alg) = ManagementAlgorithm::try_from(data[0]) else {
+            warn!("Set management key with incorrect alg: {:x}", data[0]);
+            return Err(Status::IncorrectDataParameter);
+        };
+
+        if KeyReference::PivCardApplicationAdministration != data[1] {
+            warn!(
+                "Set management key with incorrect reference: {:x}, expected: {:x}",
+                data[1],
+                KeyReference::PivCardApplicationAdministration as u8
+            );
             return Err(Status::IncorrectDataParameter);
         }
-        let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
-        self.state.persistent.set_management_key(
-            &new_management_key,
-            ManagementAlgorithm::Tdes,
-            self.trussed,
-        );
+
+        if data[2] as usize != key_data.len() || alg.key_len() != key_data.len() {
+            warn!("Set management key with incorrect data length: claimed: {}, required by algorithm: {}, real: {}", data[2], alg.key_len(), key_data.len());
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        self.state
+            .persistent
+            .set_management_key(key_data, alg, self.trussed);
         Ok(())
     }
 

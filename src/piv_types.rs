@@ -35,6 +35,12 @@ macro_rules! enum_u8 {
                 }
             }
         }
+
+        impl PartialEq<u8> for $name {
+            fn eq(&self, other: &u8) -> bool {
+                *self as u8 == *other
+            }
+        }
     }
 }
 

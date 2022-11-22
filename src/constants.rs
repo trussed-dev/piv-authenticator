@@ -5,7 +5,7 @@
 
 use hex_literal::hex;
 
-use crate::state::ManagementAlgorithm;
+use crate::state::AdministrationAlgorithm;
 
 pub const RID_LENGTH: usize = 5;
 
@@ -271,7 +271,7 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &[u8; 24] = &hex!(
 "
 );
 
-pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: ManagementAlgorithm = ManagementAlgorithm::Tdes;
+pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm = AdministrationAlgorithm::Tdes;
 
 // stolen from le yubico
 pub const DISCOVERY_OBJECT: &[u8; 20] =

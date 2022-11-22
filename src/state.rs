@@ -136,13 +136,13 @@ impl SlotName {
 
 crate::container::enum_subset! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-    pub enum ManagementAlgorithm: Algorithms {
+    pub enum AdministrationAlgorithm: Algorithms {
         Tdes,
         Aes256
     }
 }
 
-impl ManagementAlgorithm {
+impl AdministrationAlgorithm {
     pub fn challenge_length(self) -> usize {
         match self {
             Self::Tdes => 8,
@@ -175,20 +175,21 @@ pub struct KeyWithAlg<A> {
 pub struct Keys {
     // 9a "PIV Authentication Key" (YK: PIV Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
+    pub authentication: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
-    pub management_key: KeyWithAlg<ManagementAlgorithm>,
+    pub administration: KeyWithAlg<AdministrationAlgorithm>,
     // 9c "Digital Signature Key" (YK: Digital Signature)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
+    pub signature: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9d "Key Management Key" (YK: Key Management)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
+    pub key_management: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9e "Card Authentication Key" (YK: Card Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinless_authentication_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
+    pub card_authentication: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 0x82..=0x95 (130-149)
     pub retired_keys: [Option<KeyWithAlg<AsymmetricAlgorithms>>; 20],
+    // pub secure_messaging
 }
 
 impl Keys {
@@ -197,10 +198,10 @@ impl Keys {
         key: AsymmetricKeyReference,
     ) -> &Option<KeyWithAlg<AsymmetricAlgorithms>> {
         match key {
-            AsymmetricKeyReference::PivAuthentication => &self.authentication_key,
-            AsymmetricKeyReference::DigitalSignature => &self.signature_key,
-            AsymmetricKeyReference::KeyManagement => &self.authentication_key,
-            AsymmetricKeyReference::CardAuthentication => &self.authentication_key,
+            AsymmetricKeyReference::PivAuthentication => &self.authentication,
+            AsymmetricKeyReference::DigitalSignature => &self.signature,
+            AsymmetricKeyReference::KeyManagement => &self.key_management,
+            AsymmetricKeyReference::CardAuthentication => &self.card_authentication,
         }
     }
 }
@@ -341,7 +342,7 @@ impl Default for SecurityStatus {
 pub struct AppSecurityStatus {
     pub pin_verified: bool,
     pub puk_verified: bool,
-    pub management_verified: bool,
+    pub administrator_verified: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -457,18 +458,18 @@ impl Persistent {
         Self::PUK_RETRIES_DEFAULT
     }
 
-    pub fn reset_management_key(&mut self, client: &mut impl trussed::Client) {
-        self.set_management_key(
+    pub fn reset_administration_key(&mut self, client: &mut impl trussed::Client) {
+        self.set_administration_key(
             YUBICO_DEFAULT_MANAGEMENT_KEY,
             YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
             client,
         );
     }
 
-    pub fn set_management_key(
+    pub fn set_administration_key(
         &mut self,
         management_key: &[u8],
-        alg: ManagementAlgorithm,
+        alg: AdministrationAlgorithm,
         client: &mut impl trussed::Client,
     ) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
@@ -479,8 +480,8 @@ impl Persistent {
             KeySerialization::Raw
         ))
         .key;
-        let old_management_key = self.keys.management_key.id;
-        self.keys.management_key = KeyWithAlg { id, alg };
+        let old_management_key = self.keys.administration.id;
+        self.keys.administration = KeyWithAlg { id, alg };
         self.save(client);
         syscall!(client.delete(old_management_key));
     }
@@ -506,7 +507,7 @@ impl Persistent {
 
     pub fn initialize(client: &mut impl trussed::Client) -> Self {
         info!("initializing PIV state");
-        let management_key = KeyWithAlg {
+        let administration = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
                 YUBICO_DEFAULT_MANAGEMENT_KEY_ALG.mechanism(),
                 YUBICO_DEFAULT_MANAGEMENT_KEY,
@@ -527,11 +528,11 @@ impl Persistent {
         guid[8] = (guid[8] & 0x3f) | 0x80;
 
         let keys = Keys {
-            authentication_key: None,
-            management_key,
-            signature_key: None,
-            encryption_key: None,
-            pinless_authentication_key: None,
+            authentication: None,
+            administration,
+            signature: None,
+            key_management: None,
+            card_authentication: None,
             retired_keys: Default::default(),
         };
 

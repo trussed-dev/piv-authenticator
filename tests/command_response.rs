@@ -306,12 +306,12 @@ impl IoCmd {
             Self::SetManagementKey {
                 key,
                 expected_status,
-            } => Self::run_set_management_key(key.algorithm, &key.key, *expected_status, card),
+            } => Self::run_set_administration_key(key.algorithm, &key.key, *expected_status, card),
             Self::Select => Self::run_select(card),
         }
     }
 
-    fn run_set_management_key(
+    fn run_set_administration_key(
         alg: Algorithm,
         key: &str,
         expected_status: Status,

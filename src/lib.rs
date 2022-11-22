@@ -39,7 +39,7 @@ use trussed::{syscall, try_syscall};
 use constants::*;
 
 pub type Result = iso7816::Result<()>;
-use state::{CommandCache, LoadedState, ManagementAlgorithm, State, TouchPolicy};
+use state::{AdministrationAlgorithm, CommandCache, LoadedState, State, TouchPolicy};
 
 use crate::piv_types::DynamicAuthenticationTemplate;
 
@@ -246,10 +246,13 @@ where
                 // TODO: find out what all needs resetting :)
                 persistent_state.reset_pin(&mut self.trussed);
                 persistent_state.reset_puk(&mut self.trussed);
-                persistent_state.reset_management_key(&mut self.trussed);
+                persistent_state.reset_administration_key(&mut self.trussed);
                 self.state.runtime.app_security_status.pin_verified = false;
                 self.state.runtime.app_security_status.puk_verified = false;
-                self.state.runtime.app_security_status.management_verified = false;
+                self.state
+                    .runtime
+                    .app_security_status
+                    .administrator_verified = false;
 
                 try_syscall!(self.trussed.remove_file(
                     trussed::types::Location::Internal,
@@ -266,7 +269,7 @@ where
 
             YubicoPivExtension::SetManagementKey(touch_policy) => {
                 self.load()?
-                    .yubico_set_management_key(data, touch_policy, reply)?;
+                    .yubico_set_administration_key(data, touch_policy, reply)?;
             }
 
             _ => return Err(Status::FunctionNotSupported),
@@ -276,7 +279,7 @@ where
 }
 
 impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
-    pub fn yubico_set_management_key<const R: usize>(
+    pub fn yubico_set_administration_key<const R: usize>(
         &mut self,
         data: &[u8],
         _touch_policy: TouchPolicy,
@@ -293,7 +296,12 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         // TODO _touch_policy
 
-        if !self.state.runtime.app_security_status.management_verified {
+        if !self
+            .state
+            .runtime
+            .app_security_status
+            .administrator_verified
+        {
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
@@ -306,7 +314,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         let key_data = &data[3..];
 
-        let Ok(alg) = ManagementAlgorithm::try_from(data[0]) else {
+        let Ok(alg) = AdministrationAlgorithm::try_from(data[0]) else {
             warn!("Set management key with incorrect alg: {:x}", data[0]);
             return Err(Status::IncorrectDataParameter);
         };
@@ -327,7 +335,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         self.state
             .persistent
-            .set_management_key(key_data, alg, self.trussed);
+            .set_administration_key(key_data, alg, self.trussed);
         Ok(())
     }
 
@@ -518,7 +526,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         _reply: &mut Data<R>,
     ) -> Result {
         info!("Request for response");
-        let alg = self.state.persistent.keys.management_key.alg;
+        let alg = self.state.persistent.keys.administration.alg;
         if data.len() != alg.challenge_length() {
             warn!("Bad response length");
             return Err(Status::IncorrectDataParameter);
@@ -534,7 +542,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         };
         let ciphertext = syscall!(self.trussed.encrypt(
             alg.mechanism(),
-            self.state.persistent.keys.management_key.id,
+            self.state.persistent.keys.administration.id,
             &plaintext,
             &[],
             None
@@ -543,7 +551,10 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         use subtle::ConstantTimeEq;
         if data.as_slice_less_safe().ct_eq(&ciphertext).into() {
-            self.state.runtime.app_security_status.management_verified = true;
+            self.state
+                .runtime
+                .app_security_status
+                .administrator_verified = true;
             Ok(())
         } else {
             Err(Status::SecurityStatusNotSatisfied)
@@ -566,7 +577,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         data: derp::Input<'_>,
         reply: &mut Data<R>,
     ) -> Result {
-        let alg = self.state.persistent.keys.management_key.alg;
+        let alg = self.state.persistent.keys.administration.alg;
         if !data.is_empty() {
             warn!("Request for challenge with non empty data");
             return Err(Status::IncorrectDataParameter);
@@ -605,7 +616,12 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         data: &[u8],
         reply: &mut Data<R>,
     ) -> Result {
-        if !self.state.runtime.app_security_status.management_verified {
+        if !self
+            .state
+            .runtime
+            .app_security_status
+            .administrator_verified
+        {
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
@@ -721,7 +737,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     pub fn put_data(&mut self, data: &[u8]) -> Result {
         info!("PutData");
 
-        // if !self.state.runtime.app_security_status.management_verified {
+        // if !self.state.runtime.app_security_status.administrator_verified {
         //     return Err(Status::SecurityStatusNotSatisfied);
         // }
 

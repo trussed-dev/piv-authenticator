@@ -12,8 +12,8 @@ use trussed::{
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf},
 };
 
-use crate::constants::*;
-use crate::piv_types::Algorithms;
+use crate::{constants::*, piv_types::AsymmetricAlgorithms};
+use crate::{container::AsymmetricKeyReference, piv_types::Algorithms};
 
 use crate::{Pin, Puk};
 
@@ -166,29 +166,43 @@ impl ManagementAlgorithm {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct ManagementKey {
+pub struct KeyWithAlg<A> {
     pub id: KeyId,
-    pub alg: ManagementAlgorithm,
+    pub alg: A,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Keys {
     // 9a "PIV Authentication Key" (YK: PIV Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication_key: Option<KeyId>,
+    pub authentication_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
-    pub management_key: ManagementKey,
+    pub management_key: KeyWithAlg<ManagementAlgorithm>,
     // 9c "Digital Signature Key" (YK: Digital Signature)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature_key: Option<KeyId>,
+    pub signature_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9d "Key Management Key" (YK: Key Management)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption_key: Option<KeyId>,
+    pub encryption_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9e "Card Authentication Key" (YK: Card Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinless_authentication_key: Option<KeyId>,
+    pub pinless_authentication_key: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 0x82..=0x95 (130-149)
-    pub retired_keys: [Option<KeyId>; 20],
+    pub retired_keys: [Option<KeyWithAlg<AsymmetricAlgorithms>>; 20],
+}
+
+impl Keys {
+    pub fn asymetric_for_reference(
+        &self,
+        key: AsymmetricKeyReference,
+    ) -> &Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        match key {
+            AsymmetricKeyReference::PivAuthentication => &self.authentication_key,
+            AsymmetricKeyReference::DigitalSignature => &self.signature_key,
+            AsymmetricKeyReference::KeyManagement => &self.authentication_key,
+            AsymmetricKeyReference::CardAuthentication => &self.authentication_key,
+        }
+    }
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -466,14 +480,33 @@ impl Persistent {
         ))
         .key;
         let old_management_key = self.keys.management_key.id;
-        self.keys.management_key = ManagementKey { id, alg };
+        self.keys.management_key = KeyWithAlg { id, alg };
         self.save(client);
         syscall!(client.delete(old_management_key));
     }
 
+    pub fn set_asymmetric_key(
+        &mut self,
+        _key: AsymmetricKeyReference,
+        _id: KeyId,
+        _alg: AsymmetricAlgorithms,
+        _client: &mut impl trussed::Client,
+    ) -> Result<Option<KeyWithAlg<AsymmetricAlgorithms>>, Status> {
+        todo!()
+    }
+
+    pub fn generate_asymmetric_key(
+        &mut self,
+        _key: AsymmetricKeyReference,
+        _alg: AsymmetricAlgorithms,
+        _client: &mut impl trussed::Client,
+    ) -> Result<KeyId, Status> {
+        todo!()
+    }
+
     pub fn initialize(client: &mut impl trussed::Client) -> Self {
         info!("initializing PIV state");
-        let management_key = ManagementKey {
+        let management_key = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
                 YUBICO_DEFAULT_MANAGEMENT_KEY_ALG.mechanism(),
                 YUBICO_DEFAULT_MANAGEMENT_KEY,

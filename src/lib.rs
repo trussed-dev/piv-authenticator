@@ -12,7 +12,7 @@ delog::generate_macros!();
 
 pub mod commands;
 use commands::containers::KeyReference;
-use commands::GeneralAuthenticate;
+use commands::{AsymmetricKeyReference, GeneralAuthenticate};
 pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
 pub mod container;
@@ -23,7 +23,7 @@ mod dispatch;
 pub mod piv_types;
 pub mod state;
 
-pub use piv_types::{Pin, Puk};
+pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 
 #[cfg(feature = "virtual")]
 pub mod vpicc;
@@ -125,6 +125,10 @@ where
             Command::GeneralAuthenticate(authenticate) => {
                 self.load()?
                     .general_authenticate(authenticate, command.data(), reply)
+            }
+            Command::GenerateAsymmetric(reference) => {
+                self.load()?
+                    .generate_asymmetric_keypair(reference, command.data(), reply)
             }
             Command::YkExtension(yk_command) => {
                 self.yubico_piv_extension(command.data(), yk_command, reply)
@@ -595,9 +599,9 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         todo!()
     }
 
-    #[allow(unused)]
-    pub fn generate_asymmetric_keypair<const R: usize, const C: usize>(
+    pub fn generate_asymmetric_keypair<const R: usize>(
         &mut self,
+        reference: AsymmetricKeyReference,
         data: &[u8],
         reply: &mut Data<R>,
     ) -> Result {
@@ -629,37 +633,32 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // TODO: iterate on this, don't expect tags..
         let input = derp::Input::from(data);
         // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
-        let (mechanism, _pin_policy, _touch_policy) = input
+        let mechanism_data = input
             .read_all(derp::Error::Read, |input| {
                 derp::nested(input, 0xac, |input| {
-                    let mechanism = derp::expect_tag_and_get_value(input, 0x80)?;
-                    // let parameter = derp::expect_tag_and_get_value(input, 0x81)?;
-                    let pin_policy = derp::expect_tag_and_get_value(input, 0xaa)?;
-                    let touch_policy = derp::expect_tag_and_get_value(input, 0xab)?;
-                    // Ok((mechanism.as_slice_less_safe(), parameter.as_slice_less_safe()))
-                    Ok((
-                        mechanism.as_slice_less_safe(),
-                        pin_policy.as_slice_less_safe(),
-                        touch_policy.as_slice_less_safe(),
-                    ))
+                    derp::expect_tag_and_get_value(input, 0x80)
+                        .map(|input| input.as_slice_less_safe())
                 })
             })
             .map_err(|_e| {
-                info!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
+                warn!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
                 Status::IncorrectDataParameter
             })?;
 
-        // if mechanism != &[0x11] {
-        // HA! patch in Ed255
-        if mechanism != [0x22] {
-            return Err(Status::InstructionNotSupportedOrInvalid);
-        }
+        let [mechanism] = mechanism_data else {
+            warn!("Mechanism of len not 1: {mechanism_data:02x?}");
+            return Err(Status::IncorrectDataParameter);
+        };
+
+        let parsed_mechanism: AsymmetricAlgorithms = (*mechanism).try_into().map_err(|_| {
+            warn!("Unknown mechanism: {mechanism:x}");
+            Status::IncorrectDataParameter
+        })?;
 
         // ble policy
-
-        if let Some(key) = self.state.persistent.keys.authentication_key {
-            syscall!(self.trussed.delete(key));
-        }
+        // if let Some(key) = self.state.persistent.keys.authentication_key {
+        //     // syscall!(self.trussed.delete(key));
+        // }
 
         // let key = syscall!(self.trussed.generate_p256_private_key(
         // let key = syscall!(self.trussed.generate_p256_private_key(
@@ -686,7 +685,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         //     )?
         //     .signature;
         // blocking::dbg!(&signature);
-        self.state.persistent.keys.authentication_key = Some(key);
+        // self.state.persistent.keys.authentication_key = Some(key);
         self.state.persistent.save(self.trussed);
 
         // let public_key = syscall!(self.trussed.derive_p256_public_key(

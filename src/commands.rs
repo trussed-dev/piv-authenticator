@@ -15,7 +15,7 @@ use crate::state::TouchPolicy;
 pub use crate::{
     container::{
         self as containers, AttestKeyReference, AuthenticateKeyReference,
-        ChangeReferenceKeyReference, GenerateAsymmetricKeyReference, VerifyKeyReference,
+        ChangeReferenceKeyReference, AsymmetricKeyReference, VerifyKeyReference,
     },
     piv_types, Pin, Puk,
 };
@@ -58,7 +58,7 @@ pub enum Command<'l> {
     GeneralAuthenticate(GeneralAuthenticate),
     /// Store a data object / container.
     PutData(PutData),
-    GenerateAsymmetric(GenerateAsymmetricKeyReference),
+    GenerateAsymmetric(AsymmetricKeyReference),
 
     /* Yubico commands */
     YkExtension(YubicoPivExtension),
@@ -327,7 +327,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {
-                Self::GenerateAsymmetric(GenerateAsymmetricKeyReference::try_from(p2)?)
+                Self::GenerateAsymmetric(AsymmetricKeyReference::try_from(p2)?)
             }
             // (0x00, 0x01, 0x10, 0x00)
             (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {

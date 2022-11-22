@@ -1,3 +1,6 @@
+// Copyright (C) 2022  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 use piv_authenticator::{vpicc::VirtualCard, Authenticator};
 
 use std::{sync::mpsc, thread::sleep, time::Duration};

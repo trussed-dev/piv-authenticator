@@ -92,7 +92,7 @@ impl TryFrom<&[u8]> for Puk {
 }
 
 enum_u8! {
-    #[derive(Clone, Copy, Eq, PartialEq, Debug)]
+    #[derive(Clone, Copy, Eq, PartialEq, Debug,Deserialize,Serialize)]
     // As additional reference, see:
     // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
     //
@@ -129,6 +129,32 @@ enum_u8! {
         P384Sha384 = 0xF4,
     }
 }
+
+crate::container::enum_subset! {
+    #[derive(Clone, Copy, Eq, PartialEq, Debug,Deserialize,Serialize)]
+    pub enum AsymmetricAlgorithms: Algorithms {
+        Rsa2048,
+        Rsa4096,
+        P256,
+
+        // Not supported
+        // Rsa1024 = 0x6,
+        // Rsa3072 = 0xE0,
+        // P384 = 0x14,
+        // P521 = 0x15,
+
+        // non-standard! in piv-go though!
+        // Ed255_prev = 0x22,
+        // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
+        // non-standard!
+        // Ed25519 = 0xE2,
+        // X25519 = 0xE3,
+        // Ed448 = 0xE4,
+        // X448 = 0xE5,
+
+    }
+}
+
 /// TODO:
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct CryptographicAlgorithmTemplate<'a> {

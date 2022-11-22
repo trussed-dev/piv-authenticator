@@ -132,8 +132,8 @@ enum_subset! {
 
 enum_subset! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub enum GenerateAsymmetricKeyReference: KeyReference {
-        SecureMessaging,
+    pub enum AsymmetricKeyReference: KeyReference {
+        // SecureMessaging,
         PivAuthentication,
         DigitalSignature,
         KeyManagement,

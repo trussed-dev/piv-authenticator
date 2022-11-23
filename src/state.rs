@@ -9,7 +9,7 @@ use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
-    types::{KeyId, KeySerialization, Location, Mechanism, PathBuf},
+    types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
 };
 
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
@@ -17,11 +17,6 @@ use crate::{container::AsymmetricKeyReference, piv_types::Algorithms};
 
 use crate::{Pin, Puk};
 
-pub enum Key {
-    Ed25519(KeyId),
-    P256(KeyId),
-    X25519(KeyId),
-}
 pub enum PinPolicy {
     Never,
     Once,
@@ -33,105 +28,6 @@ pub enum TouchPolicy {
     Never,
     Always,
     Cached,
-}
-
-pub struct Slot {
-    pub key: Option<KeyId>,
-    pub pin_policy: PinPolicy,
-    // touch_policy: TouchPolicy,
-}
-
-impl Default for Slot {
-    fn default() -> Self {
-        Self {
-            key: None,
-            pin_policy: PinPolicy::Once, /*touch_policy: TouchPolicy::Never*/
-        }
-    }
-}
-
-impl Slot {
-    pub fn default(name: SlotName) -> Self {
-        use SlotName::*;
-        match name {
-            // Management => Slot { pin_policy: PinPolicy::Never, ..Default::default() },
-            Signature => Slot {
-                pin_policy: PinPolicy::Always,
-                ..Default::default()
-            },
-            Pinless => Slot {
-                pin_policy: PinPolicy::Never,
-                ..Default::default()
-            },
-            _ => Default::default(),
-        }
-    }
-}
-
-pub struct RetiredSlotIndex(u8);
-
-impl core::convert::TryFrom<u8> for RetiredSlotIndex {
-    type Error = u8;
-    fn try_from(i: u8) -> core::result::Result<Self, Self::Error> {
-        if (1..=20).contains(&i) {
-            Ok(Self(i))
-        } else {
-            Err(i)
-        }
-    }
-}
-pub enum SlotName {
-    Identity,
-    Management, // Personalization? Administration?
-    Signature,
-    Decryption, // Management after all?
-    Pinless,
-    Retired(RetiredSlotIndex),
-    Attestation,
-}
-
-impl SlotName {
-    pub fn default_pin_policy(&self) -> PinPolicy {
-        use PinPolicy::*;
-        use SlotName::*;
-        match *self {
-            Signature => Always,
-            Pinless | Management | Attestation => Never,
-            _ => Once,
-        }
-    }
-
-    pub fn default_slot(&self) -> Slot {
-        Slot {
-            key: None,
-            pin_policy: self.default_pin_policy(),
-        }
-    }
-
-    pub fn reference(&self) -> u8 {
-        use SlotName::*;
-        match *self {
-            Identity => 0x9a,
-            Management => 0x9b,
-            Signature => 0x9c,
-            Decryption => 0x9d,
-            Pinless => 0x9e,
-            Retired(RetiredSlotIndex(i)) => 0x81 + i,
-            Attestation => 0xf9,
-        }
-    }
-    pub fn tag(&self) -> u32 {
-        use SlotName::*;
-        match *self {
-            Identity => 0x5fc105,
-            Management => 0,
-            Signature => 0x5fc10a,
-            Decryption => 0x5fc10b,
-            Pinless => 0x5fc101,
-            Retired(RetiredSlotIndex(i)) => 0x5fc10c + i as u32,
-            Attestation => 0x5fff01,
-        }
-    }
 }
 
 crate::container::enum_subset! {
@@ -202,6 +98,18 @@ impl Keys {
             AsymmetricKeyReference::DigitalSignature => &self.signature,
             AsymmetricKeyReference::KeyManagement => &self.key_management,
             AsymmetricKeyReference::CardAuthentication => &self.card_authentication,
+        }
+    }
+
+    pub fn asymetric_for_reference_mut(
+        &mut self,
+        key: AsymmetricKeyReference,
+    ) -> &mut Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        match key {
+            AsymmetricKeyReference::PivAuthentication => &mut self.authentication,
+            AsymmetricKeyReference::DigitalSignature => &mut self.signature,
+            AsymmetricKeyReference::KeyManagement => &mut self.key_management,
+            AsymmetricKeyReference::CardAuthentication => &mut self.card_authentication,
         }
     }
 }
@@ -486,23 +394,34 @@ impl Persistent {
         syscall!(client.delete(old_management_key));
     }
 
-    pub fn set_asymmetric_key(
+    fn set_asymmetric_key(
         &mut self,
-        _key: AsymmetricKeyReference,
-        _id: KeyId,
-        _alg: AsymmetricAlgorithms,
-        _client: &mut impl trussed::Client,
-    ) -> Result<Option<KeyWithAlg<AsymmetricAlgorithms>>, Status> {
-        todo!()
+        key: AsymmetricKeyReference,
+        id: KeyId,
+        alg: AsymmetricAlgorithms,
+    ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        self.keys
+            .asymetric_for_reference_mut(key)
+            .replace(KeyWithAlg { id, alg })
     }
 
     pub fn generate_asymmetric_key(
         &mut self,
-        _key: AsymmetricKeyReference,
-        _alg: AsymmetricAlgorithms,
-        _client: &mut impl trussed::Client,
-    ) -> Result<KeyId, Status> {
-        todo!()
+        key: AsymmetricKeyReference,
+        alg: AsymmetricAlgorithms,
+        client: &mut impl trussed::Client,
+    ) -> KeyId {
+        let id = syscall!(client.generate_key(
+            alg.mechanism(),
+            StorageAttributes::default().set_persistence(Location::Internal)
+        ))
+        .key;
+        let old = self.set_asymmetric_key(key, id, alg);
+        self.save(client);
+        if let Some(old) = old {
+            syscall!(client.delete(old.id));
+        }
+        id
     }
 
     pub fn initialize(client: &mut impl trussed::Client) -> Self {

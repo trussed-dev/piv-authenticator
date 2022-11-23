@@ -33,8 +33,8 @@ use core::convert::TryInto;
 use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
-use trussed::client;
-use trussed::{syscall, try_syscall};
+use trussed::types::{Location, StorageAttributes};
+use trussed::{client, syscall, try_syscall};
 
 use constants::*;
 
@@ -671,17 +671,11 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             Status::IncorrectDataParameter
         })?;
 
-        // ble policy
-        // if let Some(key) = self.state.persistent.keys.authentication_key {
-        //     // syscall!(self.trussed.delete(key));
-        // }
-
-        // let key = syscall!(self.trussed.generate_p256_private_key(
-        // let key = syscall!(self.trussed.generate_p256_private_key(
-        let key = syscall!(self
-            .trussed
-            .generate_ed255_private_key(trussed::types::Location::Internal,))
-        .key;
+        let secret_key = self.state.persistent.generate_asymmetric_key(
+            reference,
+            parsed_mechanism,
+            self.trussed,
+        );
 
         // // TEMP
         // let mechanism = trussed::types::Mechanism::P256Prehashed;
@@ -702,33 +696,25 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         //     .signature;
         // blocking::dbg!(&signature);
         // self.state.persistent.keys.authentication_key = Some(key);
-        self.state.persistent.save(self.trussed);
+        // self.state.persistent.save(self.trussed);
 
         // let public_key = syscall!(self.trussed.derive_p256_public_key(
-        let public_key = syscall!(self
-            .trussed
-            .derive_ed255_public_key(key, trussed::types::Location::Volatile,))
+        let public_key = syscall!(self.trussed.derive_key(
+            parsed_mechanism.mechanism(),
+            secret_key,
+            None,
+            StorageAttributes::default().set_persistence(Location::Volatile)
+        ))
         .key;
 
-        let serialized_public_key = syscall!(self.trussed.serialize_key(
-            // trussed::types::Mechanism::P256,
-            trussed::types::Mechanism::Ed255,
-            public_key,
-            trussed::types::KeySerialization::Raw,
-        ))
-        .serialized_key;
-
-        // info!("supposed SEC1 pubkey, len {}: {:X?}", serialized_public_key.len(), &serialized_public_key);
-
-        // P256 SEC1 has 65 bytes, Ed255 pubkeys have 32
-        // let l2 = 65;
-        let l2 = 32;
-        let l1 = l2 + 2;
-
-        reply
-            .extend_from_slice(&[0x7f, 0x49, l1, 0x86, l2])
-            .unwrap();
-        reply.extend_from_slice(&serialized_public_key).unwrap();
+        match parsed_mechanism {
+            AsymmetricAlgorithms::P256 => {
+                todo!()
+            }
+            AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
+                todo!()
+            }
+        };
 
         Ok(())
     }

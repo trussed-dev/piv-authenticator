@@ -21,6 +21,7 @@ pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
 pub mod piv_types;
+mod reply;
 pub mod state;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
@@ -39,6 +40,7 @@ use trussed::{client, syscall, try_syscall};
 use constants::*;
 
 pub type Result = iso7816::Result<()>;
+use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, LoadedState, State, TouchPolicy};
 
 use crate::piv_types::DynamicAuthenticationTemplate;
@@ -90,7 +92,7 @@ where
     // The way apdu-dispatch currently works, this would deselect, resetting security indicators.
     pub fn deselect(&mut self) {}
 
-    pub fn select<const R: usize>(&mut self, reply: &mut Data<R>) -> Result {
+    pub fn select<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
         use piv_types::Algorithms::*;
         info!("selecting PIV maybe");
 
@@ -100,7 +102,7 @@ where
             .with_supported_cryptographic_algorithms(&[Tdes, Aes256, P256, Ed25519, X25519]);
 
         application_property_template
-            .encode_to_heapless_vec(reply)
+            .encode_to_heapless_vec(*reply)
             .unwrap();
         info!("returning: {:02X?}", reply);
         Ok(())
@@ -114,6 +116,7 @@ where
         info!("PIV responding to {:?}", command);
         let parsed_command: Command = command.try_into()?;
         info!("parsed: {:?}", &parsed_command);
+        let reply = Reply(reply);
 
         match parsed_command {
             Command::Verify(verify) => self.load()?.verify(verify),
@@ -140,7 +143,7 @@ where
     fn get_data<const R: usize>(
         &mut self,
         container: container::Container,
-        reply: &mut Data<R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         // TODO: check security status, else return Status::SecurityStatusNotSatisfied
 
@@ -162,7 +165,7 @@ where
             // '5FC1 07' (351B)
             Container::CardCapabilityContainer => {
                 piv_types::CardCapabilityContainer::default()
-                    .encode_to_heapless_vec(reply)
+                    .encode_to_heapless_vec(*reply)
                     .unwrap();
                 info!("returning CCC {:02X?}", reply);
             }
@@ -172,7 +175,7 @@ where
                 let guid = self.state.persistent(&mut self.trussed)?.guid();
                 piv_types::CardHolderUniqueIdentifier::default()
                     .with_guid(guid)
-                    .encode_to_heapless_vec(reply)
+                    .encode_to_heapless_vec(*reply)
                     .unwrap();
                 info!("returning CHUID {:02X?}", reply);
             }
@@ -218,7 +221,7 @@ where
         &mut self,
         data: &[u8],
         instruction: YubicoPivExtension,
-        reply: &mut Data<R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         info!("yubico extension: {:?}", &instruction);
         match instruction {
@@ -283,7 +286,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         data: &[u8],
         _touch_policy: TouchPolicy,
-        _reply: &mut Data<R>,
+        _reply: Reply<'_, R>,
     ) -> Result {
         // cmd := apdu{
         //     instruction: insSetMGMKey,
@@ -475,7 +478,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
-        reply: &mut Data<R>,
+        reply: Reply<'_, R>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
         //
@@ -523,7 +526,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        _reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for response");
         let alg = self.state.persistent.keys.administration.alg;
@@ -565,7 +568,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         _auth: GeneralAuthenticate,
         _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        _reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for exponentiation");
         todo!()
@@ -575,7 +578,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
-        reply: &mut Data<R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         let alg = self.state.persistent.keys.administration.alg;
         if !data.is_empty() {
@@ -592,7 +595,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             Bytes::from_slice(&challenge).unwrap(),
         ));
         let resp = DynamicAuthenticationTemplate::with_challenge(&challenge);
-        resp.encode_to_heapless_vec(reply)
+        resp.encode_to_heapless_vec(*reply)
             .map_err(|_err| {
                 error!("Failed to encode challenge: {_err:?}");
                 Status::UnspecifiedNonpersistentExecutionError
@@ -604,7 +607,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         _auth: GeneralAuthenticate,
         _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        _reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for witness");
         todo!()
@@ -614,7 +617,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         reference: AsymmetricKeyReference,
         data: &[u8],
-        reply: &mut Data<R>,
+        reply: Reply<'_, R>,
     ) -> Result {
         if !self
             .state

@@ -6,6 +6,7 @@ use core::convert::{TryFrom, TryInto};
 use flexiber::Encodable;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
+use trussed::types::Mechanism;
 
 #[macro_export]
 macro_rules! enum_u8 {
@@ -152,6 +153,16 @@ crate::container::enum_subset! {
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
+    }
+}
+
+impl AsymmetricAlgorithms {
+    pub fn mechanism(self) -> Mechanism {
+        match self {
+            Self::Rsa2048 => Mechanism::Rsa2048Pkcs,
+            Self::Rsa4096 => Mechanism::Rsa4096Pkcs,
+            Self::P256 => Mechanism::P256,
+        }
     }
 }
 

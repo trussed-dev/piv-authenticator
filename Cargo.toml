@@ -60,4 +60,4 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/sosthene-nitrokey/trussed", rev = "cbf8f3cc759fa79275fe06d3ce4661d6a4f306aa"}
+trussed = { git = "https://github.com/nitrokey/trussed", branch = "rsa-import"}

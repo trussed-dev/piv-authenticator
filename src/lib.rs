@@ -617,7 +617,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         reference: AsymmetricKeyReference,
         data: &[u8],
-        reply: Reply<'_, R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         if !self
             .state
@@ -712,10 +712,44 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         match parsed_mechanism {
             AsymmetricAlgorithms::P256 => {
-                todo!()
+                let serialized_key = syscall!(self.trussed.serialize_key(
+                    trussed::types::Mechanism::P256,
+                    public_key,
+                    trussed::types::KeySerialization::Raw
+                ))
+                .serialized_key;
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                reply.expand(&[0x86])?;
+                reply.append_len(serialized_key.len() + 1)?;
+                reply.expand(&[0x04])?;
+                reply.expand(&serialized_key)?;
+                reply.prepend_len(offset)?;
             }
             AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
-                todo!()
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                let serialized_e = syscall!(self.trussed.serialize_key(
+                    trussed::types::Mechanism::P256,
+                    public_key,
+                    trussed::types::KeySerialization::RsaE
+                ))
+                .serialized_key;
+                reply.expand(&[0x81])?;
+                reply.append_len(serialized_e.len())?;
+                reply.expand(&serialized_e)?;
+
+                let serialized_n = syscall!(self.trussed.serialize_key(
+                    trussed::types::Mechanism::P256,
+                    public_key,
+                    trussed::types::KeySerialization::RsaN
+                ))
+                .serialized_key;
+                reply.expand(&[0x82])?;
+                reply.append_len(serialized_n.len())?;
+                reply.expand(&serialized_n)?;
+
+                reply.prepend_len(offset)?;
             }
         };
 

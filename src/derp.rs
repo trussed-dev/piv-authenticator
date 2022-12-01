@@ -23,12 +23,18 @@ impl From<untrusted::EndOfInput> for Error {
 }
 
 /// Return the value of the given tag and apply a decoding function to it.
-pub fn nested<'a, F, R>(input: &mut Reader<'a>, tag: u8, decoder: F) -> Result<R>
+pub fn nested<'a, F, R, E>(
+    input: &mut Reader<'a>,
+    incomplete_end: E,
+    bad_tag: E,
+    tag: u8,
+    decoder: F,
+) -> core::result::Result<R, E>
 where
-    F: FnOnce(&mut untrusted::Reader<'a>) -> Result<R>,
+    F: FnOnce(&mut untrusted::Reader<'a>) -> core::result::Result<R, E>,
 {
-    let inner = expect_tag_and_get_value(input, tag)?;
-    inner.read_all(Error::Read, decoder)
+    let inner = expect_tag_and_get_value(input, tag).map_err(|_| bad_tag)?;
+    inner.read_all(incomplete_end, decoder)
 }
 
 /// Read a tag and return it's value. Errors when the expect and actual tag do not match.

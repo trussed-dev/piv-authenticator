@@ -279,65 +279,64 @@ impl<'a> ApplicationPropertyTemplate<'a> {
         }
     }
 }
+// /// TODO: This should be an enum of sorts, maybe.
+// ///
+// /// The data objects that appear in the dynamic authentication template (tag '7C') in the data field
+// /// of the GENERAL AUTHENTICATE card command depend on the authentication protocol being executed.
+// ///
+// /// Note that the empty tags (i.e., tags with no data) return the same tag with content
+// /// (they can be seen as “requests for requests”):
+// /// - '80 00' Returns '80 TL \<encrypted random\>' (as per definition)
+// /// - '81 00' Returns '81 TL \<random\>' (as per external authenticate example)
+// #[derive(Clone, Copy, Default, Encodable, Eq, PartialEq)]
+// #[tlv(application, constructed, number = "0x1C")] // = 0x7C
+// pub struct DynamicAuthenticationTemplate<'l> {
+//     /// The Witness (tag '80') contains encrypted data (unrevealed fact).
+//     /// This data is decrypted by the card.
+//     #[tlv(simple = "0x80")]
+//     witness: Option<&'l [u8]>,
 
-/// TODO: This should be an enum of sorts, maybe.
-///
-/// The data objects that appear in the dynamic authentication template (tag '7C') in the data field
-/// of the GENERAL AUTHENTICATE card command depend on the authentication protocol being executed.
-///
-/// Note that the empty tags (i.e., tags with no data) return the same tag with content
-/// (they can be seen as “requests for requests”):
-/// - '80 00' Returns '80 TL \<encrypted random\>' (as per definition)
-/// - '81 00' Returns '81 TL \<random\>' (as per external authenticate example)
-#[derive(Clone, Copy, Default, Encodable, Eq, PartialEq)]
-#[tlv(application, constructed, number = "0x1C")] // = 0x7C
-pub struct DynamicAuthenticationTemplate<'l> {
-    /// The Witness (tag '80') contains encrypted data (unrevealed fact).
-    /// This data is decrypted by the card.
-    #[tlv(simple = "0x80")]
-    witness: Option<&'l [u8]>,
+//     ///  The Challenge (tag '81') contains clear data (byte sequence),
+//     ///  which is encrypted by the card.
+//     #[tlv(simple = "0x81")]
+//     challenge: Option<&'l [u8]>,
 
-    ///  The Challenge (tag '81') contains clear data (byte sequence),
-    ///  which is encrypted by the card.
-    #[tlv(simple = "0x81")]
-    challenge: Option<&'l [u8]>,
+//     /// The Response (tag '82') contains either the decrypted data from tag '80'
+//     /// or the encrypted data from tag '81'.
+//     #[tlv(simple = "0x82")]
+//     response: Option<&'l [u8]>,
 
-    /// The Response (tag '82') contains either the decrypted data from tag '80'
-    /// or the encrypted data from tag '81'.
-    #[tlv(simple = "0x82")]
-    response: Option<&'l [u8]>,
+//     /// Not documented in SP-800-73-4
+//     #[tlv(simple = "0x85")]
+//     exponentiation: Option<&'l [u8]>,
+// }
 
-    /// Not documented in SP-800-73-4
-    #[tlv(simple = "0x85")]
-    exponentiation: Option<&'l [u8]>,
-}
-
-impl<'a> DynamicAuthenticationTemplate<'a> {
-    pub fn with_challenge(challenge: &'a [u8]) -> Self {
-        Self {
-            challenge: Some(challenge),
-            ..Default::default()
-        }
-    }
-    pub fn with_exponentiation(exponentiation: &'a [u8]) -> Self {
-        Self {
-            exponentiation: Some(exponentiation),
-            ..Default::default()
-        }
-    }
-    pub fn with_response(response: &'a [u8]) -> Self {
-        Self {
-            response: Some(response),
-            ..Default::default()
-        }
-    }
-    pub fn with_witness(witness: &'a [u8]) -> Self {
-        Self {
-            witness: Some(witness),
-            ..Default::default()
-        }
-    }
-}
+// impl<'a> DynamicAuthenticationTemplate<'a> {
+//     pub fn with_challenge(challenge: &'a [u8]) -> Self {
+//         Self {
+//             challenge: Some(challenge),
+//             ..Default::default()
+//         }
+//     }
+//     pub fn with_exponentiation(exponentiation: &'a [u8]) -> Self {
+//         Self {
+//             exponentiation: Some(exponentiation),
+//             ..Default::default()
+//         }
+//     }
+//     pub fn with_response(response: &'a [u8]) -> Self {
+//         Self {
+//             response: Some(response),
+//             ..Default::default()
+//         }
+//     }
+//     pub fn with_witness(witness: &'a [u8]) -> Self {
+//         Self {
+//             witness: Some(witness),
+//             ..Default::default()
+//         }
+//     }
+// }
 
 /// The Card Holder Unique Identifier (CHUID) data object is defined in accordance with the Technical
 /// Implementation Guidance: Smart Card Enabled Physical Access Control Systems (TIG SCEPACS)

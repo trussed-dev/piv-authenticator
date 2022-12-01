@@ -43,8 +43,6 @@ pub type Result = iso7816::Result<()>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, LoadedState, State, TouchPolicy};
 
-use crate::piv_types::DynamicAuthenticationTemplate;
-
 /// PIV authenticator Trussed app.
 ///
 /// The `C` parameter is necessary, as PIV includes command sequences,
@@ -113,7 +111,7 @@ where
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
     ) -> Result {
-        info!("PIV responding to {:?}", command);
+        info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
         info!("parsed: {:?}", &parsed_command);
         let reply = Reply(reply);
@@ -478,7 +476,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
-        reply: Reply<'_, R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
         //
@@ -498,37 +496,55 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // expected response: "7C L1 82 L2 SEQ(INT r, INT s)"
 
         // refine as we gain more capability
+
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
         let input = derp::Input::from(data);
+        input.read_all(Status::IncorrectDataParameter, |input| {
+            derp::nested(
+                input,
+                Status::IncorrectDataParameter,
+                Status::IncorrectDataParameter,
+                0x7C,
+                |input| {
+                    while !input.at_end() {
+                        let (tag, data) = match derp::read_tag_and_get_value(input) {
+                            Ok((tag, data)) => (tag, data),
+                            Err(_err) => {
+                                warn!("Failed to parse data: {:?}", _err);
+                                return Err(Status::IncorrectDataParameter);
+                            }
+                        };
 
-        let (tag, input) = input
-            .read_all(derp::Error::UnexpectedEnd, |r| {
-                derp::expect_tag_and_get_value(r, 0x7C)
-            })
-            .and_then(|input| {
-                input.read_all(derp::Error::UnexpectedEnd, derp::read_tag_and_get_value)
-            })
-            .map_err(|_err| {
-                warn!("Bad data: {_err:?}");
-                Status::IncorrectDataParameter
-            })?;
-
-        // part 2 table 7
-        match tag {
-            0x80 => self.request_for_witness(auth, input, reply),
-            0x81 => self.request_for_challenge(auth, input, reply),
-            0x82 => self.request_for_response(auth, input, reply),
-            0x85 => self.request_for_exponentiation(auth, input, reply),
-            _ => Err(Status::IncorrectDataParameter),
-        }
+                        // part 2 table 7
+                        match tag {
+                            0x80 => self.witness(auth, data, reply.lend())?,
+                            0x81 => self.challenge(auth, data, reply.lend())?,
+                            0x82 => self.response(auth, data, reply.lend())?,
+                            0x83 => self.exponentiation(auth, data, reply.lend())?,
+                            _ => return Err(Status::IncorrectDataParameter),
+                        }
+                    }
+                    Ok(())
+                },
+            )
+        })?;
+        reply.prepend_len(offset)
     }
 
-    pub fn request_for_response<const R: usize>(
+    pub fn response<const R: usize>(
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
         _reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for response");
+
+        if data.is_empty() {
+            // Not sure if this is correct
+            return Ok(());
+        }
+
         let alg = self.state.persistent.keys.administration.alg;
         if data.len() != alg.challenge_length() {
             warn!("Bad response length");
@@ -564,7 +580,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         }
     }
 
-    pub fn request_for_exponentiation<const R: usize>(
+    pub fn exponentiation<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
         _data: derp::Input<'_>,
@@ -574,36 +590,75 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         todo!()
     }
 
-    pub fn request_for_challenge<const R: usize>(
+    pub fn challenge<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        data: derp::Input<'_>,
+        reply: Reply<'_, R>,
+    ) -> Result {
+        if data.is_empty() {
+            self.request_for_challenge(auth, reply)
+        } else {
+            self.response_for_challenge(auth, data, reply)
+        }
+    }
+
+    pub fn response_for_challenge<const R: usize>(
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
         mut reply: Reply<'_, R>,
     ) -> Result {
+        info!("Response for challenge ");
+
         let alg = self.state.persistent.keys.administration.alg;
-        if !data.is_empty() {
-            warn!("Request for challenge with non empty data");
-            return Err(Status::IncorrectDataParameter);
-        }
         if alg != auth.algorithm {
             warn!("Bad algorithm");
             return Err(Status::IncorrectP1OrP2Parameter);
         }
+
+        if data.len() != alg.challenge_length() {
+            warn!("Bad challenge length");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let response = syscall!(self.trussed.encrypt(
+            alg.mechanism(),
+            self.state.persistent.keys.administration.id,
+            data.as_slice_less_safe(),
+            &[],
+            None
+        ))
+        .ciphertext;
+
+        reply.expand(&[0x82])?;
+        reply.append_len(response.len())?;
+        reply.expand(&response)
+    }
+
+    pub fn request_for_challenge<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
         info!("Request for challenge ");
+
+        let alg = self.state.persistent.keys.administration.alg;
+        if alg != auth.algorithm {
+            warn!("Bad algorithm");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
         let challenge = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
         self.state.runtime.command_cache = Some(CommandCache::AuthenticateChallenge(
             Bytes::from_slice(&challenge).unwrap(),
         ));
-        let resp = DynamicAuthenticationTemplate::with_challenge(&challenge);
-        resp.encode_to_heapless_vec(*reply)
-            .map_err(|_err| {
-                error!("Failed to encode challenge: {_err:?}");
-                Status::UnspecifiedNonpersistentExecutionError
-            })
-            .map(drop)
+
+        reply.expand(&[0x81])?;
+        reply.append_len(challenge.len())?;
+        reply.expand(&challenge)
     }
 
-    pub fn request_for_witness<const R: usize>(
+    pub fn witness<const R: usize>(
         &mut self,
         _auth: GeneralAuthenticate,
         _data: derp::Input<'_>,
@@ -652,17 +707,22 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // TODO: iterate on this, don't expect tags..
         let input = derp::Input::from(data);
         // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
-        let mechanism_data = input
-            .read_all(derp::Error::Read, |input| {
-                derp::nested(input, 0xac, |input| {
+        let mechanism_data = input.read_all(Status::IncorrectDataParameter, |input| {
+            derp::nested(
+                input,
+                Status::IncorrectDataParameter,
+                Status::IncorrectDataParameter,
+                0xac,
+                |input| {
                     derp::expect_tag_and_get_value(input, 0x80)
                         .map(|input| input.as_slice_less_safe())
-                })
-            })
-            .map_err(|_e| {
-                warn!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
-                Status::IncorrectDataParameter
-            })?;
+                        .map_err(|_e| {
+                            warn!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
+                            Status::IncorrectDataParameter
+                        })
+                },
+            )
+        })?;
 
         let [mechanism] = mechanism_data else {
             warn!("Mechanism of len not 1: {mechanism_data:02x?}");

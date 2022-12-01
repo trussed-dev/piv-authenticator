@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 use core::convert::{TryFrom, TryInto};
+use core::mem::replace;
 
 use heapless_bytes::Bytes;
 use iso7816::Status;
@@ -70,8 +71,7 @@ pub struct KeyWithAlg<A> {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Keys {
     // 9a "PIV Authentication Key" (YK: PIV Authentication)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication: Option<KeyWithAlg<AsymmetricAlgorithms>>,
+    pub authentication: KeyWithAlg<AsymmetricAlgorithms>,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
     pub administration: KeyWithAlg<AdministrationAlgorithm>,
     // 9c "Digital Signature Key" (YK: Digital Signature)
@@ -92,24 +92,27 @@ impl Keys {
     pub fn asymetric_for_reference(
         &self,
         key: AsymmetricKeyReference,
-    ) -> &Option<KeyWithAlg<AsymmetricAlgorithms>> {
+    ) -> Option<&KeyWithAlg<AsymmetricAlgorithms>> {
         match key {
-            AsymmetricKeyReference::PivAuthentication => &self.authentication,
-            AsymmetricKeyReference::DigitalSignature => &self.signature,
-            AsymmetricKeyReference::KeyManagement => &self.key_management,
-            AsymmetricKeyReference::CardAuthentication => &self.card_authentication,
+            AsymmetricKeyReference::PivAuthentication => Some(&self.authentication),
+            AsymmetricKeyReference::DigitalSignature => self.signature.as_ref(),
+            AsymmetricKeyReference::KeyManagement => self.key_management.as_ref(),
+            AsymmetricKeyReference::CardAuthentication => self.card_authentication.as_ref(),
         }
     }
 
-    pub fn asymetric_for_reference_mut(
+    pub fn set_asymetric_for_reference(
         &mut self,
         key: AsymmetricKeyReference,
-    ) -> &mut Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        new: KeyWithAlg<AsymmetricAlgorithms>,
+    ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
         match key {
-            AsymmetricKeyReference::PivAuthentication => &mut self.authentication,
-            AsymmetricKeyReference::DigitalSignature => &mut self.signature,
-            AsymmetricKeyReference::KeyManagement => &mut self.key_management,
-            AsymmetricKeyReference::CardAuthentication => &mut self.card_authentication,
+            AsymmetricKeyReference::PivAuthentication => {
+                Some(replace(&mut self.authentication, new))
+            }
+            AsymmetricKeyReference::DigitalSignature => self.signature.replace(new),
+            AsymmetricKeyReference::KeyManagement => self.key_management.replace(new),
+            AsymmetricKeyReference::CardAuthentication => self.card_authentication.replace(new),
         }
     }
 }
@@ -401,8 +404,7 @@ impl Persistent {
         alg: AsymmetricAlgorithms,
     ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
         self.keys
-            .asymetric_for_reference_mut(key)
-            .replace(KeyWithAlg { id, alg })
+            .set_asymetric_for_reference(key, KeyWithAlg { id, alg })
     }
 
     pub fn generate_asymmetric_key(
@@ -437,6 +439,15 @@ impl Persistent {
             alg: YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
         };
 
+        let authentication = KeyWithAlg {
+            id: syscall!(client.generate_key(
+                Mechanism::P256,
+                StorageAttributes::new().set_persistence(Location::Internal)
+            ))
+            .key,
+            alg: AsymmetricAlgorithms::P256,
+        };
+
         let mut guid: [u8; 16] = syscall!(client.random_bytes(16))
             .bytes
             .as_ref()
@@ -447,7 +458,7 @@ impl Persistent {
         guid[8] = (guid[8] & 0x3f) | 0x80;
 
         let keys = Keys {
-            authentication: None,
+            authentication,
             administration,
             signature: None,
             key_management: None,

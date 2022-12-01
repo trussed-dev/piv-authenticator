@@ -69,4 +69,21 @@
             )
         ]
     ),
+    IoTest(
+        name: "Generate key",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            IoData(
+                input: "00 47 009A 05 
+                                AC 03 
+                                     80 01 11",
+                output: Len(70),
+            )
+        ]
+    )
 ]

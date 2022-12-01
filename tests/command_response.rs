@@ -197,8 +197,14 @@ enum OutputMatcher {
     Len(usize),
     // The () at the end are here to workaround a compiler bug. See:
     // https://github.com/rust-lang/rust/issues/89940#issuecomment-1282321806
-    And(Cow<'static, [OutputMatcher]>, #[serde(default)] ()),
-    Or(Cow<'static, [OutputMatcher]>, #[serde(default)] ()),
+    All(
+        #[serde(default)] Cow<'static, [OutputMatcher]>,
+        #[serde(default)] (),
+    ),
+    Any(
+        #[serde(default)] Cow<'static, [OutputMatcher]>,
+        #[serde(default)] (),
+    ),
     /// HEX data
     Data(Cow<'static, str>),
     Bytes(Cow<'static, [u8]>),
@@ -229,8 +235,8 @@ impl OutputMatcher {
                 data == &**expected
             }
             Self::Len(len) => data.len() == *len,
-            Self::And(matchers, _) => matchers.iter().filter(|m| !m.validate(data)).count() == 0,
-            Self::Or(matchers, _) => matchers.iter().filter(|m| m.validate(data)).count() != 0,
+            Self::All(matchers, _) => matchers.iter().filter(|m| !m.validate(data)).count() == 0,
+            Self::Any(matchers, _) => matchers.iter().filter(|m| m.validate(data)).count() != 0,
         }
     }
 }
@@ -276,7 +282,7 @@ enum IoCmd {
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
-const MATCH_ANY: OutputMatcher = OutputMatcher::And(Cow::Borrowed(&[]), ());
+const MATCH_ANY: OutputMatcher = OutputMatcher::All(Cow::Borrowed(&[]), ());
 
 impl IoCmd {
     fn run(&self, card: &mut setup::Piv) {

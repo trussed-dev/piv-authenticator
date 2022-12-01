@@ -14,8 +14,8 @@ use iso7816::{Instruction, Status};
 use crate::state::TouchPolicy;
 pub use crate::{
     container::{
-        self as containers, AttestKeyReference, AuthenticateKeyReference,
-        ChangeReferenceKeyReference, AsymmetricKeyReference, VerifyKeyReference,
+        self as containers, AsymmetricKeyReference, AttestKeyReference, AuthenticateKeyReference,
+        ChangeReferenceKeyReference, VerifyKeyReference,
     },
     piv_types, Pin, Puk,
 };
@@ -67,7 +67,7 @@ pub enum Command<'l> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GeneralAuthenticate {
     pub algorithm: piv_types::Algorithms,
-    key_reference: AuthenticateKeyReference,
+    pub key_reference: AuthenticateKeyReference,
 }
 
 impl<'l> Command<'l> {

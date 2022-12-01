@@ -14,7 +14,10 @@ use trussed::{
 };
 
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
-use crate::{container::AsymmetricKeyReference, piv_types::Algorithms};
+use crate::{
+    container::{AsymmetricKeyReference, SecurityCondition},
+    piv_types::Algorithms,
+};
 
 use crate::{Pin, Puk};
 
@@ -180,59 +183,6 @@ pub struct Runtime {
     pub command_cache: Option<CommandCache>,
 }
 
-// pub trait Aid {
-//     const AID: &'static [u8];
-//     const RIGHT_TRUNCATED_LENGTH: usize;
-
-//     fn len() -> usize {
-//         Self::AID.len()
-//     }
-
-//     fn full() -> &'static [u8] {
-//         Self::AID
-//     }
-
-//     fn right_truncated() -> &'static [u8] {
-//         &Self::AID[..Self::RIGHT_TRUNCATED_LENGTH]
-//     }
-
-//     fn pix() -> &'static [u8] {
-//         &Self::AID[5..]
-//     }
-
-//     fn rid() -> &'static [u8] {
-//         &Self::AID[..5]
-//     }
-// }
-
-// #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-// pub enum SelectableAid {
-//     Piv(PivAid),
-//     YubicoOtp(YubicoOtpAid),
-// }
-
-// impl Default for SelectableAid {
-//     fn default() -> Self {
-//         Self::Piv(Default::default())
-//     }
-// }
-
-// #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-// pub struct PivAid {}
-
-// impl Aid for PivAid {
-//     const AID: &'static [u8] = &PIV_AID;
-//     const RIGHT_TRUNCATED_LENGTH: usize = 9;
-// }
-
-// #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-// pub struct YubicoOtpAid {}
-
-// impl Aid for YubicoOtpAid {
-//     const AID: &'static [u8] = &YUBICO_OTP_AID;
-//     const RIGHT_TRUNCATED_LENGTH: usize = 8;
-// }
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {}
 
@@ -241,6 +191,16 @@ pub enum SecurityStatus {
     JustVerified,
     Verified,
     NotVerified,
+}
+
+impl Runtime {
+    pub fn security_valid(&self, condition: SecurityCondition) -> bool {
+        use SecurityCondition::*;
+        match condition {
+            Pin => self.app_security_status.pin_verified,
+            Always => true,
+        }
+    }
 }
 
 impl Default for SecurityStatus {
@@ -414,7 +374,7 @@ impl Persistent {
         client: &mut impl trussed::Client,
     ) -> KeyId {
         let id = syscall!(client.generate_key(
-            alg.mechanism(),
+            alg.key_mechanism(),
             StorageAttributes::default().set_persistence(Location::Internal)
         ))
         .key;

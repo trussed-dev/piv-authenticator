@@ -157,11 +157,19 @@ crate::container::enum_subset! {
 }
 
 impl AsymmetricAlgorithms {
-    pub fn mechanism(self) -> Mechanism {
+    pub fn key_mechanism(self) -> Mechanism {
         match self {
             Self::Rsa2048 => Mechanism::Rsa2048Pkcs,
             Self::Rsa4096 => Mechanism::Rsa4096Pkcs,
             Self::P256 => Mechanism::P256,
+        }
+    }
+
+    pub fn sign_mechanism(self) -> Mechanism {
+        match self {
+            Self::Rsa2048 => Mechanism::Rsa2048Pkcs,
+            Self::Rsa4096 => Mechanism::Rsa4096Pkcs,
+            Self::P256 => Mechanism::P256Prehashed,
         }
     }
 }

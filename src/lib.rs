@@ -12,11 +12,12 @@ delog::generate_macros!();
 
 pub mod commands;
 use commands::containers::KeyReference;
+use commands::piv_types::Algorithms;
 use commands::{AsymmetricKeyReference, GeneralAuthenticate};
 pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
 pub mod container;
-use container::AttestKeyReference;
+use container::{AttestKeyReference, AuthenticateKeyReference};
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
@@ -41,7 +42,7 @@ use constants::*;
 
 pub type Result = iso7816::Result<()>;
 use reply::Reply;
-use state::{AdministrationAlgorithm, CommandCache, LoadedState, State, TouchPolicy};
+use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
 /// PIV authenticator Trussed app.
 ///
@@ -497,6 +498,18 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         // refine as we gain more capability
 
+        if !self
+            .state
+            .runtime
+            .security_valid(auth.key_reference.use_security_condition())
+        {
+            warn!(
+                "Security condition not satisfied for key {:?}",
+                auth.key_reference
+            );
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
         reply.expand(&[0x7C])?;
         let offset = reply.len();
         let input = derp::Input::from(data);
@@ -507,6 +520,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 Status::IncorrectDataParameter,
                 0x7C,
                 |input| {
+                    let mut expect_response = false;
                     while !input.at_end() {
                         let (tag, data) = match derp::read_tag_and_get_value(input) {
                             Ok((tag, data)) => (tag, data),
@@ -519,8 +533,10 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                         // part 2 table 7
                         match tag {
                             0x80 => self.witness(auth, data, reply.lend())?,
-                            0x81 => self.challenge(auth, data, reply.lend())?,
-                            0x82 => self.response(auth, data, reply.lend())?,
+                            0x81 => self.challenge(auth, data, expect_response, reply.lend())?,
+                            0x82 => {
+                                self.response(auth, data, &mut expect_response, reply.lend())?
+                            }
                             0x83 => self.exponentiation(auth, data, reply.lend())?,
                             _ => return Err(Status::IncorrectDataParameter),
                         }
@@ -536,12 +552,14 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
+        expect_response: &mut bool,
         _reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for response");
 
         if data.is_empty() {
-            // Not sure if this is correct
+            info!("No data, setting expect_response ({expect_response}) to true");
+            *expect_response = true;
             return Ok(());
         }
 
@@ -551,7 +569,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::IncorrectDataParameter);
         }
         if alg != auth.algorithm {
-            warn!("Bad algorithm");
+            warn!("Bad algorithm: {:?}", auth.algorithm);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
@@ -594,26 +612,63 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
+        expect_response: bool,
         reply: Reply<'_, R>,
     ) -> Result {
         if data.is_empty() {
             self.request_for_challenge(auth, reply)
         } else {
-            self.response_for_challenge(auth, data, reply)
+            if !expect_response {
+                warn!("Get challenge with empty data without expected response");
+            }
+            use AuthenticateKeyReference::*;
+            match auth.key_reference {
+                PivCardApplicationAdministration => {
+                    self.admin_challenge(auth.algorithm, data, reply)
+                }
+                PivAuthentication => self.authenticate_challenge(auth.algorithm, data, reply),
+                _ => Err(Status::FunctionNotSupported),
+            }
         }
     }
 
-    pub fn response_for_challenge<const R: usize>(
+    pub fn authenticate_challenge<const R: usize>(
         &mut self,
-        auth: GeneralAuthenticate,
+        requested_alg: Algorithms,
+        data: derp::Input<'_>,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        let KeyWithAlg { alg, id } = self.state.persistent.keys.authentication;
+
+        if alg != requested_alg {
+            warn!("Bad algorithm: {:?}", requested_alg);
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+
+        let response = syscall!(self.trussed.sign(
+            alg.sign_mechanism(),
+            id,
+            data.as_slice_less_safe(),
+            trussed::types::SignatureSerialization::Raw,
+        ))
+        .signature;
+        reply.expand(&[0x82])?;
+        reply.append_len(response.len())?;
+        reply.expand(&response)?;
+        Ok(())
+    }
+
+    pub fn admin_challenge<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
         data: derp::Input<'_>,
         mut reply: Reply<'_, R>,
     ) -> Result {
         info!("Response for challenge ");
 
         let alg = self.state.persistent.keys.administration.alg;
-        if alg != auth.algorithm {
-            warn!("Bad algorithm");
+        if alg != requested_alg {
+            warn!("Bad algorithm: {:?}", requested_alg);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
@@ -645,7 +700,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         let alg = self.state.persistent.keys.administration.alg;
         if alg != auth.algorithm {
-            warn!("Bad algorithm");
+            warn!("Bad algorithm: {:?}", auth.algorithm);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
         let challenge = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
@@ -763,7 +818,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         // let public_key = syscall!(self.trussed.derive_p256_public_key(
         let public_key = syscall!(self.trussed.derive_key(
-            parsed_mechanism.mechanism(),
+            parsed_mechanism.key_mechanism(),
             secret_key,
             None,
             StorageAttributes::default().set_persistence(Location::Volatile)

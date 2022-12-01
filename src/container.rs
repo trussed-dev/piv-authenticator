@@ -7,6 +7,7 @@ use hex_literal::hex;
 
 macro_rules! enum_subset {
     (
+
         $(#[$outer:meta])*
         $vis:vis enum $name:ident: $sup:ident {
             $($var:ident),+
@@ -80,6 +81,12 @@ impl<'a> Tag<'a> {
     }
 }
 
+/// Security condition for the use of a given key.
+pub enum SecurityCondition {
+    Pin,
+    Always,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RetiredIndex(u8);
 
@@ -121,6 +128,30 @@ crate::enum_u8! {
         Retired19 = 0x94,
         Retired20 = 0x95,
     }
+}
+
+impl KeyReference {
+    pub fn use_security_condition(self) -> SecurityCondition {
+        match self {
+            Self::SecureMessaging
+            | Self::PivCardApplicationAdministration
+            | Self::KeyManagement => SecurityCondition::Always,
+            _ => SecurityCondition::Pin,
+        }
+    }
+}
+
+macro_rules! impl_use_security_condition {
+    ($($name:ident),*) => {
+        $(
+            impl $name {
+                pub fn use_security_condition(self) -> SecurityCondition {
+                    let tmp: KeyReference = self.into();
+                    tmp.use_security_condition()
+                }
+            }
+        )*
+    };
 }
 
 enum_subset! {
@@ -194,6 +225,13 @@ enum_subset! {
         Retired20,
     }
 }
+impl_use_security_condition!(
+    AttestKeyReference,
+    AsymmetricKeyReference,
+    ChangeReferenceKeyReference,
+    VerifyKeyReference,
+    AuthenticateKeyReference
+);
 
 /// The 36 data objects defined by PIV (SP 800-37-4, Part 1).
 ///

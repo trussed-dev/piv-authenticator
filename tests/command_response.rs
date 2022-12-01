@@ -381,12 +381,12 @@ impl IoCmd {
         let command = build_command(0x00, 0x87, alg as u8, 0x9B, &hex!("7C 02 81 00"), 0);
         let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
         let key = parse_hex(key);
-        if expected_status_challenge != Status::Success && res.is_empty() {
+        if expected_status_challenge != Status::Success {
             res = heapless::Vec::from_slice(&vec![0; alg.challenge_len() + 6]).unwrap();
         }
 
         // Remove header
-        let challenge = &mut res[6..][..alg.challenge_len()];
+        let challenge = &mut res[4..][..alg.challenge_len()];
         match alg {
             Algorithm::Tdes => {
                 let cipher = TdesEde3::new(GenericArray::from_slice(&key));

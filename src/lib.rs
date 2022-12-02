@@ -123,7 +123,7 @@ where
             Command::ChangeReference(change_reference) => {
                 self.load()?.change_reference(change_reference)
             }
-            Command::GetData(container) => self.get_data(container, reply),
+            Command::GetData(container) => self.load()?.get_data(container, reply),
             Command::Select(_aid) => self.select(reply),
             Command::GeneralAuthenticate(authenticate) => {
                 self.load()?
@@ -138,83 +138,6 @@ where
             }
             _ => todo!(),
         }
-    }
-
-    fn get_data<const R: usize>(
-        &mut self,
-        container: container::Container,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
-
-        // Table 3, Part 1, SP 800-73-4
-        // https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=30
-        use crate::container::Container;
-        match container {
-            Container::DiscoveryObject => {
-                // Err(Status::InstructionNotSupportedOrInvalid)
-                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
-                // todo!("discovery object"),
-            }
-
-            Container::BiometricInformationTemplatesGroupTemplate => {
-                return Err(Status::InstructionNotSupportedOrInvalid);
-                // todo!("biometric information template"),
-            }
-
-            // '5FC1 07' (351B)
-            Container::CardCapabilityContainer => {
-                piv_types::CardCapabilityContainer::default()
-                    .encode_to_heapless_vec(*reply)
-                    .unwrap();
-                info!("returning CCC {:02X?}", reply);
-            }
-
-            // '5FC1 02' (351B)
-            Container::CardHolderUniqueIdentifier => {
-                let guid = self.state.persistent(&mut self.trussed)?.guid();
-                piv_types::CardHolderUniqueIdentifier::default()
-                    .with_guid(guid)
-                    .encode_to_heapless_vec(*reply)
-                    .unwrap();
-                info!("returning CHUID {:02X?}", reply);
-            }
-
-            // // '5FC1 05' (351B)
-            // Container::X509CertificateForPivAuthentication => {
-            //     // return Err(Status::NotFound);
-
-            //     // info!("loading 9a cert");
-            //     // it seems like fetching this certificate is the way Filo's agent decides
-            //     // whether the key is "already setup":
-            //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
-            //     let data = try_syscall!(self.trussed.read_file(
-            //         trussed::types::Location::Internal,
-            //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
-            //     )).map_err(|_| {
-            //         // info!("error loading: {:?}", &e);
-            //         Status::NotFound
-            //     } )?.data;
-
-            //     // todo: cleanup
-            //     let tag = flexiber::Tag::application(0x13); // 0x53
-            //     flexiber::TaggedSlice::from(tag, &data)
-            //         .unwrap()
-            //         .encode_to_heapless_vec(reply)
-            //         .unwrap();
-            // }
-
-            // // '5F FF01' (754B)
-            // YubicoObjects::AttestationCertificate => {
-            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
-            //     reply.extend_from_slice(&data).ok();
-            // }
-            _ => {
-                warn!("Unimplemented GET DATA object: {container:?}");
-                return Err(Status::FunctionNotSupported);
-            }
-        }
-        Ok(())
     }
 
     pub fn yubico_piv_extension<const R: usize>(
@@ -959,6 +882,82 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         Err(Status::IncorrectDataParameter)
     }
 
+    fn get_data<const R: usize>(
+        &mut self,
+        container: container::Container,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+
+        // Table 3, Part 1, SP 800-73-4
+        // https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=30
+        use crate::container::Container;
+        match container {
+            Container::DiscoveryObject => {
+                // Err(Status::InstructionNotSupportedOrInvalid)
+                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
+                // todo!("discovery object"),
+            }
+
+            Container::BiometricInformationTemplatesGroupTemplate => {
+                return Err(Status::InstructionNotSupportedOrInvalid);
+                // todo!("biometric information template"),
+            }
+
+            // '5FC1 07' (351B)
+            Container::CardCapabilityContainer => {
+                piv_types::CardCapabilityContainer::default()
+                    .encode_to_heapless_vec(*reply)
+                    .unwrap();
+                info!("returning CCC {:02X?}", reply);
+            }
+
+            // '5FC1 02' (351B)
+            Container::CardHolderUniqueIdentifier => {
+                let guid = self.state.persistent.guid();
+                piv_types::CardHolderUniqueIdentifier::default()
+                    .with_guid(guid)
+                    .encode_to_heapless_vec(*reply)
+                    .unwrap();
+                info!("returning CHUID {:02X?}", reply);
+            }
+
+            // // '5FC1 05' (351B)
+            // Container::X509CertificateForPivAuthentication => {
+            //     // return Err(Status::NotFound);
+
+            //     // info!("loading 9a cert");
+            //     // it seems like fetching this certificate is the way Filo's agent decides
+            //     // whether the key is "already setup":
+            //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
+            //     let data = try_syscall!(self.trussed.read_file(
+            //         trussed::types::Location::Internal,
+            //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
+            //     )).map_err(|_| {
+            //         // info!("error loading: {:?}", &e);
+            //         Status::NotFound
+            //     } )?.data;
+
+            //     // todo: cleanup
+            //     let tag = flexiber::Tag::application(0x13); // 0x53
+            //     flexiber::TaggedSlice::from(tag, &data)
+            //         .unwrap()
+            //         .encode_to_heapless_vec(reply)
+            //         .unwrap();
+            // }
+
+            // // '5F FF01' (754B)
+            // YubicoObjects::AttestationCertificate => {
+            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
+            //     reply.extend_from_slice(&data).ok();
+            // }
+            _ => {
+                warn!("Unimplemented GET DATA object: {container:?}");
+                return Err(Status::FunctionNotSupported);
+            }
+        }
+        Ok(())
+    }
     // match container {
     //     containers::Container::CardHolderUniqueIdentifier =>
     //         piv_types::CardHolderUniqueIdentifier::default()

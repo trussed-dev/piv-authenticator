@@ -13,6 +13,7 @@ use trussed::{
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
 };
 
+use crate::container::Container;
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
 use crate::{
     container::{AsymmetricKeyReference, SecurityCondition},
@@ -491,5 +492,79 @@ fn load_if_exists(
                 Err(Status::UnspecifiedPersistentExecutionError)
             }
         },
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ContainerStorage(Container);
+
+impl ContainerStorage {
+    fn path(self) -> PathBuf {
+        PathBuf::from(match self.0 {
+            Container::CardCapabilityContainer => "CardCapabilityContainer",
+            Container::CardHolderUniqueIdentifier => "CardHolderUniqueIdentifier",
+            Container::X509CertificateFor9A => "X509CertificateFor9A",
+            Container::CardholderFingerprints => "CardholderFingerprints",
+            Container::SecurityObject => "SecurityObject",
+            Container::CardholderFacialImage => "CardholderFacialImage",
+            Container::X509CertificateFor9E => "X509CertificateFor9E",
+            Container::X509CertificateFor9C => "X509CertificateFor9C",
+            Container::X509CertificateFor9D => "X509CertificateFor9D",
+            Container::PrintedInformation => "PrintedInformation",
+            Container::DiscoveryObject => "DiscoveryObject",
+            Container::KeyHistoryObject => "KeyHistoryObject",
+            Container::RetiredCert01 => "RetiredCert01",
+            Container::RetiredCert02 => "RetiredCert02",
+            Container::RetiredCert03 => "RetiredCert03",
+            Container::RetiredCert04 => "RetiredCert04",
+            Container::RetiredCert05 => "RetiredCert05",
+            Container::RetiredCert06 => "RetiredCert06",
+            Container::RetiredCert07 => "RetiredCert07",
+            Container::RetiredCert08 => "RetiredCert08",
+            Container::RetiredCert09 => "RetiredCert09",
+            Container::RetiredCert10 => "RetiredCert10",
+            Container::RetiredCert11 => "RetiredCert11",
+            Container::RetiredCert12 => "RetiredCert12",
+            Container::RetiredCert13 => "RetiredCert13",
+            Container::RetiredCert14 => "RetiredCert14",
+            Container::RetiredCert15 => "RetiredCert15",
+            Container::RetiredCert16 => "RetiredCert16",
+            Container::RetiredCert17 => "RetiredCert17",
+            Container::RetiredCert18 => "RetiredCert18",
+            Container::RetiredCert19 => "RetiredCert19",
+            Container::RetiredCert20 => "RetiredCert20",
+            Container::CardholderIrisImages => "CardholderIrisImages",
+            Container::BiometricInformationTemplatesGroupTemplate => {
+                "BiometricInformationTemplatesGroupTemplate"
+            }
+            Container::SecureMessagingCertificateSigner => "SecureMessagingCertificateSigner",
+            Container::PairingCodeReferenceDataContainer => "PairingCodeReferenceDataContainer",
+        })
+    }
+
+    fn default(self) -> &'static [u8] {
+        todo!()
+    }
+
+    pub fn load(
+        self,
+        client: &mut impl trussed::Client,
+    ) -> Result<Bytes<MAX_MESSAGE_LENGTH>, Status> {
+        load_if_exists(client, Location::Internal, &self.path())
+            .map(|data| data.unwrap_or_else(|| Bytes::from_slice(self.default()).unwrap()))
+    }
+
+    pub fn save(self, client: &mut impl trussed::Client, bytes: &[u8]) -> Result<(), Status> {
+        let msg = Bytes::from(heapless::Vec::try_from(bytes).map_err(|_| {
+            error!("Buffer full");
+            Status::IncorrectDataParameter
+        })?);
+        try_syscall!(client.write_file(Location::Internal, self.path(), msg, None)).map_err(
+            |_err| {
+                error!("Failed to store data: {_err:?}");
+                Status::UnspecifiedNonpersistentExecutionError
+            },
+        )?;
+        Ok(())
     }
 }

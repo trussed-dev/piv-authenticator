@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 //! Parsed PIV commands.
 //!
 //! The types here should enforce all restrictions in the spec (such as padded_piv_pin.len() == 8),
@@ -8,7 +11,27 @@ use core::convert::{TryFrom, TryInto};
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
-pub use crate::{container as containers, piv_types, Pin, Puk};
+use crate::state::TouchPolicy;
+pub use crate::{
+    container::{
+        self as containers, AttestKeyReference, AuthenticateKeyReference,
+        ChangeReferenceKeyReference, GenerateAsymmetricKeyReference, VerifyKeyReference,
+    },
+    piv_types, Pin, Puk,
+};
+
+// https://developers.yubico.com/PIV/Introduction/Yubico_extensions.html
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum YubicoPivExtension {
+    SetManagementKey(TouchPolicy),
+    ImportAsymmetricKey,
+    GetVersion,
+    Reset,
+    SetPinRetries,
+    Attest(AttestKeyReference),
+    GetSerial, // also used via 0x01
+    GetMetadata,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Command<'l> {
@@ -32,10 +55,19 @@ pub enum Command<'l> {
     /// The most general purpose method, performing actual cryptographic operations
     ///
     /// In particular, this can also decrypt or similar.
-    Authenticate(Authenticate),
+    GeneralAuthenticate(GeneralAuthenticate),
     /// Store a data object / container.
     PutData(PutData),
-    GenerateAsymmetric(GenerateAsymmetric),
+    GenerateAsymmetric(GenerateAsymmetricKeyReference),
+
+    /* Yubico commands */
+    YkExtension(YubicoPivExtension),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GeneralAuthenticate {
+    algorithm: piv_types::Algorithms,
+    key_reference: AuthenticateKeyReference,
 }
 
 impl<'l> Command<'l> {
@@ -66,7 +98,6 @@ impl<'l> TryFrom<&'l [u8]> for Select<'l> {
     }
 }
 
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GetData(containers::Container);
 
@@ -74,7 +105,9 @@ impl TryFrom<&[u8]> for GetData {
     type Error = Status;
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         let mut decoder = flexiber::Decoder::new(data);
-        let tagged_slice: flexiber::TaggedSlice = decoder.decode().map_err(|_| Status::IncorrectDataParameter)?;
+        let tagged_slice: flexiber::TaggedSlice = decoder
+            .decode()
+            .map_err(|_| Status::IncorrectDataParameter)?;
         if tagged_slice.tag() != flexiber::Tag::application(0x1C) {
             return Err(Status::IncorrectDataParameter);
         }
@@ -82,38 +115,8 @@ impl TryFrom<&[u8]> for GetData {
             .try_into()
             .map_err(|_| Status::IncorrectDataParameter)?;
 
-        info_now!("request to GetData for container {:?}", container);
+        info!("request to GetData for container {:?}", container);
         Ok(Self(container))
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum VerifyKeyReference {
-    GlobalPin = 0x00,
-    PivPin = 0x80,
-    PrimaryFingerOcc = 0x96,
-    SecondaryFingerOcc = 0x97,
-    PairingCode = 0x98,
-}
-
-impl TryFrom<u8> for VerifyKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        // If the PIV Card Application does not contain the Discovery Object as described in Part 1,
-        // then no other key reference shall be able to be verified by the PIV Card Application VERIFY command.
-        match p2 {
-            0x00 => Ok(Self::GlobalPin),
-            // 0x00 => Err(Status::FunctionNotSupported),
-            0x80 => Ok(Self::PivPin),
-            0x96 => Ok(Self::PrimaryFingerOcc),
-            0x97 => Ok(Self::SecondaryFingerOcc),
-            0x98 => Ok(Self::PairingCode),
-            // 0x96 => Err(Status::FunctionNotSupported),
-            // 0x97 => Err(Status::FunctionNotSupported),
-            // 0x98 => Err(Status::FunctionNotSupported),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
     }
 }
 
@@ -130,7 +133,6 @@ impl TryFrom<u8> for VerifyLogout {
         }
     }
 }
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VerifyArguments<'l> {
     pub key_reference: VerifyKeyReference,
@@ -155,37 +157,24 @@ pub enum Verify {
 impl TryFrom<VerifyArguments<'_>> for Verify {
     type Error = Status;
     fn try_from(arguments: VerifyArguments<'_>) -> Result<Self, Self::Error> {
-        let VerifyArguments { key_reference, logout, data } = arguments;
-        if key_reference != VerifyKeyReference::PivPin {
+        let VerifyArguments {
+            key_reference,
+            logout,
+            data,
+        } = arguments;
+        if key_reference != VerifyKeyReference::ApplicationPin {
             return Err(Status::FunctionNotSupported);
         }
         Ok(match (logout.0, data.len()) {
             (false, 0) => Verify::Status(key_reference),
-            (false, 8) => Verify::Login(VerifyLogin::PivPin(data.try_into().map_err(|_| Status::IncorrectDataParameter)?)),
+            (false, 8) => Verify::Login(VerifyLogin::PivPin(
+                data.try_into()
+                    .map_err(|_| Status::IncorrectDataParameter)?,
+            )),
             (false, _) => return Err(Status::IncorrectDataParameter),
             (true, 0) => Verify::Logout(key_reference),
             (true, _) => return Err(Status::IncorrectDataParameter),
         })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum ChangeReferenceKeyReference {
-    GlobalPin = 0x00,
-    PivPin = 0x80,
-    Puk = 0x81,
-}
-
-impl TryFrom<u8> for ChangeReferenceKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        match p2 {
-            0x00 => Ok(Self::GlobalPin),
-            0x80 => Ok(Self::PivPin),
-            0x81 => Ok(Self::Puk),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
     }
 }
 
@@ -204,24 +193,26 @@ pub enum ChangeReference {
 impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
     type Error = Status;
     fn try_from(arguments: ChangeReferenceArguments<'_>) -> Result<Self, Self::Error> {
-        let ChangeReferenceArguments { key_reference, data } = arguments;
+        let ChangeReferenceArguments {
+            key_reference,
+            data,
+        } = arguments;
 
         use ChangeReferenceKeyReference::*;
         Ok(match (key_reference, data) {
             (GlobalPin, _) => return Err(Status::FunctionNotSupported),
-            (PivPin, data) => {
-                ChangeReference::ChangePin {
-                    old_pin: Pin::try_from(&data[..8]).map_err(|_| Status::IncorrectDataParameter)?,
-                    new_pin: Pin::try_from(&data[8..]).map_err(|_| Status::IncorrectDataParameter)?,
-                }
-            }
-            (Puk, data) => {
-                use crate::commands::Puk;
-                ChangeReference::ChangePuk {
-                    old_puk: Puk(data[..8].try_into().map_err(|_| Status::IncorrectDataParameter)?),
-                    new_puk: Puk(data[8..].try_into().map_err(|_| Status::IncorrectDataParameter)?),
-                }
-            }
+            (ApplicationPin, data) => ChangeReference::ChangePin {
+                old_pin: Pin::try_from(&data[..8]).map_err(|_| Status::IncorrectDataParameter)?,
+                new_pin: Pin::try_from(&data[8..]).map_err(|_| Status::IncorrectDataParameter)?,
+            },
+            (PinUnblockingKey, data) => ChangeReference::ChangePuk {
+                old_puk: Puk(data[..8]
+                    .try_into()
+                    .map_err(|_| Status::IncorrectDataParameter)?),
+                new_puk: Puk(data[8..]
+                    .try_into()
+                    .map_err(|_| Status::IncorrectDataParameter)?),
+            },
         })
     }
 }
@@ -229,7 +220,7 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResetPinRetries {
     pub padded_pin: [u8; 8],
-    pub puk: [u8;  8],
+    pub puk: [u8; 8],
 }
 
 impl TryFrom<&[u8]> for ResetPinRetries {
@@ -246,72 +237,6 @@ impl TryFrom<&[u8]> for ResetPinRetries {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum AuthenticateKeyReference {
-    SecureMessaging = 0x04,
-    Authentication = 0x9a,
-    Administration = 0x9b,
-    Signature = 0x9c,
-    Management = 0x9d,
-    CardAuthentication = 0x9e,
-    Retired01 = 0x82,
-    Retired02 = 0x83,
-    Retired03 = 0x84,
-    Retired04 = 0x85,
-    Retired05 = 0x86,
-    Retired06 = 0x87,
-    Retired07 = 0x88,
-    Retired08 = 0x89,
-    Retired09 = 0x8A,
-    Retired10 = 0x8B,
-    Retired11 = 0x8C,
-    Retired12 = 0x8D,
-    Retired13 = 0x8E,
-    Retired14 = 0x8F,
-    Retired15 = 0x90,
-    Retired16 = 0x91,
-    Retired17 = 0x92,
-    Retired18 = 0x93,
-    Retired19 = 0x94,
-    Retired20 = 0x95,
-}
-
-impl TryFrom<u8> for AuthenticateKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        match p2 {
-            0x04 => Ok(Self::SecureMessaging),
-            0x9a => Ok(Self::Authentication),
-            0x9b => Ok(Self::Administration),
-            0x9c => Ok(Self::Signature),
-            0x9d => Ok(Self::Management),
-            0x9e => Ok(Self::CardAuthentication),
-            0x82 => Ok(Self::Retired01),
-            0x83 => Ok(Self::Retired02),
-            0x84 => Ok(Self::Retired03),
-            0x85 => Ok(Self::Retired04),
-            0x86 => Ok(Self::Retired05),
-            0x87 => Ok(Self::Retired06),
-            0x88 => Ok(Self::Retired07),
-            0x89 => Ok(Self::Retired08),
-            0x8A => Ok(Self::Retired09),
-            0x8B => Ok(Self::Retired10),
-            0x8C => Ok(Self::Retired11),
-            0x8D => Ok(Self::Retired12),
-            0x8E => Ok(Self::Retired13),
-            0x8F => Ok(Self::Retired14),
-            0x90 => Ok(Self::Retired15),
-            0x91 => Ok(Self::Retired16),
-            0x92 => Ok(Self::Retired17),
-            0x93 => Ok(Self::Retired18),
-            0x94 => Ok(Self::Retired19),
-            0x95 => Ok(Self::Retired20),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AuthenticateArguments<'l> {
     /// To allow the authenticator to have additional algorithms beyond NIST SP 800-78-4,
     /// this is passed through as-is.
@@ -321,64 +246,11 @@ pub struct AuthenticateArguments<'l> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Authenticate {
-}
-
-impl TryFrom<AuthenticateArguments<'_>> for Authenticate {
-    type Error = Status;
-    fn try_from(_arguments: AuthenticateArguments<'_>) -> Result<Self, Self::Error> {
-        todo!();
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PutData {
-}
+pub struct PutData {}
 
 impl TryFrom<&[u8]> for PutData {
     type Error = Status;
     fn try_from(_data: &[u8]) -> Result<Self, Self::Error> {
-        todo!();
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-pub enum GenerateAsymmetricKeyReference {
-    SecureMessaging = 0x04,
-    Authentication = 0x9a,
-    Signature = 0x9c,
-    Management = 0x9d,
-    CardAuthentication = 0x9e,
-}
-
-impl TryFrom<u8> for GenerateAsymmetricKeyReference {
-    type Error = Status;
-    fn try_from(p2: u8) -> Result<Self, Self::Error> {
-        match p2 {
-            0x04 => Err(Status::FunctionNotSupported),
-            0x9a => Ok(Self::Authentication),
-            0x9c => Ok(Self::Signature),
-            0x9d => Ok(Self::Management),
-            0x9e => Ok(Self::CardAuthentication),
-            _ => Err(Status::KeyReferenceNotFound),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct GenerateAsymmetricArguments<'l> {
-    pub key_reference: GenerateAsymmetricKeyReference,
-    pub data: &'l [u8],
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum GenerateAsymmetric {
-}
-
-impl TryFrom<GenerateAsymmetricArguments<'_>> for GenerateAsymmetric {
-    type Error = Status;
-    fn try_from(_arguments: GenerateAsymmetricArguments<'_>) -> Result<Self, Self::Error> {
         todo!();
     }
 }
@@ -392,7 +264,12 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
     ///
     /// The individual piv::Command TryFroms then further interpret these validated parameters.
     fn try_from(command: &'l iso7816::Command<C>) -> Result<Self, Self::Error> {
-        let (class, instruction, p1, p2) = (command.class(), command.instruction(), command.p1, command.p2);
+        let (class, instruction, p1, p2) = (
+            command.class(),
+            command.instruction(),
+            command.p1,
+            command.p2,
+        );
         let data = command.data();
 
         if !class.secure_messaging().none() {
@@ -406,7 +283,6 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
         // TODO: should we check `command.expected() == 0`, where specified?
 
         Ok(match (class.into_inner(), instruction, p1, p2) {
-
             (0x00, Instruction::Select, 0x04, 0x00) => {
                 Self::Select(Select::try_from(data.as_slice())?)
             }
@@ -418,12 +294,19 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             (0x00, Instruction::Verify, p1, p2) => {
                 let logout = VerifyLogout::try_from(p1)?;
                 let key_reference = VerifyKeyReference::try_from(p2)?;
-                Self::Verify(Verify::try_from(VerifyArguments { key_reference, logout, data })?)
+                Self::Verify(Verify::try_from(VerifyArguments {
+                    key_reference,
+                    logout,
+                    data,
+                })?)
             }
 
             (0x00, Instruction::ChangeReferenceData, 0x00, p2) => {
                 let key_reference = ChangeReferenceKeyReference::try_from(p2)?;
-                Self::ChangeReference(ChangeReference::try_from(ChangeReferenceArguments { key_reference, data })?)
+                Self::ChangeReference(ChangeReference::try_from(ChangeReferenceArguments {
+                    key_reference,
+                    data,
+                })?)
             }
 
             (0x00, Instruction::ResetRetryCounter, 0x00, 0x80) => {
@@ -431,9 +314,12 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
-                let unparsed_algorithm = p1;
+                let algorithm = p1.try_into()?;
                 let key_reference = AuthenticateKeyReference::try_from(p2)?;
-                Self::Authenticate(Authenticate::try_from(AuthenticateArguments { unparsed_algorithm, key_reference, data })?)
+                Self::GeneralAuthenticate(GeneralAuthenticate {
+                    algorithm,
+                    key_reference,
+                })
             }
 
             (0x00, Instruction::PutData, 0x3F, 0xFF) => {
@@ -441,8 +327,40 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {
-                let key_reference = GenerateAsymmetricKeyReference::try_from(p2)?;
-                Self::GenerateAsymmetric(GenerateAsymmetric::try_from(GenerateAsymmetricArguments { key_reference, data })?)
+                Self::GenerateAsymmetric(GenerateAsymmetricKeyReference::try_from(p2)?)
+            }
+            // (0x00, 0x01, 0x10, 0x00)
+            (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::GetSerial)
+            }
+            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFE) => {
+                Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Never))
+            }
+            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFF) => {
+                Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Always))
+            }
+            (0x00, Instruction::Unknown(0xfe), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::ImportAsymmetricKey)
+            }
+            (0x00, Instruction::Unknown(0xfd), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::GetVersion)
+            }
+            (0x00, Instruction::Unknown(0xfb), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::Reset)
+            }
+            (0x00, Instruction::Unknown(0xfa), 0x00, 0x00) => {
+                Self::YkExtension(YubicoPivExtension::SetPinRetries)
+            }
+            // (0x00, 0xf9, 0x9a, 0x00)
+            (0x00, Instruction::Unknown(0xf9), _, 0x00) => Self::YkExtension(
+                YubicoPivExtension::Attest(AttestKeyReference::try_from(p1)?),
+            ),
+            // (0x00, 0xf8, 0x00, 0x00)
+            (0x00, Instruction::Unknown(0xf8), _, _) => {
+                Self::YkExtension(YubicoPivExtension::GetSerial)
+            }
+            (0x00, Instruction::Unknown(0xf7), _, _) => {
+                Self::YkExtension(YubicoPivExtension::GetMetadata)
             }
 
             _ => return Err(Status::FunctionNotSupported),

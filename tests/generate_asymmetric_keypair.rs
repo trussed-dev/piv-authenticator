@@ -1,6 +1,7 @@
-mod setup;
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
 
-use iso7816::Status::*;
+mod setup;
 
 // example: 00 47 00 9A 0B
 //   AC 09
@@ -13,10 +14,10 @@ use iso7816::Status::*;
 
 #[test]
 fn gen_keypair() {
-    let cmd = cmd!("00 47 00 9A 0B  AC 09  80 01 11  AA 01 02  AB 01 02");
+    let _cmd = cmd!("00 47 00 9A 0B  AC 09  80 01 11  AA 01 02  AB 01 02");
 
     // without PIN, no key generation
-    setup::piv(|piv| {
+    setup::piv(|_piv| {
         // not currently implemented
         //
         // let mut response = iso7816::Data::<16>::default();

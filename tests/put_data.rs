@@ -1,3 +1,6 @@
+// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
+// SPDX-License-Identifier: LGPL-3.0-only
+
 mod setup;
 
 // use apdu_dispatch::dispatch::Interface::Contact;
@@ -16,7 +19,7 @@ mod setup;
 
 #[test]
 fn put_data() {
-    setup::piv(|piv| {
+    setup::piv(|_piv| {
 
         // let mut response = iso7816::Data::<16>::default();
         // piv.respond(&cmd!(

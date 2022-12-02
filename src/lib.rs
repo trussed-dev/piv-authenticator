@@ -24,6 +24,7 @@ mod dispatch;
 pub mod piv_types;
 mod reply;
 pub mod state;
+mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 

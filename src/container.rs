@@ -74,13 +74,6 @@ macro_rules! enum_subset {
 
 pub(crate) use enum_subset;
 
-pub struct Tag<'a>(&'a [u8]);
-impl<'a> Tag<'a> {
-    pub fn new(slice: &'a [u8]) -> Self {
-        Self(slice)
-    }
-}
-
 /// Security condition for the use of a given key.
 pub enum SecurityCondition {
     Pin,
@@ -257,33 +250,6 @@ pub enum Container {
     PairingCodeReferenceDataContainer,
 }
 
-pub struct ContainerId(u16);
-
-impl From<Container> for ContainerId {
-    fn from(container: Container) -> Self {
-        use Container::*;
-        Self(match container {
-            CardCapabilityContainer => 0xDB00,
-            CardHolderUniqueIdentifier => 0x3000,
-            X509CertificateFor9A => 0x0101,
-            CardholderFingerprints => 0x6010,
-            SecurityObject => 0x9000,
-            CardholderFacialImage => 0x6030,
-            X509CertificateFor9E => 0x0500,
-            X509CertificateFor9C => 0x0100,
-            X509CertificateFor9D => 0x0102,
-            PrintedInformation => 0x3001,
-            DiscoveryObject => 0x6050,
-            KeyHistoryObject => 0x6060,
-            RetiredX509Certificate(RetiredIndex(i)) => 0x1000u16 + i as u16,
-            CardholderIrisImages => 0x1015,
-            BiometricInformationTemplatesGroupTemplate => 0x1016,
-            SecureMessagingCertificateSigner => 0x1017,
-            PairingCodeReferenceDataContainer => 0x1018,
-        })
-    }
-}
-
 // these are just the "contact" rules, need to model "contactless" also
 pub enum ReadAccessRule {
     Always,
@@ -326,11 +292,11 @@ pub enum ReadAccessRule {
 //     }
 // }
 
-impl TryFrom<Tag<'_>> for Container {
+impl TryFrom<&[u8]> for Container {
     type Error = ();
-    fn try_from(tag: Tag<'_>) -> Result<Self, ()> {
+    fn try_from(tag: &[u8]) -> Result<Self, ()> {
         use Container::*;
-        Ok(match tag.0 {
+        Ok(match tag {
             hex!("5FC107") => CardCapabilityContainer,
             hex!("5FC102") => CardHolderUniqueIdentifier,
             hex!("5FC105") => X509CertificateFor9A,

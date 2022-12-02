@@ -11,6 +11,8 @@ use core::convert::{TryFrom, TryInto};
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
+use crate::container::Container;
+
 use crate::state::TouchPolicy;
 pub use crate::{
     container::{
@@ -57,7 +59,7 @@ pub enum Command<'l> {
     /// In particular, this can also decrypt or similar.
     GeneralAuthenticate(GeneralAuthenticate),
     /// Store a data object / container.
-    PutData(PutData),
+    PutData(PutData<'l>),
     GenerateAsymmetric(AsymmetricKeyReference),
 
     /* Yubico commands */
@@ -111,8 +113,7 @@ impl TryFrom<&[u8]> for GetData {
         if tagged_slice.tag() != flexiber::Tag::application(0x1C) {
             return Err(Status::IncorrectDataParameter);
         }
-        let container: containers::Container = containers::Tag::new(tagged_slice.as_bytes())
-            .try_into()
+        let container = containers::Container::try_from(tagged_slice.as_bytes())
             .map_err(|_| Status::IncorrectDataParameter)?;
 
         info!("request to GetData for container {:?}", container);
@@ -246,12 +247,45 @@ pub struct AuthenticateArguments<'l> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PutData {}
+pub enum PutData<'data> {
+    DiscoveryObject(&'data [u8]),
+    BitGroupTemplate(&'data [u8]),
+    Any(Container, &'data [u8]),
+}
 
-impl TryFrom<&[u8]> for PutData {
+impl<'data> TryFrom<&'data [u8]> for PutData<'data> {
     type Error = Status;
-    fn try_from(_data: &[u8]) -> Result<Self, Self::Error> {
-        todo!();
+    fn try_from(data: &'data [u8]) -> Result<Self, Self::Error> {
+        use crate::tlv::take_do;
+        let (tag, inner, rem) = take_do(data).ok_or_else(|| {
+            warn!("Failed to parse PUT DATA: {:02x?}", data);
+            Status::IncorrectDataParameter
+        })?;
+        if matches!(tag, 0x7E | 0x7F61) && !rem.is_empty() {
+            warn!("Empty remainder expected, got: {:02x?}", rem);
+        }
+
+        let container: Container = match tag {
+            0x7E => return Ok(PutData::DiscoveryObject(inner)),
+            0x7F61 => return Ok(PutData::BitGroupTemplate(inner)),
+            0x5C => Container::try_from(inner).map_err(|_| Status::IncorrectDataParameter)?,
+            _ => return Err(Status::IncorrectDataParameter),
+        };
+
+        let (tag, inner, rem) = take_do(data).ok_or_else(|| {
+            warn!("Failed to parse PUT DATA's second field: {:02x?}", data);
+            Status::IncorrectDataParameter
+        })?;
+
+        if !rem.is_empty() {
+            warn!("Empty second remainder expected, got: {:02x?}", rem);
+        }
+
+        if tag != 0x53 {
+            warn!("Expected 0x53 tag, got: 0x{:02x?}", rem);
+        }
+
+        Ok(PutData::Any(container, inner))
     }
 }
 

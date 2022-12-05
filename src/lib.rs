@@ -895,7 +895,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         match container {
             Container::DiscoveryObject => {
                 // Err(Status::InstructionNotSupportedOrInvalid)
-                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
+                reply.extend_from_slice(&DISCOVERY_OBJECT).ok();
                 // todo!("discovery object"),
             }
 

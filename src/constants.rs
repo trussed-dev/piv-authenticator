@@ -271,8 +271,14 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &[u8; 24] = &hex!(
 "
 );
 
-pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm = AdministrationAlgorithm::Tdes;
+pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm =
+    AdministrationAlgorithm::Tdes;
 
 // stolen from le yubico
-pub const DISCOVERY_OBJECT: &[u8; 20] =
-    b"~\x12O\x0b\xa0\x00\x00\x03\x08\x00\x00\x10\x00\x01\x00_/\x02@\x00";
+pub const DISCOVERY_OBJECT: [u8; 20] = hex!(
+    "7e 12 
+        4f 0b // PIV AID
+           a000000308000010000100
+        5f2f 02 // PIN usage Policy
+             4000"
+);

@@ -546,16 +546,25 @@ impl ContainerStorage {
         })
     }
 
-    fn default(self) -> &'static [u8] {
-        todo!()
+    fn default(self) -> Option<Vec<u8, MAX_MESSAGE_LENGTH>> {
+        match self.0 {
+            Container::CardHolderUniqueIdentifier => panic!("CHUID should alway be set"),
+            Container::CardCapabilityContainer => Some(
+                crate::piv_types::CardCapabilityContainer::default()
+                    .to_heapless_vec()
+                    .unwrap(),
+            ),
+            Container::DiscoveryObject => Some(Vec::from_slice(&DISCOVERY_OBJECT).unwrap()),
+            _ => None,
+        }
     }
 
     pub fn load(
         self,
         client: &mut impl trussed::Client,
-    ) -> Result<Bytes<MAX_MESSAGE_LENGTH>, Status> {
+    ) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
         load_if_exists(client, Location::Internal, &self.path())
-            .map(|data| data.unwrap_or_else(|| Bytes::from_slice(self.default()).unwrap()))
+            .map(|data| data.or_else(|| self.default().map(Bytes::from)))
     }
 
     pub fn save(self, client: &mut impl trussed::Client, bytes: &[u8]) -> Result<(), Status> {

@@ -123,8 +123,8 @@ where
             Command::ChangeReference(change_reference) => {
                 self.load()?.change_reference(change_reference)
             }
-            Command::GetData(container) => self.get_data(container, reply),
-            Command::PutData(put_data) => self.put_data(put_data),
+            Command::GetData(container) => self.load()?.get_data(container, reply),
+            Command::PutData(put_data) => self.load()?.put_data(put_data),
             Command::Select(_aid) => self.select(reply),
             Command::GeneralAuthenticate(authenticate) => {
                 self.load()?
@@ -202,32 +202,6 @@ where
             _ => return Err(Status::FunctionNotSupported),
         }
         Ok(())
-    }
-
-    fn get_data<const R: usize>(
-        &mut self,
-        container: Container,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
-
-        use state::ContainerStorage;
-        reply.expand(&ContainerStorage(container).load(&mut self.trussed)?)
-    }
-
-    fn put_data(&mut self, put_data: PutData<'_>) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
-
-        let (container, data) = match put_data {
-            PutData::Any(container, data) => (container, data),
-            PutData::BitGroupTemplate(data) => {
-                (Container::BiometricInformationTemplatesGroupTemplate, data)
-            }
-            PutData::DiscoveryObject(data) => (Container::DiscoveryObject, data),
-        };
-
-        use state::ContainerStorage;
-        ContainerStorage(container).save(&mut self.trussed, data)
     }
 }
 
@@ -820,5 +794,34 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         };
 
         Ok(())
+    }
+
+    fn get_data<const R: usize>(
+        &mut self,
+        container: Container,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+
+        use state::ContainerStorage;
+        match ContainerStorage(container).load(self.trussed)? {
+            Some(data) => reply.expand(&data),
+            None => Err(Status::NotFound),
+        }
+    }
+
+    fn put_data(&mut self, put_data: PutData<'_>) -> Result {
+        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+
+        let (container, data) = match put_data {
+            PutData::Any(container, data) => (container, data),
+            PutData::BitGroupTemplate(data) => {
+                (Container::BiometricInformationTemplatesGroupTemplate, data)
+            }
+            PutData::DiscoveryObject(data) => (Container::DiscoveryObject, data),
+        };
+
+        use state::ContainerStorage;
+        ContainerStorage(container).save(self.trussed, data)
     }
 }

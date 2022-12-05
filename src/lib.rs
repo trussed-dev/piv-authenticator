@@ -13,11 +13,11 @@ delog::generate_macros!();
 pub mod commands;
 use commands::containers::KeyReference;
 use commands::piv_types::Algorithms;
-use commands::{AsymmetricKeyReference, GeneralAuthenticate};
+use commands::{AsymmetricKeyReference, GeneralAuthenticate, PutData};
 pub use commands::{Command, YubicoPivExtension};
 pub mod constants;
 pub mod container;
-use container::{AttestKeyReference, AuthenticateKeyReference};
+use container::{AttestKeyReference, AuthenticateKeyReference, Container};
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
@@ -123,7 +123,8 @@ where
             Command::ChangeReference(change_reference) => {
                 self.load()?.change_reference(change_reference)
             }
-            Command::GetData(container) => self.load()?.get_data(container, reply),
+            Command::GetData(container) => self.get_data(container, reply),
+            Command::PutData(put_data) => self.put_data(put_data),
             Command::Select(_aid) => self.select(reply),
             Command::GeneralAuthenticate(authenticate) => {
                 self.load()?
@@ -201,6 +202,32 @@ where
             _ => return Err(Status::FunctionNotSupported),
         }
         Ok(())
+    }
+
+    fn get_data<const R: usize>(
+        &mut self,
+        container: Container,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+
+        use state::ContainerStorage;
+        reply.expand(&ContainerStorage(container).load(&mut self.trussed)?)
+    }
+
+    fn put_data(&mut self, put_data: PutData<'_>) -> Result {
+        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+
+        let (container, data) = match put_data {
+            PutData::Any(container, data) => (container, data),
+            PutData::BitGroupTemplate(data) => {
+                (Container::BiometricInformationTemplatesGroupTemplate, data)
+            }
+            PutData::DiscoveryObject(data) => (Container::DiscoveryObject, data),
+        };
+
+        use state::ContainerStorage;
+        ContainerStorage(container).save(&mut self.trussed, data)
     }
 }
 
@@ -794,175 +821,4 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         Ok(())
     }
-
-    #[allow(unused)]
-    pub fn put_data(&mut self, data: &[u8]) -> Result {
-        info!("PutData");
-
-        // if !self.state.runtime.app_security_status.administrator_verified {
-        //     return Err(Status::SecurityStatusNotSatisfied);
-        // }
-
-        // # PutData
-        // 00 DB 3F FF 23
-        //    # data object: 5FC109
-        //    5C 03 5F C1 09
-        //    # data:
-        //    53 1C
-        //       # actual data
-        //       88 1A 89 18 AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
-        //
-
-        let input = derp::Input::from(data);
-        let (data_object, data) = input
-            .read_all(derp::Error::Read, |input| {
-                let data_object = derp::expect_tag_and_get_value(input, 0x5c)?;
-                let data = derp::expect_tag_and_get_value(input, 0x53)?;
-                Ok((data_object.as_slice_less_safe(), data.as_slice_less_safe()))
-                // }).unwrap();
-            })
-            .map_err(|_e| {
-                info!("error parsing PutData: {:?}", &_e);
-                Status::IncorrectDataParameter
-            })?;
-
-        // info!("PutData in {:?}: {:?}", data_object, data);
-
-        if data_object == [0x5f, 0xc1, 0x09] {
-            // "Printed Information", supposedly
-            // Yubico uses this to store its "Metadata"
-            //
-            // 88 1A
-            //    89 18
-            //       # we see here the raw management key? amazing XD
-            //       AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
-
-            // TODO: use smarter quota rule, actual data sent is 28B
-            if data.len() >= 512 {
-                return Err(Status::UnspecifiedCheckingError);
-            }
-
-            try_syscall!(self.trussed.write_file(
-                trussed::types::Location::Internal,
-                trussed::types::PathBuf::from(b"printed-information"),
-                trussed::types::Message::from_slice(data).unwrap(),
-                None,
-            ))
-            .map_err(|_| Status::NotEnoughMemory)?;
-
-            return Ok(());
-        }
-
-        if data_object == [0x5f, 0xc1, 0x05] {
-            // "X.509 Certificate for PIV Authentication", supposedly
-            // IOW, the cert for "authentication key"
-            // Yubico uses this to store its "Metadata"
-            //
-            // 88 1A
-            //    89 18
-            //       # we see here the raw management key? amazing XD
-            //       AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
-
-            // TODO: use smarter quota rule, actual data sent is 28B
-            if data.len() >= 512 {
-                return Err(Status::UnspecifiedCheckingError);
-            }
-
-            try_syscall!(self.trussed.write_file(
-                trussed::types::Location::Internal,
-                trussed::types::PathBuf::from(b"authentication-key.x5c"),
-                trussed::types::Message::from_slice(data).unwrap(),
-                None,
-            ))
-            .map_err(|_| Status::NotEnoughMemory)?;
-
-            return Ok(());
-        }
-
-        Err(Status::IncorrectDataParameter)
-    }
-
-    fn get_data<const R: usize>(
-        &mut self,
-        container: container::Container,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
-
-        // Table 3, Part 1, SP 800-73-4
-        // https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=30
-        use crate::container::Container;
-        match container {
-            Container::DiscoveryObject => {
-                // Err(Status::InstructionNotSupportedOrInvalid)
-                reply.extend_from_slice(&DISCOVERY_OBJECT).ok();
-                // todo!("discovery object"),
-            }
-
-            Container::BiometricInformationTemplatesGroupTemplate => {
-                return Err(Status::InstructionNotSupportedOrInvalid);
-                // todo!("biometric information template"),
-            }
-
-            // '5FC1 07' (351B)
-            Container::CardCapabilityContainer => {
-                piv_types::CardCapabilityContainer::default()
-                    .encode_to_heapless_vec(*reply)
-                    .unwrap();
-                info!("returning CCC {:02X?}", reply);
-            }
-
-            // '5FC1 02' (351B)
-            Container::CardHolderUniqueIdentifier => {
-                let guid = self.state.persistent.guid();
-                piv_types::CardHolderUniqueIdentifier::default()
-                    .with_guid(guid)
-                    .encode_to_heapless_vec(*reply)
-                    .unwrap();
-                info!("returning CHUID {:02X?}", reply);
-            }
-
-            // // '5FC1 05' (351B)
-            // Container::X509CertificateForPivAuthentication => {
-            //     // return Err(Status::NotFound);
-
-            //     // info!("loading 9a cert");
-            //     // it seems like fetching this certificate is the way Filo's agent decides
-            //     // whether the key is "already setup":
-            //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
-            //     let data = try_syscall!(self.trussed.read_file(
-            //         trussed::types::Location::Internal,
-            //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
-            //     )).map_err(|_| {
-            //         // info!("error loading: {:?}", &e);
-            //         Status::NotFound
-            //     } )?.data;
-
-            //     // todo: cleanup
-            //     let tag = flexiber::Tag::application(0x13); // 0x53
-            //     flexiber::TaggedSlice::from(tag, &data)
-            //         .unwrap()
-            //         .encode_to_heapless_vec(reply)
-            //         .unwrap();
-            // }
-
-            // // '5F FF01' (754B)
-            // YubicoObjects::AttestationCertificate => {
-            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
-            //     reply.extend_from_slice(&data).ok();
-            // }
-            _ => {
-                warn!("Unimplemented GET DATA object: {container:?}");
-                return Err(Status::FunctionNotSupported);
-            }
-        }
-        Ok(())
-    }
-    // match container {
-    //     containers::Container::CardHolderUniqueIdentifier =>
-    //         piv_types::CardHolderUniqueIdentifier::default()
-    //         .encode
-    //     _ => todo!(),
-    // }
-    // todo!();
 }

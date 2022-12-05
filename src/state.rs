@@ -4,6 +4,8 @@
 use core::convert::{TryFrom, TryInto};
 use core::mem::replace;
 
+use flexiber::EncodableHeapless;
+use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
 use trussed::{
@@ -14,6 +16,7 @@ use trussed::{
 };
 
 use crate::container::Container;
+use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
 use crate::{
     container::{AsymmetricKeyReference, SecurityCondition},
@@ -170,8 +173,6 @@ pub struct Persistent {
     // pin_hash: Option<[u8; 16]>,
     // Ideally, we'd dogfood a "Monotonic Counter" from `trussed`.
     timestamp: u32,
-    // must be a valid RFC 4122 UUID 1, 2 or 4
-    guid: [u8; 16],
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -233,10 +234,6 @@ impl Persistent {
     const FILENAME: &'static [u8] = b"persistent-state.cbor";
     const DEFAULT_PIN: &'static [u8] = b"123456\xff\xff";
     const DEFAULT_PUK: &'static [u8] = b"12345678";
-
-    pub fn guid(&self) -> [u8; 16] {
-        self.guid
-    }
 
     pub fn remaining_pin_retries(&self) -> u8 {
         if self.consecutive_pin_mismatches >= Self::PIN_RETRIES_DEFAULT {
@@ -418,6 +415,14 @@ impl Persistent {
         guid[6] = (guid[6] & 0xf) | 0x40;
         guid[8] = (guid[8] & 0x3f) | 0x80;
 
+        let guid_file: Vec<u8, 1024> = CardHolderUniqueIdentifier::default()
+            .with_guid(guid)
+            .to_heapless_vec()
+            .unwrap();
+        ContainerStorage(Container::CardHolderUniqueIdentifier)
+            .save(client, &guid_file)
+            .ok();
+
         let keys = Keys {
             authentication,
             administration,
@@ -434,7 +439,6 @@ impl Persistent {
             pin: Pin::try_from(Self::DEFAULT_PIN).unwrap(),
             puk: Puk::try_from(Self::DEFAULT_PUK).unwrap(),
             timestamp: 0,
-            guid,
         };
         state.save(client);
         state
@@ -496,7 +500,7 @@ fn load_if_exists(
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ContainerStorage(Container);
+pub struct ContainerStorage(pub Container);
 
 impl ContainerStorage {
     fn path(self) -> PathBuf {

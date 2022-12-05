@@ -15,11 +15,10 @@ use trussed::{
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
 };
 
-use crate::container::Container;
 use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
 use crate::{
-    container::{AsymmetricKeyReference, SecurityCondition},
+    container::{AsymmetricKeyReference, Container, ReadAccessRule, SecurityCondition},
     piv_types::Algorithms,
 };
 
@@ -200,6 +199,14 @@ impl Runtime {
         use SecurityCondition::*;
         match condition {
             Pin => self.app_security_status.pin_verified,
+            Always => true,
+        }
+    }
+
+    pub fn read_valid(&self, condition: ReadAccessRule) -> bool {
+        use ReadAccessRule::*;
+        match condition {
+            Pin | PinOrOcc => self.app_security_status.pin_verified,
             Always => true,
         }
     }

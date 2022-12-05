@@ -277,40 +277,40 @@ pub enum ReadAccessRule {
     PinOrOcc,
 }
 
-// impl Container {
-//     const fn minimum_capacity(self) -> usize {
-//         use Container::*;
-//         match self {
-//             CardCapabilityContainer => 287,
-//             CardHolderUniqueIdentifier => 2916,
-//             CardholderFingerprints => 4006,
-//             SecurityObject => 1336,
-//             CardholderFacialImage => 12710,
-//             PrintedInformation => 245,
-//             DiscoveryObject => 19,
-//             KeyHistoryObject => 128,
-//             CardholderIrisImages => 7106,
-//             BiometricInformationTemplate => 65,
-//             SecureMessagingCertificateSigner => 2471,
-//             PairingCodeReferenceDataContainer => 12,
-//             // the others are X509 certificates
-//             _ => 1905,
-//         }
-//     }
+impl Container {
+    //     const fn minimum_capacity(self) -> usize {
+    //         use Container::*;
+    //         match self {
+    //             CardCapabilityContainer => 287,
+    //             CardHolderUniqueIdentifier => 2916,
+    //             CardholderFingerprints => 4006,
+    //             SecurityObject => 1336,
+    //             CardholderFacialImage => 12710,
+    //             PrintedInformation => 245,
+    //             DiscoveryObject => 19,
+    //             KeyHistoryObject => 128,
+    //             CardholderIrisImages => 7106,
+    //             BiometricInformationTemplate => 65,
+    //             SecureMessagingCertificateSigner => 2471,
+    //             PairingCodeReferenceDataContainer => 12,
+    //             // the others are X509 certificates
+    //             _ => 1905,
+    //         }
+    //     }
 
-//     const fn contact_access_rule(self) -> {
-//         use Container::*;
-//         use ReadAccessRule::*;
-//         match self {
-//             CardholderFingerprints => Pin,
-//             CardholderFacialImage => Pin,
-//             PrintedInformation => PinOrOcc,
-//             CardholderIrisImages => Pin,
-//             PairingCodeReferenceDataContainer => PinOrOcc,
-//             _ => Always,
-//         }
-//     }
-// }
+    pub const fn contact_access_rule(self) -> ReadAccessRule {
+        use Container::*;
+        use ReadAccessRule::*;
+        match self {
+            CardholderFingerprints => Pin,
+            CardholderFacialImage => Pin,
+            PrintedInformation => PinOrOcc,
+            CardholderIrisImages => Pin,
+            PairingCodeReferenceDataContainer => PinOrOcc,
+            _ => Always,
+        }
+    }
+}
 
 impl TryFrom<&[u8]> for Container {
     type Error = ();

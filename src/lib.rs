@@ -801,7 +801,14 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         container: Container,
         mut reply: Reply<'_, R>,
     ) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+        if !self
+            .state
+            .runtime
+            .read_valid(container.contact_access_rule())
+        {
+            warn!("Unauthorized attempt to access: {:?}", container);
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
 
         use state::ContainerStorage;
         match ContainerStorage(container).load(self.trussed)? {
@@ -811,7 +818,15 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     }
 
     fn put_data(&mut self, put_data: PutData<'_>) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
+        if !self
+            .state
+            .runtime
+            .app_security_status
+            .administrator_verified
+        {
+            warn!("Unauthorized attempt at PUT DATA: {:?}", put_data);
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
 
         let (container, data) = match put_data {
             PutData::Any(container, data) => (container, data),

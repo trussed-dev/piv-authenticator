@@ -230,7 +230,9 @@ impl_use_security_condition!(
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Container {
+    // static
     CardCapabilityContainer,
+    // generated at card creation
     CardHolderUniqueIdentifier,
     X509CertificateFor9A,
     CardholderFingerprints,

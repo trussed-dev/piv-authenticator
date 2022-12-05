@@ -3,6 +3,7 @@
 
 //! Utilities for dealing with TLV (Tag-Length-Value) encoded data
 
+#[allow(unused)]
 pub fn get_do<'input>(tag_path: &[u16], data: &'input [u8]) -> Option<&'input [u8]> {
     let mut to_ret = data;
     let mut remainder = data;

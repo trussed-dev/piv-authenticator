@@ -6,7 +6,13 @@ use piv_authenticator::{vpicc::VirtualCard, Authenticator};
 use std::{sync::mpsc, thread::sleep, time::Duration};
 use stoppable_thread::spawn;
 
+use std::sync::Mutex;
+
+static VSC_MUTEX: Mutex<()> = Mutex::new(());
+
 pub fn with_vsc<F: FnOnce() -> R, R>(f: F) -> R {
+    let _lock = VSC_MUTEX.lock().unwrap();
+
     let mut vpicc = vpicc::connect().expect("failed to connect to vpcd");
 
     let (tx, rx) = mpsc::channel();

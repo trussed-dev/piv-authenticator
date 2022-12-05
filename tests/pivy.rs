@@ -22,3 +22,18 @@ fn list() {
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
     });
 }
+
+#[test]
+fn generate() {
+    with_vsc(|| {
+        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456").unwrap();
+        p.check("Touch button confirmation may be required.")
+            .unwrap();
+        p.check(Regex(
+            "^ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}$",
+        ))
+        .unwrap();
+        p.check(Eof).unwrap();
+        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+    });
+}

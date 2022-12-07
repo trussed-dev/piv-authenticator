@@ -4,6 +4,7 @@
 .NOTPARALLEL:
 
 export RUST_LOG ?= info,cargo_tarpaulin=off
+TEST_FEATURES ?=virtual,pivy-tests,opensc-tests
 
 .PHONY: build-cortex-m4
 build-cortex-m4:
@@ -11,7 +12,7 @@ build-cortex-m4:
 
 .PHONY: test
 test:
-	cargo test --features virtual,pivy-tests,opensc-tests
+	cargo test --features $(TEST_FEATURES)
 
 .PHONY: check
 check:
@@ -23,7 +24,7 @@ check:
 	
 .PHONY: tarpaulin
 tarpaulin:
-	cargo tarpaulin --features virtual -o Html -o Xml
+	cargo tarpaulin --features $(TEST_FEATURES) -o Html -o Xml
 
 .PHONY: example
 example:

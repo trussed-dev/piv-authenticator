@@ -497,7 +497,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             }
             _ => {
                 warn!("Response without a challenge or a witness");
-                return Err(Status::ConditionsOfUseNotSatisfied);
+                Err(Status::ConditionsOfUseNotSatisfied)
             }
         }
     }

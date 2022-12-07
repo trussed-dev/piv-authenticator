@@ -29,7 +29,7 @@ fn admin_mutual() {
         let mut command = Command::new("piv-tool");
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
-            .args(&["-A", "M:9B:03"]);
+            .args(["-A", "M:9B:03"]);
         let mut p = expectrl::session::Session::spawn(command).unwrap();
         p.check("Using reader with a card: Virtual PCD 00 00")
             .unwrap();
@@ -47,7 +47,7 @@ fn admin_card() {
         let mut command = Command::new("piv-tool");
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
-            .args(&["-A", "A:9B:03"]);
+            .args(["-A", "A:9B:03"]);
         let mut p = expectrl::session::Session::spawn(command).unwrap();
         p.check("Using reader with a card: Virtual PCD 00 00")
             .unwrap();
@@ -63,7 +63,7 @@ fn generate_key() {
         let mut command = Command::new("piv-tool");
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
-            .args(&["-A", "M:9B:03", "-G", "9A:11"]);
+            .args(["-A", "M:9B:03", "-G", "9A:11"]);
         let mut p = expectrl::session::Session::spawn(command).unwrap();
         p.check("Using reader with a card: Virtual PCD 00 00")
             .unwrap();
@@ -75,7 +75,7 @@ fn generate_key() {
         let mut command = Command::new("piv-tool");
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
-            .args(&["-A", "M:9B:03", "-G", "9A:07"]);
+            .args(["-A", "M:9B:03", "-G", "9A:07"]);
         let mut p = expectrl::session::Session::spawn(command).unwrap();
         p.check("Using reader with a card: Virtual PCD 00 00")
             .unwrap();

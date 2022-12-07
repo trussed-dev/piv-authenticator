@@ -445,7 +445,6 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 Status::IncorrectDataParameter,
                 0x7C,
                 |input| {
-                    let mut expect_response = false;
                     while !input.at_end() {
                         let (tag, data) = match derp::read_tag_and_get_value(input) {
                             Ok((tag, data)) => (tag, data),
@@ -458,10 +457,8 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                         // part 2 table 7
                         match tag {
                             0x80 => self.witness(auth, data, reply.lend())?,
-                            0x81 => self.challenge(auth, data, expect_response, reply.lend())?,
-                            0x82 => {
-                                self.response(auth, data, &mut expect_response, reply.lend())?
-                            }
+                            0x81 => self.challenge(auth, data, reply.lend())?,
+                            0x82 => self.response(auth, data, reply.lend())?,
                             0x83 => self.exponentiation(auth, data, reply.lend())?,
                             _ => return Err(Status::IncorrectDataParameter),
                         }
@@ -477,49 +474,31 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
-        expect_response: &mut bool,
-        _reply: Reply<'_, R>,
+        reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for response");
 
         if data.is_empty() {
-            info!("No data, setting expect_response ({expect_response}) to true");
-            *expect_response = true;
             return Ok(());
         }
-
-        let alg = self.state.persistent.keys.administration.alg;
-        if data.len() != alg.challenge_length() {
-            warn!("Bad response length");
-            return Err(Status::IncorrectDataParameter);
-        }
-        if alg != auth.algorithm {
-            warn!("Bad algorithm: {:?}", auth.algorithm);
+        if auth.key_reference != KeyReference::PivCardApplicationAdministration {
+            warn!("Response with bad key ref: {:?}", auth);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
-        let Some(CommandCache::AuthenticateChallenge(plaintext)) = self.state.runtime.command_cache.take() else {
-            warn!("Request for response without cached challenge");
-            return Err(Status::ConditionsOfUseNotSatisfied);
-        };
-        let ciphertext = syscall!(self.trussed.encrypt(
-            alg.mechanism(),
-            self.state.persistent.keys.administration.id,
-            &plaintext,
-            &[],
-            None
-        ))
-        .ciphertext;
-
-        use subtle::ConstantTimeEq;
-        if data.as_slice_less_safe().ct_eq(&ciphertext).into() {
-            self.state
-                .runtime
-                .app_security_status
-                .administrator_verified = true;
-            Ok(())
-        } else {
-            Err(Status::SecurityStatusNotSatisfied)
+        match self.state.runtime.command_cache.take() {
+            Some(CommandCache::AuthenticateChallenge(original)) => {
+                info!("Got response for challenge");
+                self.admin_challenge_validate(auth.algorithm, data, original, reply)
+            }
+            Some(CommandCache::WitnessChallenge(original)) => {
+                info!("Got response for challenge");
+                self.admin_witness_validate(auth.algorithm, data, original, reply)
+            }
+            _ => {
+                warn!("Response without a challenge or a witness");
+                return Err(Status::ConditionsOfUseNotSatisfied);
+            }
         }
     }
 
@@ -537,15 +516,11 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: derp::Input<'_>,
-        expect_response: bool,
         reply: Reply<'_, R>,
     ) -> Result {
         if data.is_empty() {
             self.request_for_challenge(auth, reply)
         } else {
-            if !expect_response {
-                warn!("Get challenge with empty data without expected response");
-            }
             use AuthenticateKeyReference::*;
             match auth.key_reference {
                 PivCardApplicationAdministration => {
@@ -587,33 +562,74 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         requested_alg: Algorithms,
         data: derp::Input<'_>,
-        mut reply: Reply<'_, R>,
+        reply: Reply<'_, R>,
     ) -> Result {
         info!("Response for challenge ");
+        self.admin_challenge_respond(requested_alg, data, reply)
+    }
 
-        let alg = self.state.persistent.keys.administration.alg;
-        if alg != requested_alg {
+    pub fn admin_challenge_respond<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
+        data: derp::Input<'_>,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        let admin = &self.state.persistent.keys.administration;
+        if admin.alg != requested_alg {
             warn!("Bad algorithm: {:?}", requested_alg);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
-        if data.len() != alg.challenge_length() {
+        if data.len() != admin.alg.challenge_length() {
             warn!("Bad challenge length");
             return Err(Status::IncorrectDataParameter);
         }
 
         let response = syscall!(self.trussed.encrypt(
-            alg.mechanism(),
-            self.state.persistent.keys.administration.id,
+            admin.alg.mechanism(),
+            admin.id,
             data.as_slice_less_safe(),
             &[],
             None
         ))
         .ciphertext;
 
+        info!(
+            "Challenge: {:02x?}, response: {:02x?}",
+            data.as_slice_less_safe(),
+            &*response
+        );
+
         reply.expand(&[0x82])?;
         reply.append_len(response.len())?;
         reply.expand(&response)
+    }
+
+    pub fn admin_challenge_validate<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
+        data: derp::Input<'_>,
+        original: Bytes<16>,
+        _reply: Reply<'_, R>,
+    ) -> Result {
+        if self.state.persistent.keys.administration.alg != requested_alg {
+            warn!(
+                "Incorrect challenge validation algorithm. Expected: {:?}, got {:?}",
+                self.state.persistent.keys.administration.alg, requested_alg
+            );
+        }
+        use subtle::ConstantTimeEq;
+        if data.as_slice_less_safe().ct_eq(&original).into() {
+            info!("Correct challenge validation");
+            self.state
+                .runtime
+                .app_security_status
+                .administrator_verified = true;
+            Ok(())
+        } else {
+            warn!("Incorrect challenge validation");
+            Err(Status::UnspecifiedCheckingError)
+        }
     }
 
     pub fn request_for_challenge<const R: usize>(
@@ -629,23 +645,147 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::IncorrectP1OrP2Parameter);
         }
         let challenge = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
+        let ciphertext = syscall!(self.trussed.encrypt(
+            alg.mechanism(),
+            self.state.persistent.keys.administration.id,
+            &challenge,
+            &[],
+            None
+        ))
+        .ciphertext;
         self.state.runtime.command_cache = Some(CommandCache::AuthenticateChallenge(
-            Bytes::from_slice(&challenge).unwrap(),
+            Bytes::from_slice(&ciphertext).unwrap(),
         ));
 
         reply.expand(&[0x81])?;
         reply.append_len(challenge.len())?;
         reply.expand(&challenge)
     }
-
     pub fn witness<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: Reply<'_, R>,
+        auth: GeneralAuthenticate,
+        data: derp::Input<'_>,
+        reply: Reply<'_, R>,
+    ) -> Result {
+        if data.is_empty() {
+            self.request_for_witness(auth, reply)
+        } else {
+            use AuthenticateKeyReference::*;
+            match auth.key_reference {
+                PivCardApplicationAdministration => self.admin_witness(auth.algorithm, data, reply),
+                _ => Err(Status::FunctionNotSupported),
+            }
+        }
+    }
+
+    pub fn request_for_witness<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for witness");
-        todo!()
+
+        let alg = self.state.persistent.keys.administration.alg;
+        if alg != auth.algorithm {
+            warn!("Bad algorithm: {:?}", auth.algorithm);
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+        let data = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
+        self.state.runtime.command_cache = Some(CommandCache::WitnessChallenge(
+            Bytes::from_slice(&data).unwrap(),
+        ));
+        info!("{:02x?}", &*data);
+
+        let challenge = syscall!(self.trussed.encrypt(
+            alg.mechanism(),
+            self.state.persistent.keys.administration.id,
+            &data,
+            &[],
+            None
+        ))
+        .ciphertext;
+
+        reply.expand(&[0x80])?;
+        reply.append_len(challenge.len())?;
+        reply.expand(&challenge)
+    }
+
+    pub fn admin_witness<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
+        data: derp::Input<'_>,
+        reply: Reply<'_, R>,
+    ) -> Result {
+        info!("Admin witness");
+        self.admin_witness_respond(requested_alg, data, reply)
+    }
+
+    pub fn admin_witness_respond<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
+        data: derp::Input<'_>,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        let admin = &self.state.persistent.keys.administration;
+        if admin.alg != requested_alg {
+            warn!("Bad algorithm: {:?}", requested_alg);
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+
+        if data.len() != admin.alg.challenge_length() {
+            warn!(
+                "Bad challenge length. Got {}, expected {} for algorithm: {:?}",
+                data.len(),
+                admin.alg.challenge_length(),
+                admin.alg
+            );
+            return Err(Status::IncorrectDataParameter);
+        }
+        let response = syscall!(self.trussed.decrypt(
+            admin.alg.mechanism(),
+            admin.id,
+            data.as_slice_less_safe(),
+            &[],
+            &[],
+            &[]
+        ))
+        .plaintext;
+
+        let Some(response) = response else {
+            warn!("Failed to decrypt witness");
+            return Err(Status::IncorrectDataParameter);
+        };
+
+        reply.expand(&[0x82])?;
+        reply.append_len(response.len())?;
+        reply.expand(&response)
+    }
+
+    pub fn admin_witness_validate<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
+        data: derp::Input<'_>,
+        original: Bytes<16>,
+        _reply: Reply<'_, R>,
+    ) -> Result {
+        use subtle::ConstantTimeEq;
+        if self.state.persistent.keys.administration.alg != requested_alg {
+            warn!(
+                "Incorrect witness validation algorithm. Expected: {:?}, got {:?}",
+                self.state.persistent.keys.administration.alg, requested_alg
+            );
+        }
+        if data.as_slice_less_safe().ct_eq(&original).into() {
+            info!("Correct witness validation");
+            self.state
+                .runtime
+                .app_security_status
+                .administrator_verified = true;
+            Ok(())
+        } else {
+            warn!("Incorrect witness validation");
+            Err(Status::UnspecifiedCheckingError)
+        }
     }
 
     pub fn generate_asymmetric_keypair<const R: usize>(

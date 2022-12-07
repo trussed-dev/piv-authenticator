@@ -210,6 +210,22 @@ impl Runtime {
             Always => true,
         }
     }
+
+    pub fn take_witness(&mut self) -> Option<Bytes<16>> {
+        match self.command_cache.take() {
+            Some(CommandCache::WitnessChallenge(b)) => return Some(b),
+            old @ _ => self.command_cache = old,
+        };
+        None
+    }
+
+    pub fn take_challenge(&mut self) -> Option<Bytes<16>> {
+        match self.command_cache.take() {
+            Some(CommandCache::AuthenticateChallenge(b)) => return Some(b),
+            old @ _ => self.command_cache = old,
+        };
+        None
+    }
 }
 
 impl Default for SecurityStatus {
@@ -229,6 +245,7 @@ pub struct AppSecurityStatus {
 pub enum CommandCache {
     GetData(GetData),
     AuthenticateChallenge(Bytes<16>),
+    WitnessChallenge(Bytes<16>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

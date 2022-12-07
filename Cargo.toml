@@ -51,6 +51,8 @@ default = []
 strict-pin = []
 std = []
 virtual = ["std", "vpicc","trussed/virt"]
+pivy-tests = []
+opensc-tests = []
 
 log-all = []
 log-none = []

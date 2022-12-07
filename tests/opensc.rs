@@ -9,7 +9,7 @@ use std::process::Command;
 
 use card::with_vsc;
 
-use expectrl::{spawn, Eof, Regex, WaitStatus};
+use expectrl::{spawn, Eof, WaitStatus};
 
 #[test]
 fn list() {
@@ -54,5 +54,33 @@ fn admin_card() {
         p.check("Personal Identity Verification Card").unwrap();
         p.check(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+    });
+}
+
+#[test]
+fn generate_key() {
+    with_vsc(|| {
+        let mut command = Command::new("piv-tool");
+        command
+            .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
+            .args(&["-A", "M:9B:03", "-G", "9A:11"]);
+        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        p.check("Using reader with a card: Virtual PCD 00 00")
+            .unwrap();
+        p.check(Eof).unwrap();
+        // Non zero exit code?
+        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 1));
+    });
+    with_vsc(|| {
+        let mut command = Command::new("piv-tool");
+        command
+            .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
+            .args(&["-A", "M:9B:03", "-G", "9A:07"]);
+        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        p.check("Using reader with a card: Virtual PCD 00 00")
+            .unwrap();
+        p.check(Eof).unwrap();
+        // Non zero exit code?
+        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 1));
     });
 }

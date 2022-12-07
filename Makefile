@@ -11,7 +11,7 @@ build-cortex-m4:
 
 .PHONY: test
 test:
-	cargo test --features virtual
+	cargo test --features virtual,pivy-tests,opensc-tests
 
 .PHONY: check
 check:

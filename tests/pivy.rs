@@ -1,7 +1,7 @@
 // Copyright (C) 2022  Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
 
-#![cfg(feature = "virtual")]
+#![cfg(all(feature = "virtual", feature = "pivy-tests"))]
 
 mod card;
 

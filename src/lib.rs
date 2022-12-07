@@ -565,7 +565,10 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         reply: Reply<'_, R>,
     ) -> Result {
         info!("Response for challenge ");
-        self.admin_challenge_respond(requested_alg, data, reply)
+        match self.state.runtime.take_challenge() {
+            Some(original) => self.admin_challenge_validate(requested_alg, data, original, reply),
+            None => self.admin_challenge_respond(requested_alg, data, reply),
+        }
     }
 
     pub fn admin_challenge_respond<const R: usize>(
@@ -717,7 +720,10 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         reply: Reply<'_, R>,
     ) -> Result {
         info!("Admin witness");
-        self.admin_witness_respond(requested_alg, data, reply)
+        match self.state.runtime.take_witness() {
+            Some(original) => self.admin_witness_validate(requested_alg, data, original, reply),
+            None => self.admin_witness_respond(requested_alg, data, reply),
+        }
     }
 
     pub fn admin_witness_respond<const R: usize>(

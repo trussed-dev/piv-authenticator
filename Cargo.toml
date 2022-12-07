@@ -23,7 +23,7 @@ hex-literal = "0.3"
 interchange = "0.2.2"
 iso7816 = "0.1"
 serde = { version = "1", default-features = false, features = ["derive"] }
-trussed = "0.1"
+trussed = { version = "0.1", features = ["rsa2048", "rsa4096"] }
 untrusted = "0.9"
 vpicc = { version = "0.1.0", optional = true }
 log = "0.4"
@@ -63,3 +63,9 @@ log-error = []
 
 [patch.crates-io]
 trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey-3"}
+
+[profile.dev.package.rsa]
+opt-level = 2
+
+[profile.dev.package.num-bigint-dig]
+opt-level = 2

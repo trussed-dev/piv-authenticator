@@ -899,7 +899,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         match parsed_mechanism {
             AsymmetricAlgorithms::P256 => {
                 let serialized_key = syscall!(self.trussed.serialize_key(
-                    trussed::types::Mechanism::P256,
+                    parsed_mechanism.key_mechanism(),
                     public_key,
                     trussed::types::KeySerialization::Raw
                 ))
@@ -916,7 +916,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 reply.expand(&[0x7F, 0x49])?;
                 let offset = reply.len();
                 let serialized_e = syscall!(self.trussed.serialize_key(
-                    trussed::types::Mechanism::P256,
+                    parsed_mechanism.key_mechanism(),
                     public_key,
                     trussed::types::KeySerialization::RsaE
                 ))
@@ -926,7 +926,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 reply.expand(&serialized_e)?;
 
                 let serialized_n = syscall!(self.trussed.serialize_key(
-                    trussed::types::Mechanism::P256,
+                    parsed_mechanism.key_mechanism(),
                     public_key,
                     trussed::types::KeySerialization::RsaN
                 ))

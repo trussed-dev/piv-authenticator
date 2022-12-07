@@ -396,7 +396,7 @@ impl Persistent {
         client: &mut impl trussed::Client,
     ) -> KeyId {
         let id = syscall!(client.generate_key(
-            alg.key_mechanism(),
+            dbg!(alg.key_mechanism()),
             StorageAttributes::default().set_persistence(Location::Internal)
         ))
         .key;

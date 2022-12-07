@@ -214,7 +214,7 @@ impl Runtime {
     pub fn take_witness(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
             Some(CommandCache::WitnessChallenge(b)) => return Some(b),
-            old @ _ => self.command_cache = old,
+            old => self.command_cache = old,
         };
         None
     }
@@ -222,7 +222,7 @@ impl Runtime {
     pub fn take_challenge(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
             Some(CommandCache::AuthenticateChallenge(b)) => return Some(b),
-            old @ _ => self.command_cache = old,
+            old => self.command_cache = old,
         };
         None
     }

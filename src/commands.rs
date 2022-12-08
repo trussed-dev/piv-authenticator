@@ -220,7 +220,7 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResetRetryCounter {
-    pub padded_pin: [u8; 8],
+    pub pin: [u8; 8],
     pub puk: [u8; 8],
 }
 
@@ -231,7 +231,7 @@ impl TryFrom<&[u8]> for ResetRetryCounter {
             return Err(Status::IncorrectDataParameter);
         }
         Ok(Self {
-            padded_pin: data[..8].try_into().unwrap(),
+            pin: data[..8].try_into().unwrap(),
             puk: data[8..].try_into().unwrap(),
         })
     }

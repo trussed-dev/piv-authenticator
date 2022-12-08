@@ -162,6 +162,38 @@ enum_subset! {
         DigitalSignature,
         KeyManagement,
         CardAuthentication,
+        Retired01,
+        Retired02,
+        Retired03,
+        Retired04,
+        Retired05,
+        Retired06,
+        Retired07,
+        Retired08,
+        Retired09,
+        Retired10,
+        Retired11,
+        Retired12,
+        Retired13,
+        Retired14,
+        Retired15,
+        Retired16,
+        Retired17,
+        Retired18,
+        Retired19,
+        Retired20,
+
+    }
+}
+
+enum_subset! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum GenerateKeyReference: AsymmetricKeyReference {
+        // SecureMessaging,
+        PivAuthentication,
+        DigitalSignature,
+        KeyManagement,
+        CardAuthentication,
     }
 }
 

@@ -11,13 +11,14 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
-use commands::containers::KeyReference;
 use commands::piv_types::Algorithms;
-use commands::{AsymmetricKeyReference, GeneralAuthenticate, PutData};
 pub use commands::{Command, YubicoPivExtension};
+use commands::{GeneralAuthenticate, PutData};
 pub mod constants;
 pub mod container;
-use container::{AttestKeyReference, AuthenticateKeyReference, Container};
+use container::{
+    AttestKeyReference, AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference,
+};
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
@@ -800,7 +801,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
     pub fn generate_asymmetric_keypair<const R: usize>(
         &mut self,
-        reference: AsymmetricKeyReference,
+        reference: GenerateKeyReference,
         data: &[u8],
         mut reply: Reply<'_, R>,
     ) -> Result {
@@ -865,7 +866,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         })?;
 
         let secret_key = self.state.persistent.generate_asymmetric_key(
-            reference,
+            reference.into(),
             parsed_mechanism,
             self.trussed,
         );

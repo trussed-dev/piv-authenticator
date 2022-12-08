@@ -85,5 +85,46 @@
                 output: Len(70),
             )
         ]
+    ),
+    IoTest(
+        name: "PUT DATA",
+        cmd_resp: [
+            GetData(
+                input: "5C 01 7E",
+                output: Data("7e 12 4f 0b a000000308000010000100 5f2f 02 4000")
+            ),
+            GetData(
+                input: "5C 03 5FC102",
+                output: Len(61)
+            ),
+            PutData(
+                input: "5C 03 5FC102 53 10 000102030405060708090A0B0C0D0E0F",
+                expected_status: SecurityStatusNotSatisfied
+            ),
+            GetData(
+                input: "5C 03 5FC102",
+                output: Len(61)
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            PutData(
+                input: "5C 03 5FC102 53 10 000102030405060708090A0B0C0D0E0F",
+            ),
+            GetData(
+                input: "5C 03 5FC102",
+                output: Data("53 10 000102030405060708090A0B0C0D0E0F")
+            ),
+            PutData(
+                input: "5C 01 7E 53 10 000102030405060708090A0B0C0D0E0F",
+            ),
+            GetData(
+                input: "5C 01 7E",
+                output: Data("7e 10 000102030405060708090A0B0C0D0E0F")
+            ),
+        ]
     )
 ]

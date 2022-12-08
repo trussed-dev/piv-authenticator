@@ -258,6 +258,20 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    GetData {
+        input: String,
+        #[serde(default)]
+        output: OutputMatcher,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    PutData {
+        input: String,
+        #[serde(default)]
+        output: OutputMatcher,
+        #[serde(default)]
+        expected_status: Status,
+    },
     VerifyDefaultApplicationPin {
         #[serde(default)]
         expected_status: Status,
@@ -292,6 +306,16 @@ impl IoCmd {
                 output,
                 expected_status,
             } => Self::run_iodata(input, output, *expected_status, card),
+            Self::GetData {
+                input,
+                output,
+                expected_status,
+            } => Self::run_get_data(input, output, *expected_status, card),
+            Self::PutData {
+                input,
+                output,
+                expected_status,
+            } => Self::run_put_data(input, output, *expected_status, card),
             Self::VerifyDefaultApplicationPin { expected_status } => {
                 Self::run_verify_default_application_pin(*expected_status, card)
             }
@@ -371,6 +395,34 @@ impl IoCmd {
         card: &mut setup::Piv,
     ) {
         Self::run_bytes(&parse_hex(input), output, expected_status, card);
+    }
+
+    fn run_get_data(
+        input: &str,
+        output: &OutputMatcher,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        Self::run_bytes(
+            &build_command(0x00, 0xCB, 0x3F, 0xFF, &parse_hex(input), 0),
+            output,
+            expected_status,
+            card,
+        );
+    }
+
+    fn run_put_data(
+        input: &str,
+        output: &OutputMatcher,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        Self::run_bytes(
+            &build_command(0x00, 0xDB, 0x3F, 0xFF, &parse_hex(input), 0),
+            output,
+            expected_status,
+            card,
+        );
     }
 
     fn run_authenticate_management(

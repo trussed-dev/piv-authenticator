@@ -273,7 +273,10 @@ impl<'data> TryFrom<&'data [u8]> for PutData<'data> {
         };
 
         let (tag, inner, rem) = take_do(rem).ok_or_else(|| {
-            warn!("Failed to parse PUT DATA's second field: {:02x?}", data);
+            warn!(
+                "Failed to parse PUT DATA's second field: {:02x?}, {:02x?}",
+                data, rem
+            );
             Status::IncorrectDataParameter
         })?;
 

@@ -957,10 +957,20 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         }
 
         use state::ContainerStorage;
+        let tag = match container {
+            Container::DiscoveryObject => [0x7E].as_slice(),
+            Container::BiometricInformationTemplatesGroupTemplate => &[0x7F, 0x61],
+            _ => &[0x53],
+        };
+        reply.expand(tag)?;
+        let offset = reply.len();
         match ContainerStorage(container).load(self.trussed)? {
-            Some(data) => reply.expand(&data),
-            None => Err(Status::NotFound),
+            Some(data) => reply.expand(&data)?,
+            None => return Err(Status::NotFound),
         }
+        reply.prepend_len(offset)?;
+
+        Ok(())
     }
 
     fn put_data(&mut self, put_data: PutData<'_>) -> Result {

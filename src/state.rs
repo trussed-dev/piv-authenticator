@@ -444,7 +444,10 @@ impl Persistent {
             .to_heapless_vec()
             .unwrap();
         ContainerStorage(Container::CardHolderUniqueIdentifier)
-            .save(client, &guid_file)
+            .save(
+                client,
+                &guid_file[2..], // Remove the unnecessary 53 tag
+            )
             .ok();
 
         let keys = Keys {

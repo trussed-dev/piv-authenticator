@@ -987,9 +987,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         {
             return Err(Status::VerificationFailed);
         }
-        self.state
-            .persistent
-            .set_pin(Pin(data.padded_pin), self.trussed);
+        self.state.persistent.set_pin(Pin(data.pin), self.trussed);
 
         Ok(())
     }

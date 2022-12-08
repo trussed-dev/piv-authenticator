@@ -53,7 +53,7 @@ pub enum Command<'l> {
     /// Change PIN or PUK
     ChangeReference(ChangeReference),
     /// If the PIN is blocked, reset it using the PUK
-    ResetPinRetries(ResetPinRetries),
+    ResetRetryCounter(ResetRetryCounter),
     /// The most general purpose method, performing actual cryptographic operations
     ///
     /// In particular, this can also decrypt or similar.
@@ -219,12 +219,12 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ResetPinRetries {
+pub struct ResetRetryCounter {
     pub padded_pin: [u8; 8],
     pub puk: [u8; 8],
 }
 
-impl TryFrom<&[u8]> for ResetPinRetries {
+impl TryFrom<&[u8]> for ResetRetryCounter {
     type Error = Status;
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         if data.len() != 16 {
@@ -347,7 +347,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::ResetRetryCounter, 0x00, 0x80) => {
-                Self::ResetPinRetries(ResetPinRetries::try_from(data.as_slice())?)
+                Self::ResetRetryCounter(ResetRetryCounter::try_from(data.as_slice())?)
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {

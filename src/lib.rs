@@ -13,7 +13,7 @@ delog::generate_macros!();
 pub mod commands;
 use commands::piv_types::Algorithms;
 pub use commands::{Command, YubicoPivExtension};
-use commands::{GeneralAuthenticate, PutData};
+use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
 pub mod container;
 use container::{
@@ -138,7 +138,7 @@ where
             Command::YkExtension(yk_command) => {
                 self.yubico_piv_extension(command.data(), yk_command, reply)
             }
-            _ => todo!(),
+            Command::ResetRetryCounter(reset) => self.load()?.reset_retry_counter(reset),
         }
     }
 
@@ -275,7 +275,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 return Err(Status::OperationBlocked);
             }
 
-            if self.state.persistent.verify_pin(&pin) {
+            if self.state.persistent.verify_pin(&pin, self.trussed) {
                 self.state
                     .persistent
                     .reset_consecutive_pin_mismatches(self.trussed);
@@ -332,7 +332,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::OperationBlocked);
         }
 
-        if !self.state.persistent.verify_pin(&old_pin) {
+        if !self.state.persistent.verify_pin(&old_pin, self.trussed) {
             let remaining = self
                 .state
                 .persistent
@@ -354,7 +354,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::OperationBlocked);
         }
 
-        if !self.state.persistent.verify_puk(&old_puk) {
+        if !self.state.persistent.verify_puk(&old_puk, self.trussed) {
             let remaining = self
                 .state
                 .persistent
@@ -977,5 +977,20 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         use state::ContainerStorage;
         ContainerStorage(container).save(self.trussed, data)
+    }
+
+    fn reset_retry_counter(&mut self, data: ResetRetryCounter) -> Result {
+        if !self
+            .state
+            .persistent
+            .verify_puk(&Puk(data.puk), self.trussed)
+        {
+            return Err(Status::VerificationFailed);
+        }
+        self.state
+            .persistent
+            .set_pin(Pin(data.padded_pin), self.trussed);
+
+        Ok(())
     }
 }

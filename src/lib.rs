@@ -870,28 +870,6 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             self.trussed,
         );
 
-        // // TEMP
-        // let mechanism = trussed::types::Mechanism::P256Prehashed;
-        // let mechanism = trussed::types::Mechanism::P256;
-        // let commitment = &[37u8; 32];
-        // // blocking::dbg!(commitment);
-        // let serialization = trussed::types::SignatureSerialization::Asn1Der;
-        // // blocking::dbg!(&key);
-        // let signature = block!(self.trussed.sign(mechanism, key.clone(), commitment, serialization).map_err(|e| {
-        //     blocking::dbg!(e);
-        //     e
-        // }).unwrap())
-        //     .map_err(|error| {
-        //         // NoSuchKey
-        //         blocking::dbg!(error);
-        //         Status::UnspecifiedNonpersistentExecutionError }
-        //     )?
-        //     .signature;
-        // blocking::dbg!(&signature);
-        // self.state.persistent.keys.authentication_key = Some(key);
-        // self.state.persistent.save(self.trussed);
-
-        // let public_key = syscall!(self.trussed.derive_p256_public_key(
         let public_key = syscall!(self.trussed.derive_key(
             parsed_mechanism.key_mechanism(),
             secret_key,

@@ -544,6 +544,10 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             warn!("Bad algorithm: {:?}", requested_alg);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
+        if !self.state.runtime.app_security_status.pin_verified {
+            warn!("Authenticate challenge without pin validated");
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
 
         let response = syscall!(self.trussed.sign(
             alg.sign_mechanism(),

@@ -49,35 +49,12 @@ macro_rules! enum_u8 {
 ///
 /// We are more lenient, and allow ASCII 0x20..=0x7E.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Pin {
-    padded_pin: [u8; 8],
-    len: usize,
-}
+pub struct Pin(pub [u8; 8]);
 
 impl TryFrom<&[u8]> for Pin {
     type Error = ();
     fn try_from(padded_pin: &[u8]) -> Result<Self, Self::Error> {
-        let padded_pin: [u8; 8] = padded_pin.try_into().map_err(|_| ())?;
-        let first_pad_byte = padded_pin[..8].iter().position(|&b| b == 0xff);
-        let unpadded_pin = match first_pad_byte {
-            Some(l) => &padded_pin[..l],
-            None => &padded_pin,
-        };
-        match unpadded_pin.len() {
-            len @ 6..=8 => {
-                let verifier = if cfg!(feature = "strict-pin") {
-                    |&byte| (b'0'..=b'9').contains(&byte)
-                } else {
-                    |&byte| (32..=127).contains(&byte)
-                };
-                if unpadded_pin.iter().all(verifier) {
-                    Ok(Pin { padded_pin, len })
-                } else {
-                    Err(())
-                }
-            }
-            _ => Err(()),
-        }
+        Ok(Self(padded_pin.try_into().map_err(|_| ())?))
     }
 }
 

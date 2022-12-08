@@ -316,24 +316,44 @@ impl Persistent {
     }
 
     // FIXME: revisit with trussed pin management
-    pub fn verify_pin(&self, other_pin: &Pin) -> bool {
-        // hprintln!("verifying pin {:?} against {:?}", other_pin, &self.pin).ok();
-        self.pin == *other_pin
+    pub fn verify_pin(&mut self, other_pin: &Pin, client: &mut impl trussed::Client) -> bool {
+        if self.remaining_pin_retries() == 0 {
+            return false;
+        }
+        self.consecutive_pin_mismatches += 1;
+        self.save(client);
+        if self.pin == *other_pin {
+            self.consecutive_pin_mismatches = 0;
+            true
+        } else {
+            false
+        }
     }
 
     // FIXME: revisit with trussed pin management
-    pub fn verify_puk(&self, other_puk: &Puk) -> bool {
-        // hprintln!("verifying puk {:?} against {:?}", other_puk, &self.puk).ok();
-        self.puk == *other_puk
+    pub fn verify_puk(&mut self, other_puk: &Puk, client: &mut impl trussed::Client) -> bool {
+        if self.remaining_puk_retries() == 0 {
+            return false;
+        }
+        self.consecutive_puk_mismatches += 1;
+        self.save(client);
+        if self.puk == *other_puk {
+            self.consecutive_puk_mismatches = 0;
+            true
+        } else {
+            false
+        }
     }
 
     pub fn set_pin(&mut self, new_pin: Pin, client: &mut impl trussed::Client) {
         self.pin = new_pin;
+        self.consecutive_pin_mismatches = 0;
         self.save(client);
     }
 
     pub fn set_puk(&mut self, new_puk: Puk, client: &mut impl trussed::Client) {
         self.puk = new_puk;
+        self.consecutive_puk_mismatches = 0;
         self.save(client);
     }
 

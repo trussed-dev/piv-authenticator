@@ -68,7 +68,7 @@ impl AdministrationAlgorithm {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct KeyWithAlg<A> {
     pub id: KeyId,
     pub alg: A,
@@ -98,32 +98,32 @@ impl Keys {
     pub fn asymetric_for_reference(
         &self,
         key: AsymmetricKeyReference,
-    ) -> Option<&KeyWithAlg<AsymmetricAlgorithms>> {
+    ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
         match key {
-            AsymmetricKeyReference::PivAuthentication => Some(&self.authentication),
-            AsymmetricKeyReference::DigitalSignature => self.signature.as_ref(),
-            AsymmetricKeyReference::KeyManagement => self.key_management.as_ref(),
-            AsymmetricKeyReference::CardAuthentication => self.card_authentication.as_ref(),
-            AsymmetricKeyReference::Retired01 => self.retired_keys[1].as_ref(),
-            AsymmetricKeyReference::Retired02 => self.retired_keys[2].as_ref(),
-            AsymmetricKeyReference::Retired03 => self.retired_keys[3].as_ref(),
-            AsymmetricKeyReference::Retired04 => self.retired_keys[4].as_ref(),
-            AsymmetricKeyReference::Retired05 => self.retired_keys[5].as_ref(),
-            AsymmetricKeyReference::Retired06 => self.retired_keys[6].as_ref(),
-            AsymmetricKeyReference::Retired07 => self.retired_keys[7].as_ref(),
-            AsymmetricKeyReference::Retired08 => self.retired_keys[8].as_ref(),
-            AsymmetricKeyReference::Retired09 => self.retired_keys[9].as_ref(),
-            AsymmetricKeyReference::Retired10 => self.retired_keys[10].as_ref(),
-            AsymmetricKeyReference::Retired11 => self.retired_keys[11].as_ref(),
-            AsymmetricKeyReference::Retired12 => self.retired_keys[12].as_ref(),
-            AsymmetricKeyReference::Retired13 => self.retired_keys[13].as_ref(),
-            AsymmetricKeyReference::Retired14 => self.retired_keys[14].as_ref(),
-            AsymmetricKeyReference::Retired15 => self.retired_keys[15].as_ref(),
-            AsymmetricKeyReference::Retired16 => self.retired_keys[16].as_ref(),
-            AsymmetricKeyReference::Retired17 => self.retired_keys[17].as_ref(),
-            AsymmetricKeyReference::Retired18 => self.retired_keys[18].as_ref(),
-            AsymmetricKeyReference::Retired19 => self.retired_keys[19].as_ref(),
-            AsymmetricKeyReference::Retired20 => self.retired_keys[20].as_ref(),
+            AsymmetricKeyReference::PivAuthentication => Some(self.authentication),
+            AsymmetricKeyReference::DigitalSignature => self.signature,
+            AsymmetricKeyReference::KeyManagement => self.key_management,
+            AsymmetricKeyReference::CardAuthentication => self.card_authentication,
+            AsymmetricKeyReference::Retired01 => self.retired_keys[1],
+            AsymmetricKeyReference::Retired02 => self.retired_keys[2],
+            AsymmetricKeyReference::Retired03 => self.retired_keys[3],
+            AsymmetricKeyReference::Retired04 => self.retired_keys[4],
+            AsymmetricKeyReference::Retired05 => self.retired_keys[5],
+            AsymmetricKeyReference::Retired06 => self.retired_keys[6],
+            AsymmetricKeyReference::Retired07 => self.retired_keys[7],
+            AsymmetricKeyReference::Retired08 => self.retired_keys[8],
+            AsymmetricKeyReference::Retired09 => self.retired_keys[9],
+            AsymmetricKeyReference::Retired10 => self.retired_keys[10],
+            AsymmetricKeyReference::Retired11 => self.retired_keys[11],
+            AsymmetricKeyReference::Retired12 => self.retired_keys[12],
+            AsymmetricKeyReference::Retired13 => self.retired_keys[13],
+            AsymmetricKeyReference::Retired14 => self.retired_keys[14],
+            AsymmetricKeyReference::Retired15 => self.retired_keys[15],
+            AsymmetricKeyReference::Retired16 => self.retired_keys[16],
+            AsymmetricKeyReference::Retired17 => self.retired_keys[17],
+            AsymmetricKeyReference::Retired18 => self.retired_keys[18],
+            AsymmetricKeyReference::Retired19 => self.retired_keys[19],
+            AsymmetricKeyReference::Retired20 => self.retired_keys[20],
         }
     }
 

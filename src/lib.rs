@@ -524,7 +524,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if *alg != auth.algorithm {
+        if alg != auth.algorithm {
             warn!("Attempt to exponentiate with incorrect algorithm");
             return Err(Status::IncorrectP1OrP2Parameter);
         }
@@ -553,7 +553,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         .key;
         let shared_secret = syscall!(self.trussed.agree(
             mechanism,
-            *id,
+            id,
             public_key,
             StorageAttributes::default()
                 .set_persistence(Location::Volatile)
@@ -620,7 +620,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if *alg != requested_alg {
+        if alg != requested_alg {
             warn!("Bad algorithm: {:?}", requested_alg);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
@@ -631,7 +631,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         let response = syscall!(self.trussed.sign(
             alg.sign_mechanism(),
-            *id,
+            id,
             data.as_slice_less_safe(),
             trussed::types::SignatureSerialization::Raw,
         ))

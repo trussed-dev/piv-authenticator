@@ -74,12 +74,30 @@ pub struct KeyWithAlg<A> {
     pub alg: A,
 }
 
+macro_rules! generate_into_key_with_alg {
+    ($($name:ident),*) => {
+        $(
+            impl From<KeyWithAlg<$name>> for KeyWithAlg<Algorithms> {
+                fn from(other: KeyWithAlg<$name>) -> Self {
+                    KeyWithAlg {
+                        id: other.id,
+                        alg: other.alg.into()
+                    }
+                }
+            }
+        )*
+    };
+}
+
+generate_into_key_with_alg!(AsymmetricAlgorithms, AdministrationAlgorithm);
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Keys {
     // 9a "PIV Authentication Key" (YK: PIV Authentication)
     pub authentication: KeyWithAlg<AsymmetricAlgorithms>,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
     pub administration: KeyWithAlg<AdministrationAlgorithm>,
+    pub is_admin_default: bool,
     // 9c "Digital Signature Key" (YK: Digital Signature)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<KeyWithAlg<AsymmetricAlgorithms>>,
@@ -513,6 +531,7 @@ impl Persistent {
         let keys = Keys {
             authentication,
             administration,
+            is_admin_default: true,
             signature: None,
             key_management: None,
             card_authentication: None,

@@ -202,6 +202,7 @@ where
                     .yubico_set_administration_key(data, touch_policy, reply)?;
             }
 
+            YubicoPivExtension::GetMetadata(_reference) => { /* TODO */ }
             _ => return Err(Status::FunctionNotSupported),
         }
         Ok(())
@@ -462,7 +463,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                             0x80 => self.witness(auth, data, reply.lend())?,
                             0x81 => self.challenge(auth, data, reply.lend())?,
                             0x82 => self.response(auth, data, reply.lend())?,
-                            0x83 => self.exponentiation(auth, data, reply.lend())?,
+                            0x85 => self.exponentiation(auth, data, reply.lend())?,
                             _ => return Err(Status::IncorrectDataParameter),
                         }
                     }
@@ -482,6 +483,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         info!("Request for response");
 
         if data.is_empty() {
+            info!("Empty data");
             return Ok(());
         }
         if auth.key_reference != KeyReference::PivCardApplicationAdministration {

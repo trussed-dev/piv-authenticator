@@ -258,6 +258,23 @@ impl_use_security_condition!(
     AuthenticateKeyReference
 );
 
+macro_rules! impl_try_from {
+    ($(($left:ident, $right:ident)),*) => {
+        $(
+            impl TryFrom<$left> for $right {
+                type Error = ::iso7816::Status;
+                fn try_from(val: $left) -> Result<Self,Self::Error> {
+                    let tmp = KeyReference::from(val);
+                    tmp.try_into()
+                }
+
+            }
+        )*
+    };
+}
+
+impl_try_from!((AuthenticateKeyReference, AsymmetricKeyReference));
+
 /// The 36 data objects defined by PIV (SP 800-37-4, Part 1).
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

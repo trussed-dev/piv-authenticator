@@ -46,6 +46,8 @@ pub type Result = iso7816::Result<()>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
+use crate::container::AsymmetricKeyReference;
+
 /// PIV authenticator Trussed app.
 ///
 /// The `C` parameter is necessary, as PIV includes command sequences,
@@ -527,21 +529,38 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 PivCardApplicationAdministration => {
                     self.admin_challenge(auth.algorithm, data, reply)
                 }
-                PivAuthentication => self.authenticate_challenge(auth.algorithm, data, reply),
-                _ => Err(Status::FunctionNotSupported),
+                SecureMessaging => Err(Status::FunctionNotSupported),
+                _ => self.sign_challenge(
+                    auth.algorithm,
+                    auth.key_reference.try_into().map_err(|_| {
+                        if cfg!(debug_assertions) {
+                            // To find errors more easily in tests and fuzzing but not crash in production
+                            panic!("Failed to convert key reference: {:?}", auth.key_reference);
+                        } else {
+                            error!("Failed to convert key reference: {:?}", auth.key_reference);
+                            Status::UnspecifiedNonpersistentExecutionError
+                        }
+                    })?,
+                    data,
+                    reply,
+                ),
             }
         }
     }
 
-    pub fn authenticate_challenge<const R: usize>(
+    pub fn sign_challenge<const R: usize>(
         &mut self,
         requested_alg: Algorithms,
+        key_ref: AsymmetricKeyReference,
         data: derp::Input<'_>,
         mut reply: Reply<'_, R>,
     ) -> Result {
-        let KeyWithAlg { alg, id } = self.state.persistent.keys.authentication;
+        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
+            warn!("Attempt to use unset key");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
 
-        if alg != requested_alg {
+        if *alg != requested_alg {
             warn!("Bad algorithm: {:?}", requested_alg);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
@@ -552,7 +571,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         let response = syscall!(self.trussed.sign(
             alg.sign_mechanism(),
-            id,
+            *id,
             data.as_slice_less_safe(),
             trussed::types::SignatureSerialization::Raw,
         ))

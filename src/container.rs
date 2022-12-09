@@ -250,6 +250,7 @@ enum_subset! {
         Retired20,
     }
 }
+
 impl_use_security_condition!(
     AttestKeyReference,
     AsymmetricKeyReference,

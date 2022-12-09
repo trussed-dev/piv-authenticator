@@ -142,12 +142,26 @@ impl AsymmetricAlgorithms {
         }
     }
 
+    pub fn ecdh_mechanism(self) -> Option<Mechanism> {
+        use AsymmetricAlgorithms::*;
+        match self {
+            P256 => Some(Mechanism::P256),
+            /* P384 | P521 | X25519 | X448 */
+            _ => None,
+        }
+    }
+
     pub fn sign_mechanism(self) -> Mechanism {
         match self {
             Self::Rsa2048 => Mechanism::Rsa2048Pkcs,
             Self::Rsa4096 => Mechanism::Rsa4096Pkcs,
             Self::P256 => Mechanism::P256Prehashed,
         }
+    }
+
+    pub fn is_rsa(self) -> bool {
+        use AsymmetricAlgorithms::*;
+        matches!(self, Rsa2048 | Rsa4096)
     }
 }
 

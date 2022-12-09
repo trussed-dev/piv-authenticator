@@ -37,7 +37,7 @@ use core::convert::TryInto;
 use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
-use trussed::types::{Location, StorageAttributes};
+use trussed::types::{KeySerialization, Location, StorageAttributes};
 use trussed::{client, syscall, try_syscall};
 
 use constants::*;
@@ -507,12 +507,72 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
     pub fn exponentiation<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: Reply<'_, R>,
+        auth: GeneralAuthenticate,
+        data: derp::Input<'_>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for exponentiation");
-        todo!()
+        let key_reference = auth.key_reference.try_into().map_err(|_| {
+            warn!(
+                "Attempt to use non asymetric key for exponentiation: {:?}",
+                auth.key_reference
+            );
+            Status::IncorrectP1OrP2Parameter
+        })?;
+        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_reference) else {
+            warn!("Attempt to use unset key");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if *alg != auth.algorithm {
+            warn!("Attempt to exponentiate with incorrect algorithm");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+
+        let Some(mechanism) = alg.ecdh_mechanism() else {
+            warn!("Attempt to exponentiate with non ECDH algorithm");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        let data = data.as_slice_less_safe();
+        if data.first() != Some(&0x04) {
+            warn!("Bad data format for ECDH");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let public_key = try_syscall!(self.trussed.deserialize_key(
+            mechanism,
+            &data[1..],
+            KeySerialization::Raw,
+            StorageAttributes::default().set_persistence(Location::Volatile)
+        ))
+        .map_err(|_err| {
+            warn!("Failed to load public key: {:?}", _err);
+            Status::IncorrectDataParameter
+        })?
+        .key;
+        let shared_secret = syscall!(self.trussed.agree(
+            mechanism,
+            *id,
+            public_key,
+            StorageAttributes::default()
+                .set_persistence(Location::Volatile)
+                .set_serializable(true)
+        ))
+        .shared_secret;
+
+        let serialized_secret = syscall!(self.trussed.serialize_key(
+            trussed::types::Mechanism::SharedSecret,
+            shared_secret,
+            KeySerialization::Raw
+        ))
+        .serialized_key;
+        syscall!(self.trussed.delete(public_key));
+        syscall!(self.trussed.delete(shared_secret));
+
+        reply.expand(&[0x82])?;
+        reply.append_len(serialized_secret.len())?;
+        reply.expand(&serialized_secret)
     }
 
     pub fn challenge<const R: usize>(

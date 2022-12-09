@@ -11,7 +11,7 @@ use core::convert::{TryFrom, TryInto};
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
-use crate::container::Container;
+use crate::container::{Container, KeyReference};
 
 use crate::state::TouchPolicy;
 pub use crate::{
@@ -32,7 +32,7 @@ pub enum YubicoPivExtension {
     SetPinRetries,
     Attest(AttestKeyReference),
     GetSerial, // also used via 0x01
-    GetMetadata,
+    GetMetadata(KeyReference),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -396,9 +396,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             (0x00, Instruction::Unknown(0xf8), _, _) => {
                 Self::YkExtension(YubicoPivExtension::GetSerial)
             }
-            (0x00, Instruction::Unknown(0xf7), _, _) => {
-                Self::YkExtension(YubicoPivExtension::GetMetadata)
-            }
+            (0x00, Instruction::Unknown(0xf7), 0x00, reference) => Self::YkExtension(
+                YubicoPivExtension::GetMetadata(KeyReference::try_from(reference)?),
+            ),
 
             _ => return Err(Status::FunctionNotSupported),
         })

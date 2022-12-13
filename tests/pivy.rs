@@ -9,8 +9,8 @@ use card::with_vsc;
 
 use expectrl::{spawn, Eof, Regex, WaitStatus};
 
-use std::process::{Command,Stdio};
 use std::io::Write;
+use std::process::{Command, Stdio};
 
 #[test]
 fn list() {
@@ -20,7 +20,8 @@ fn list() {
         p.expect("device: Virtual PCD 00 00").unwrap();
         p.expect("chuid: ok").unwrap();
         p.expect(Regex("guid: [0-9A-Z]*")).unwrap();
-        p.expect("algos: 3DES AES256 ECCP256 (null) (null)").unwrap();
+        p.expect("algos: 3DES AES256 ECCP256 (null) (null)")
+            .unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
     });
@@ -57,7 +58,7 @@ fn ecdh() {
             .spawn()
             .unwrap();
         let mut stdin = p.stdin.take().unwrap();
-        write!(stdin, 
+        write!(stdin,
             "ecdsa-sha2-nistp256 \
                 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIK+WUxBiBEwHgT4ykw3FDC1kRRMZCQo2+iM9+8WQgz7eFhEcU78eVweIrqG0nyJaZeWhgcYTSDP+VisDftiQgo= \
                 PIV_slot_9A@6E9BCA45D8AF4B9D95AA2E8C8C23BA49"        ).unwrap();

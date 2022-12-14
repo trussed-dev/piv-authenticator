@@ -38,7 +38,7 @@ pub enum TouchPolicy {
 }
 
 crate::container::enum_subset! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+    #[derive(Debug, serde::Deserialize, serde::Serialize)]
     pub enum AdministrationAlgorithm: Algorithms {
         Tdes,
         Aes256

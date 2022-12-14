@@ -19,6 +19,7 @@ macro_rules! enum_u8 {
     ) => {
         $(#[$outer])*
         #[repr(u8)]
+        #[derive(Clone, Copy)]
         $vis enum $name {
             $(
                 $var = $num,
@@ -42,6 +43,17 @@ macro_rules! enum_u8 {
                 *self as u8 == *other
             }
         }
+
+        impl<T: Into<$name> + Copy> PartialEq<T> for $name {
+            fn eq(&self, other: &T) -> bool {
+                let other: $name = (*other).into();
+                matches!((self,other), $(
+                    | ($name::$var, $name::$var)
+                )*)
+            }
+        }
+
+        impl Eq for $name {}
     }
 }
 
@@ -70,7 +82,7 @@ impl TryFrom<&[u8]> for Puk {
 }
 
 enum_u8! {
-    #[derive(Clone, Copy, Eq, PartialEq, Debug,Deserialize,Serialize)]
+    #[derive(Debug,Deserialize,Serialize)]
     // As additional reference, see:
     // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
     //
@@ -109,7 +121,7 @@ enum_u8! {
 }
 
 crate::container::enum_subset! {
-    #[derive(Clone, Copy, Eq, PartialEq, Debug,Deserialize,Serialize)]
+    #[derive(Debug,Deserialize,Serialize)]
     pub enum AsymmetricAlgorithms: Algorithms {
         Rsa2048,
         Rsa4096,
@@ -164,6 +176,43 @@ impl AsymmetricAlgorithms {
         matches!(self, Rsa2048 | Rsa4096)
     }
 }
+
+macro_rules! impl_use_try_into {
+    ($sup:ident => {$(($from:ident, $into:ident)),*}) => {
+        $(
+            impl TryFrom<$from> for $into {
+                type Error = iso7816::Status;
+                fn try_from(v: $from) -> core::result::Result<$into, iso7816::Status> {
+                    let sup: $sup = v.into();
+                    sup.try_into()
+                }
+            }
+        )*
+    };
+}
+
+crate::container::enum_subset! {
+    #[derive(Debug,Deserialize,Serialize)]
+    pub enum RsaAlgorithms: Algorithms {
+        Rsa2048,
+        Rsa4096,
+    }
+}
+
+impl RsaAlgorithms {
+    pub fn mechanism(self) -> Mechanism {
+        match self {
+            Self::Rsa2048 => Mechanism::Rsa2048Pkcs,
+            Self::Rsa4096 => Mechanism::Rsa4096Pkcs,
+        }
+    }
+}
+
+impl_use_try_into!(
+    Algorithms => {
+        (AsymmetricAlgorithms, RsaAlgorithms)
+   }
+);
 
 /// TODO:
 #[derive(Clone, Copy, Default, Eq, PartialEq)]

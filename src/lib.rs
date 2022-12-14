@@ -11,7 +11,7 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
-use commands::piv_types::Algorithms;
+use commands::piv_types::{Algorithms, RsaAlgorithms};
 pub use commands::{Command, YubicoPivExtension};
 use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
@@ -592,7 +592,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                     self.admin_challenge(auth.algorithm, data, reply)
                 }
                 SecureMessaging => Err(Status::FunctionNotSupported),
-                _ => self.sign_challenge(
+                PivAuthentication | CardAuthentication | DigitalSignature => self.sign_challenge(
                     auth.algorithm,
                     auth.key_reference.try_into().map_err(|_| {
                         if cfg!(debug_assertions) {
@@ -600,7 +600,24 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                             panic!("Failed to convert key reference: {:?}", auth.key_reference);
                         } else {
                             error!("Failed to convert key reference: {:?}", auth.key_reference);
-                            Status::UnspecifiedNonpersistentExecutionError
+                            Status::UnspecifiedPersistentExecutionError
+                        }
+                    })?,
+                    data,
+                    reply,
+                ),
+                KeyManagement | Retired01 | Retired02 | Retired03 | Retired04 | Retired05
+                | Retired06 | Retired07 | Retired08 | Retired09 | Retired10 | Retired11
+                | Retired12 | Retired13 | Retired14 | Retired15 | Retired16 | Retired17
+                | Retired18 | Retired19 | Retired20 => self.agreement_challenge(
+                    auth.algorithm,
+                    auth.key_reference.try_into().map_err(|_| {
+                        if cfg!(debug_assertions) {
+                            // To find errors more easily in tests and fuzzing but not crash in production
+                            panic!("Failed to convert key reference: {:?}", auth.key_reference);
+                        } else {
+                            error!("Failed to convert key reference: {:?}", auth.key_reference);
+                            Status::UnspecifiedPersistentExecutionError
                         }
                     })?,
                     data,
@@ -608,6 +625,50 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 ),
             }
         }
+    }
+
+    pub fn agreement_challenge<const R: usize>(
+        &mut self,
+        requested_alg: Algorithms,
+        key_ref: AsymmetricKeyReference,
+        data: derp::Input<'_>,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
+            warn!("Attempt to use unset key");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if alg != requested_alg {
+            warn!("Bad algorithm: {:?}", requested_alg);
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+        let rsa_alg: RsaAlgorithms = alg.try_into().map_err(|_| {
+            warn!("Tried to perform agreement on a challenge with a non-rsa algorithm");
+            Status::ConditionsOfUseNotSatisfied
+        })?;
+
+        let response = try_syscall!(self.trussed.decrypt(
+            rsa_alg.mechanism(),
+            id,
+            data.as_slice_less_safe(),
+            &[],
+            &[],
+            &[]
+        ))
+        .map_err(|_err| {
+            warn!("Failed to decrypt challenge: {:?}", _err);
+            Status::IncorrectDataParameter
+        })?
+        .plaintext
+        .ok_or_else(|| {
+            warn!("Failed to decrypt challenge, no plaintext");
+            Status::IncorrectDataParameter
+        })?;
+        reply.expand(&[0x82])?;
+        reply.append_len(response.len())?;
+        reply.expand(&response)?;
+        Ok(())
     }
 
     pub fn sign_challenge<const R: usize>(

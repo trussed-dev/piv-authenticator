@@ -16,6 +16,7 @@ macro_rules! enum_subset {
     ) => {
         $(#[$outer])*
         #[repr(u8)]
+        #[derive(Clone, Copy)]
         $vis enum $name {
             $(
                 $var,
@@ -46,9 +47,9 @@ macro_rules! enum_subset {
             }
         }
 
-        impl PartialEq<$sup> for $name {
-            fn eq(&self, other: &$sup) -> bool {
-                match (self,other) {
+        impl<T: Copy + Into<$sup>> PartialEq<T> for $name {
+            fn eq(&self, other: &T) -> bool {
+                match (self,(*other).into()) {
                     $(
                         | ($name::$var, $sup::$var)
                     )* => true,
@@ -56,6 +57,8 @@ macro_rules! enum_subset {
                 }
             }
         }
+
+        impl Eq for $name {}
 
         impl TryFrom<u8> for $name {
             type Error = ::iso7816::Status;
@@ -84,7 +87,7 @@ pub enum SecurityCondition {
 pub struct RetiredIndex(u8);
 
 crate::enum_u8! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum KeyReference {
         GlobalPin = 0x00,
         SecureMessaging = 0x04,
@@ -148,14 +151,14 @@ macro_rules! impl_use_security_condition {
 }
 
 enum_subset! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum AttestKeyReference: KeyReference {
         PivAuthentication,
     }
 }
 
 enum_subset! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum AsymmetricKeyReference: KeyReference {
         // SecureMessaging,
         PivAuthentication,
@@ -187,7 +190,7 @@ enum_subset! {
 }
 
 enum_subset! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum GenerateKeyReference: AsymmetricKeyReference {
         // SecureMessaging,
         PivAuthentication,
@@ -198,7 +201,7 @@ enum_subset! {
 }
 
 enum_subset! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum ChangeReferenceKeyReference: KeyReference {
         GlobalPin,
         ApplicationPin,
@@ -207,7 +210,7 @@ enum_subset! {
 }
 
 enum_subset! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum VerifyKeyReference: KeyReference {
         GlobalPin,
         ApplicationPin,
@@ -220,7 +223,7 @@ enum_subset! {
 
 enum_subset! {
 
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Debug)]
     pub enum AuthenticateKeyReference: KeyReference {
         SecureMessaging,
         PivAuthentication,

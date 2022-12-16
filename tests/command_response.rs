@@ -213,7 +213,7 @@ impl Default for OutputMatcher {
 
 fn parse_hex(data: &str) -> Vec<u8> {
     let tmp: String = data.split_whitespace().collect();
-    hex::decode(&tmp).unwrap()
+    hex::decode(tmp).unwrap()
 }
 
 impl OutputMatcher {

@@ -250,8 +250,8 @@ impl<'a> ApplicationPropertyTemplate<'a> {
 ///
 /// Note that the empty tags (i.e., tags with no data) return the same tag with content
 /// (they can be seen as “requests for requests”):
-/// - '80 00' Returns '80 TL <encrypted random>' (as per definition)
-/// - '81 00' Returns '81 TL <random>' (as per external authenticate example)
+/// - '80 00' Returns '80 TL \<encrypted random\>' (as per definition)
+/// - '81 00' Returns '81 TL \<random\>' (as per external authenticate example)
 #[derive(Clone, Copy, Default, Encodable, Eq, PartialEq)]
 #[tlv(application, constructed, number = "0x1C")] // = 0x7C
 pub struct DynamicAuthenticationTemplate<'l> {

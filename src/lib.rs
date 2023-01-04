@@ -1040,25 +1040,25 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
                 reply.expand(&[0x7F, 0x49])?;
                 let offset = reply.len();
-                let serialized_e = syscall!(self.trussed.serialize_key(
-                    parsed_mechanism.key_mechanism(),
-                    public_key,
-                    trussed::types::KeySerialization::RsaE
-                ))
-                .serialized_key;
-                reply.expand(&[0x81])?;
-                reply.append_len(serialized_e.len())?;
-                reply.expand(&serialized_e)?;
-
                 let serialized_n = syscall!(self.trussed.serialize_key(
                     parsed_mechanism.key_mechanism(),
                     public_key,
                     trussed::types::KeySerialization::RsaN
                 ))
                 .serialized_key;
-                reply.expand(&[0x82])?;
+                reply.expand(&[0x81])?;
                 reply.append_len(serialized_n.len())?;
                 reply.expand(&serialized_n)?;
+
+                let serialized_e = syscall!(self.trussed.serialize_key(
+                    parsed_mechanism.key_mechanism(),
+                    public_key,
+                    trussed::types::KeySerialization::RsaE
+                ))
+                .serialized_key;
+                reply.expand(&[0x82])?;
+                reply.append_len(serialized_e.len())?;
+                reply.expand(&serialized_e)?;
 
                 reply.prepend_len(offset)?;
             }

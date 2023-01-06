@@ -45,12 +45,17 @@ aes = "0.8.2"
 stoppable_thread = "0.2.1"
 expectrl = "0.6.0"
 
+# Examples
+trussed-usbip = { git = "https://github.com/trussed-dev/pc-usbip-runner", default-features = false, features = ["ccid"]}
+apdu-dispatch = "0.1"
+usbd-ccid = { git = "https://github.com/Nitrokey/nitrokey-3-firmware", features = ["highspeed-usb"]}
+rand = "0.8.5"
 
 [features]
 default = []
 strict-pin = []
 std = []
-virtual = ["std", "vpicc","trussed/virt"]
+virtual = ["std", "vpicc", "trussed/virt"]
 pivy-tests = []
 opensc-tests = []
 
@@ -62,7 +67,8 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey-3"}
+trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey-4"}
+littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-1" }
 
 [profile.dev.package.rsa]
 opt-level = 2

@@ -14,6 +14,11 @@ documentation = "https://docs.rs/piv-authenticator"
 name = "virtual"
 required-features = ["virtual"]
 
+
+[[example]]
+name = "usbip"
+required-features = ["apdu-dispatch"]
+
 [dependencies]
 apdu-dispatch = { version = "0.1", optional = true }
 delog = { version = "0.1.5", optional = true }
@@ -47,7 +52,6 @@ expectrl = "0.6.0"
 
 # Examples
 trussed-usbip = { git = "https://github.com/trussed-dev/pc-usbip-runner", default-features = false, features = ["ccid"]}
-apdu-dispatch = "0.1"
 usbd-ccid = { git = "https://github.com/Nitrokey/nitrokey-3-firmware", features = ["highspeed-usb"]}
 rand = "0.8.5"
 

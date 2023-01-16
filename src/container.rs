@@ -377,11 +377,10 @@ impl TryFrom<&[u8]> for Container {
             hex!("5FC106") => SecurityObject,
             hex!("5FC108") => CardholderFacialImage,
             hex!("5FC101") => X509CertificateFor9E,
+            hex!("5FC109") => PrintedInformation,
             hex!("5FC10A") => X509CertificateFor9C,
             hex!("5FC10B") => X509CertificateFor9D,
-            hex!("5FC109") => PrintedInformation,
-            hex!("7E") => DiscoveryObject,
-
+            hex!("5FC10C") => KeyHistoryObject,
             hex!("5FC10D") => RetiredCert01,
             hex!("5FC10E") => RetiredCert02,
             hex!("5FC10F") => RetiredCert03,
@@ -404,9 +403,11 @@ impl TryFrom<&[u8]> for Container {
             hex!("5FC120") => RetiredCert20,
 
             hex!("5FC121") => CardholderIrisImages,
-            hex!("7F61") => BiometricInformationTemplatesGroupTemplate,
             hex!("5FC122") => SecureMessagingCertificateSigner,
             hex!("5FC123") => PairingCodeReferenceDataContainer,
+
+            hex!("7E") => DiscoveryObject,
+            hex!("7F61") => BiometricInformationTemplatesGroupTemplate,
             _ => return Err(()),
         })
     }

@@ -1089,9 +1089,12 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         };
         reply.expand(tag)?;
         let offset = reply.len();
-        match ContainerStorage(container).load(self.trussed)? {
-            Some(data) => reply.expand(&data)?,
-            None => return Err(Status::NotFound),
+        match container {
+            Container::KeyHistoryObject => self.get_key_history_object(reply.lend())?,
+            _ => match ContainerStorage(container).load(self.trussed)? {
+                Some(data) => reply.expand(&data)?,
+                None => return Err(Status::NotFound),
+            },
         }
         reply.prepend_len(offset)?;
 
@@ -1131,6 +1134,33 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         }
         self.state.persistent.set_pin(Pin(data.pin), self.trussed);
 
+        Ok(())
+    }
+
+    fn get_key_history_object<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
+        let num_keys = self
+            .state
+            .persistent
+            .keys
+            .retired_keys
+            .iter()
+            .filter(|k| k.is_some())
+            .count() as u8;
+        let mut num_certs = 0u8;
+
+        use state::ContainerStorage;
+
+        for c in RETIRED_CERTS {
+            if ContainerStorage(c).exists(self.trussed)? {
+                num_certs += 1;
+            }
+        }
+
+        reply.expand(&[0xC1, 0x01])?;
+        reply.expand(&[num_certs])?;
+        reply.expand(&[0xC2, 0x01])?;
+        reply.expand(&[num_keys.saturating_sub(num_certs)])?;
+        reply.expand(&[0xFE, 0x00])?;
         Ok(())
     }
 }

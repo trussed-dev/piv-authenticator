@@ -665,6 +665,28 @@ impl ContainerStorage {
         }
     }
 
+    pub fn exists(self, client: &mut impl trussed::Client) -> Result<bool, Status> {
+        match try_syscall!(client.entry_metadata(Location::Internal, self.path())) {
+            Ok(Metadata { metadata: None }) => Ok(false),
+            Ok(Metadata {
+                metadata: Some(metadata),
+            }) if metadata.is_file() => Ok(true),
+            Ok(Metadata {
+                metadata: Some(_metadata),
+            }) => {
+                error!(
+                    "File {} exists but isn't a file: {_metadata:?}",
+                    self.path()
+                );
+                Err(Status::UnspecifiedPersistentExecutionError)
+            }
+            Err(_err) => {
+                error!("File {} couldn't be read: {_err:?}", self.path());
+                Err(Status::UnspecifiedPersistentExecutionError)
+            }
+        }
+    }
+
     pub fn load(
         self,
         client: &mut impl trussed::Client,

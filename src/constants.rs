@@ -282,3 +282,27 @@ pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
     5f2f 02 // PIN usage Policy
          4000"
 );
+
+use crate::Container;
+pub const RETIRED_CERTS: [Container; 20] = [
+    Container::RetiredCert01,
+    Container::RetiredCert02,
+    Container::RetiredCert03,
+    Container::RetiredCert04,
+    Container::RetiredCert05,
+    Container::RetiredCert06,
+    Container::RetiredCert07,
+    Container::RetiredCert08,
+    Container::RetiredCert09,
+    Container::RetiredCert10,
+    Container::RetiredCert11,
+    Container::RetiredCert12,
+    Container::RetiredCert13,
+    Container::RetiredCert14,
+    Container::RetiredCert15,
+    Container::RetiredCert16,
+    Container::RetiredCert17,
+    Container::RetiredCert18,
+    Container::RetiredCert19,
+    Container::RetiredCert20,
+];

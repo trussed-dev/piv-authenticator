@@ -694,10 +694,38 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
+        // Trussed doesn't support signing pre-padded with RSA, so we remove it.
+        // PKCS#1v1.5 padding is 00 01 FF…FF 00
+        let data = data.as_slice_less_safe();
+        if data.len() < 3 {
+            warn!("Attempt to sign too little data");
+            return Err(Status::IncorrectDataParameter);
+        }
+        if data[0] != 0 || data[1] != 1 {
+            warn!("Attempt to sign with bad padding");
+            return Err(Status::IncorrectDataParameter);
+        }
+        let mut data = &data[2..];
+        loop {
+            let Some(b) = data.first() else {
+                warn!("Sign is only padding");
+                return Err(Status::IncorrectDataParameter);
+            };
+            data = &data[1..];
+            if *b == 0xFF {
+                continue;
+            }
+            if *b == 0 {
+                break;
+            }
+            warn!("Invalid padding value");
+            return Err(Status::IncorrectDataParameter);
+        }
+
         let response = syscall!(self.trussed.sign(
             alg.sign_mechanism(),
             id,
-            data.as_slice_less_safe(),
+            data,
             trussed::types::SignatureSerialization::Raw,
         ))
         .signature;

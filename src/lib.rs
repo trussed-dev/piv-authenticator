@@ -1065,6 +1065,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 reply.prepend_len(offset)?;
             }
         };
+        syscall!(self.trussed.delete(public_key));
 
         Ok(())
     }

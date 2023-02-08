@@ -183,7 +183,7 @@ impl Keys {
 
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct State {
-    pub runtime: Runtime,
+    pub volatile: Volatile,
     pub persistent: Option<Persistent>,
 }
 
@@ -193,7 +193,7 @@ impl State {
             self.persistent = Some(Persistent::load_or_initialize(client)?);
         }
         Ok(LoadedState {
-            runtime: &mut self.runtime,
+            volatile: &mut self.volatile,
             persistent: self.persistent.as_mut().unwrap(),
         })
     }
@@ -212,7 +212,7 @@ impl State {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct LoadedState<'t> {
-    pub runtime: &'t mut Runtime,
+    pub volatile: &'t mut Volatile,
     pub persistent: &'t mut Persistent,
 }
 
@@ -233,7 +233,7 @@ pub struct Persistent {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Runtime {
+pub struct Volatile {
     // aid: Option<
     // consecutive_pin_mismatches: u8,
     pub global_security_status: GlobalSecurityStatus,
@@ -252,7 +252,7 @@ pub enum SecurityStatus {
     NotVerified,
 }
 
-impl Runtime {
+impl Volatile {
     pub fn security_valid(&self, condition: SecurityCondition) -> bool {
         use SecurityCondition::*;
         match condition {

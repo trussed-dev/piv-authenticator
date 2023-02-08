@@ -179,10 +179,10 @@ where
                 persistent_state.reset_pin(&mut self.trussed);
                 persistent_state.reset_puk(&mut self.trussed);
                 persistent_state.reset_administration_key(&mut self.trussed);
-                self.state.runtime.app_security_status.pin_verified = false;
-                self.state.runtime.app_security_status.puk_verified = false;
+                self.state.volatile.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.puk_verified = false;
                 self.state
-                    .runtime
+                    .volatile
                     .app_security_status
                     .administrator_verified = false;
 
@@ -231,7 +231,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         if !self
             .state
-            .runtime
+            .volatile
             .app_security_status
             .administrator_verified
         {
@@ -284,7 +284,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 self.state
                     .persistent
                     .reset_consecutive_pin_mismatches(self.trussed);
-                self.state.runtime.app_security_status.pin_verified = true;
+                self.state.volatile.app_security_status.pin_verified = true;
                 Ok(())
             } else {
                 let remaining = self
@@ -292,7 +292,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                     .persistent
                     .increment_consecutive_pin_mismatches(self.trussed);
                 // should we logout here?
-                self.state.runtime.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_verified = false;
                 Err(Status::RemainingRetries(remaining))
             }
         } else {
@@ -306,7 +306,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             Verify::Login(login) => self.login(login),
 
             Verify::Logout(_) => {
-                self.state.runtime.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_verified = false;
                 Ok(())
             }
 
@@ -314,7 +314,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 if key_reference != commands::VerifyKeyReference::ApplicationPin {
                     return Err(Status::FunctionNotSupported);
                 }
-                if self.state.runtime.app_security_status.pin_verified {
+                if self.state.volatile.app_security_status.pin_verified {
                     Ok(())
                 } else {
                     let retries = self.state.persistent.remaining_pin_retries();
@@ -342,7 +342,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 .state
                 .persistent
                 .increment_consecutive_pin_mismatches(self.trussed);
-            self.state.runtime.app_security_status.pin_verified = false;
+            self.state.volatile.app_security_status.pin_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
@@ -350,7 +350,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             .persistent
             .reset_consecutive_pin_mismatches(self.trussed);
         self.state.persistent.set_pin(new_pin, self.trussed);
-        self.state.runtime.app_security_status.pin_verified = true;
+        self.state.volatile.app_security_status.pin_verified = true;
         Ok(())
     }
 
@@ -364,7 +364,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 .state
                 .persistent
                 .increment_consecutive_puk_mismatches(self.trussed);
-            self.state.runtime.app_security_status.puk_verified = false;
+            self.state.volatile.app_security_status.puk_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
@@ -372,7 +372,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             .persistent
             .reset_consecutive_puk_mismatches(self.trussed);
         self.state.persistent.set_puk(new_puk, self.trussed);
-        self.state.runtime.app_security_status.puk_verified = true;
+        self.state.volatile.app_security_status.puk_verified = true;
         Ok(())
     }
 
@@ -431,7 +431,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
 
         if !self
             .state
-            .runtime
+            .volatile
             .security_valid(auth.key_reference.use_security_condition())
         {
             warn!(
@@ -493,7 +493,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
-        match self.state.runtime.command_cache.take() {
+        match self.state.volatile.command_cache.take() {
             Some(CommandCache::AuthenticateChallenge(original)) => {
                 info!("Got response for challenge");
                 self.admin_challenge_validate(auth.algorithm, data, original, reply)
@@ -689,7 +689,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             warn!("Bad algorithm: {:?}", requested_alg);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
-        if !self.state.runtime.app_security_status.pin_verified {
+        if !self.state.volatile.app_security_status.pin_verified {
             warn!("Authenticate challenge without pin validated");
             return Err(Status::SecurityStatusNotSatisfied);
         }
@@ -742,7 +742,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         reply: Reply<'_, R>,
     ) -> Result {
         info!("Response for challenge ");
-        match self.state.runtime.take_challenge() {
+        match self.state.volatile.take_challenge() {
             Some(original) => self.admin_challenge_validate(requested_alg, data, original, reply),
             None => self.admin_challenge_respond(requested_alg, data, reply),
         }
@@ -802,7 +802,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         if data.as_slice_less_safe().ct_eq(&original).into() {
             info!("Correct challenge validation");
             self.state
-                .runtime
+                .volatile
                 .app_security_status
                 .administrator_verified = true;
             Ok(())
@@ -833,7 +833,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             None
         ))
         .ciphertext;
-        self.state.runtime.command_cache = Some(CommandCache::AuthenticateChallenge(
+        self.state.volatile.command_cache = Some(CommandCache::AuthenticateChallenge(
             Bytes::from_slice(&ciphertext).unwrap(),
         ));
 
@@ -871,7 +871,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::IncorrectP1OrP2Parameter);
         }
         let data = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
-        self.state.runtime.command_cache = Some(CommandCache::WitnessChallenge(
+        self.state.volatile.command_cache = Some(CommandCache::WitnessChallenge(
             Bytes::from_slice(&data).unwrap(),
         ));
         info!("{:02x?}", &*data);
@@ -897,7 +897,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         reply: Reply<'_, R>,
     ) -> Result {
         info!("Admin witness");
-        match self.state.runtime.take_witness() {
+        match self.state.volatile.take_witness() {
             Some(original) => self.admin_witness_validate(requested_alg, data, original, reply),
             None => self.admin_witness_respond(requested_alg, data, reply),
         }
@@ -961,7 +961,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         if data.as_slice_less_safe().ct_eq(&original).into() {
             info!("Correct witness validation");
             self.state
-                .runtime
+                .volatile
                 .app_security_status
                 .administrator_verified = true;
             Ok(())
@@ -979,7 +979,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     ) -> Result {
         if !self
             .state
-            .runtime
+            .volatile
             .app_security_status
             .administrator_verified
         {
@@ -1105,7 +1105,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     ) -> Result {
         if !self
             .state
-            .runtime
+            .volatile
             .read_valid(container.contact_access_rule())
         {
             warn!("Unauthorized attempt to access: {:?}", container);
@@ -1135,7 +1135,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     fn put_data(&mut self, put_data: PutData<'_>) -> Result {
         if !self
             .state
-            .runtime
+            .volatile
             .app_security_status
             .administrator_verified
         {

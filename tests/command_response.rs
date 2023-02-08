@@ -231,7 +231,7 @@ impl OutputMatcher {
                 data == parse_hex(expected)
             }
             Self::Bytes(expected) => {
-                println!("Validating output with {expected:x?}");
+                println!("Validating output with {expected:02x?}");
                 data == &**expected
             }
             Self::Len(len) => data.len() == *len,
@@ -380,7 +380,7 @@ impl IoCmd {
         println!("Output: {:?}\nStatus: {status:?}", hex::encode(&rep));
 
         if !output.validate(&rep) {
-            panic!("Bad output. Expected {:?}", output);
+            panic!("Bad output. Expected {:02x?}", output);
         }
         if status != expected_status {
             panic!("Bad status. Expected {:?}", expected_status);
@@ -482,7 +482,7 @@ impl IoCmd {
     fn run_select(card: &mut setup::Piv) {
         let matcher = OutputMatcher::Bytes(Cow::Borrowed(&hex!(
             "
-            61 63 // Card application property template
+            61 66 // Card application property template
                 4f 06 000010000100 // Application identifier
                 50 0c 536f6c6f4b65797320504956 // Application label = b\"Solokeys PIV\"
 
@@ -490,12 +490,13 @@ impl IoCmd {
                 5f50 2d 68747470733a2f2f6769746875622e636f6d2f736f6c6f6b6579732f7069762d61757468656e74696361746f72 
             
                 // Cryptographic Algorithm Identifier Template
-                ac 12 
+                ac 15 
                     80 01 03 // TDES - ECB
                     80 01 0c // AES256 - ECB
                     80 01 11 // P-256
                     80 01 e2 // Ed25519
                     80 01 e3 // X25519
+                    80 01 07 // RSA 2048
                     06 01 00
                 // Coexistent Tag Allocation Authority Template 
                 79 07 

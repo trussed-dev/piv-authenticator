@@ -11,7 +11,7 @@ use card::with_vsc;
 
 use expectrl::{spawn, Eof, WaitStatus};
 
-#[test]
+#[test_log::test]
 fn list() {
     with_vsc(|| {
         let mut p = spawn("piv-tool -n").unwrap();
@@ -23,7 +23,7 @@ fn list() {
     });
 }
 
-#[test]
+#[test_log::test]
 fn admin_mutual() {
     with_vsc(|| {
         let mut command = Command::new("piv-tool");
@@ -40,7 +40,7 @@ fn admin_mutual() {
 }
 
 // I can't understand the error for this specific case, it may be comming from opensc and not us.
-#[test]
+#[test_log::test]
 #[ignore]
 fn admin_card() {
     with_vsc(|| {
@@ -57,7 +57,7 @@ fn admin_card() {
     });
 }
 
-#[test]
+#[test_log::test]
 fn generate_key() {
     // with_vsc(|| {
     //     let mut command = Command::new("piv-tool");

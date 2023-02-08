@@ -12,7 +12,7 @@ use expectrl::{spawn, Eof, Regex, WaitStatus};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-#[test]
+#[test_log::test]
 fn list() {
     with_vsc(|| {
         let mut p = spawn("pivy-tool list").unwrap();
@@ -27,7 +27,7 @@ fn list() {
     });
 }
 
-#[test]
+#[test_log::test]
 fn generate() {
     with_vsc(|| {
         let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456").unwrap();
@@ -40,7 +40,7 @@ fn generate() {
     });
 }
 
-#[test]
+#[test_log::test]
 fn ecdh() {
     with_vsc(|| {
         let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456").unwrap();

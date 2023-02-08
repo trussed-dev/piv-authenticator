@@ -6,7 +6,7 @@ mod setup;
 // use delog::hex_str;
 // use iso7816::Status::*;
 
-#[test]
+#[test_log::test]
 fn get_data() {
     // let cmd = cmd!("00 47 00 9A 0B  AC 09  80 01 11  AA 01 02  AB 01 02");
     // let cmd = cmd!("00 47 00 9A 0B  AC 09  80 01 11  AA 01 02  AB 01 02");

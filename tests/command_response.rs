@@ -365,7 +365,7 @@ impl IoCmd {
         expected_status: Status,
         card: &mut setup::Piv,
     ) -> heapless::Vec<u8, 1024> {
-        println!("Command: {:x?}", input);
+        println!("Command: {input:x?}");
         let mut rep: heapless::Vec<u8, 1024> = heapless::Vec::new();
         let cmd: iso7816::Command<{ setup::COMMAND_SIZE }> = iso7816::Command::try_from(input)
             .unwrap_or_else(|err| {
@@ -380,10 +380,10 @@ impl IoCmd {
         println!("Output: {:?}\nStatus: {status:?}", hex::encode(&rep));
 
         if !output.validate(&rep) {
-            panic!("Bad output. Expected {:02x?}", output);
+            panic!("Bad output. Expected {output:02x?}");
         }
         if status != expected_status {
-            panic!("Bad status. Expected {:?}", expected_status);
+            panic!("Bad status. Expected {expected_status:?}");
         }
         rep
     }

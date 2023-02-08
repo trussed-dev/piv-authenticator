@@ -47,7 +47,7 @@ pub fn expect_tag_and_get_value<'a>(input: &mut Reader<'a>, tag: u8) -> Result<I
 }
 
 /// Read a tag and its value. Errors when the expected and actual tag and values do not match.
-pub fn expect_tag_and_value<'a>(input: &mut Reader<'a>, tag: u8, value: &[u8]) -> Result<()> {
+pub fn expect_tag_and_value(input: &mut Reader, tag: u8, value: &[u8]) -> Result<()> {
     let (actual_tag, inner) = read_tag_and_get_value(input)?;
     if usize::from(tag) != usize::from(actual_tag) {
         return Err(Error::WrongTag);

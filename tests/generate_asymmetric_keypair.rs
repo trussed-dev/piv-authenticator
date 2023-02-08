@@ -12,7 +12,7 @@ mod setup;
 //      # 0xAB = Yubico extension (of course...), TouchPolicy, 0x2 =
 //      AB 01 02
 
-#[test]
+#[test_log::test]
 fn gen_keypair() {
     let _cmd = cmd!("00 47 00 9A 0B  AC 09  80 01 11  AA 01 02  AB 01 02");
 

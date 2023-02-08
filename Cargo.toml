@@ -51,8 +51,8 @@ stoppable_thread = "0.2.1"
 expectrl = "0.6.0"
 
 # Examples
-trussed-usbip = { git = "https://github.com/trussed-dev/pc-usbip-runner", default-features = false, features = ["ccid"]}
-usbd-ccid = { git = "https://github.com/Nitrokey/nitrokey-3-firmware", features = ["highspeed-usb"]}
+trussed-usbip = { git = "https://github.com/trussed-dev/pc-usbip-runner", default-features = false, features = ["ccid"], rev = "d2957b6c24c2b0cafbbfacd6fecd62c80943630b"}
+usbd-ccid = { version = "0.2.0", features = ["highspeed-usb"]}
 rand = "0.8.5"
 
 [features]

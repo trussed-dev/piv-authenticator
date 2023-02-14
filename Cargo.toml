@@ -28,12 +28,13 @@ hex-literal = "0.3"
 interchange = "0.2.2"
 iso7816 = "0.1"
 serde = { version = "1", default-features = false, features = ["derive"] }
-trussed = { version = "0.1", features = ["rsa2048", "rsa4096"] }
+trussed = { version = "0.1" }
 untrusted = "0.9"
 vpicc = { version = "0.1.0", optional = true }
 log = "0.4"
 heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
+trussed-rsa-alloc = { git = "https://github.com/Nitrokey/trussed-rsa-backend.git", rev = "a39ceceeb6c5faecec567d6b1b2ed3d456951c07" }
 
 [dev-dependencies]
 littlefs2 = "0.3.2"
@@ -71,8 +72,9 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey-4"}
-littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-1" }
+# trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey-4"}
+trussed = { git = "https://github.com/trussed-dev/trussed", rev = "d9276a689d68ffeb4c5d9ac635b18232be172f45"}
+# littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-1" }
 
 [profile.dev.package.rsa]
 opt-level = 2

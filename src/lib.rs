@@ -1068,27 +1068,27 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 reply.prepend_len(offset)?;
             }
             AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
+                use trussed_rsa_alloc::RsaPublicParts;
                 reply.expand(&[0x7F, 0x49])?;
                 let offset = reply.len();
-                let serialized_n = syscall!(self.trussed.serialize_key(
+                let tmp = syscall!(self.trussed.serialize_key(
                     parsed_mechanism.key_mechanism(),
                     public_key,
-                    trussed::types::KeySerialization::RsaN
+                    trussed::types::KeySerialization::RsaParts
                 ))
                 .serialized_key;
+                let serialized: RsaPublicParts =
+                    trussed::postcard_deserialize(&tmp).map_err(|_err| {
+                        error!("Failed to parse RSA parts: {:?}", _err);
+                        Status::UnspecifiedNonpersistentExecutionError
+                    })?;
                 reply.expand(&[0x81])?;
-                reply.append_len(serialized_n.len())?;
-                reply.expand(&serialized_n)?;
+                reply.append_len(serialized.n.len())?;
+                reply.expand(serialized.n)?;
 
-                let serialized_e = syscall!(self.trussed.serialize_key(
-                    parsed_mechanism.key_mechanism(),
-                    public_key,
-                    trussed::types::KeySerialization::RsaE
-                ))
-                .serialized_key;
                 reply.expand(&[0x82])?;
-                reply.append_len(serialized_e.len())?;
-                reply.expand(&serialized_e)?;
+                reply.append_len(serialized.e.len())?;
+                reply.expand(serialized.e)?;
 
                 reply.prepend_len(offset)?;
             }

@@ -39,7 +39,7 @@ fn admin_mutual() {
     });
 }
 
-// I can't understand the error for this specific case, it may be comming from opensc and not us.
+/// Fails because of https://github.com/OpenSC/OpenSC/issues/2658
 #[test_log::test]
 #[ignore]
 fn admin_card() {

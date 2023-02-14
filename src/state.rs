@@ -269,17 +269,17 @@ impl Volatile {
         }
     }
 
-    pub fn take_witness(&mut self) -> Option<Bytes<16>> {
+    pub fn take_single_challenge(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
-            Some(CommandCache::WitnessChallenge(b)) => return Some(b),
+            Some(CommandCache::SingleAuthChallenge(b)) => return Some(b),
             old => self.command_cache = old,
         };
         None
     }
 
-    pub fn take_challenge(&mut self) -> Option<Bytes<16>> {
+    pub fn take_mutual_challenge(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
-            Some(CommandCache::AuthenticateChallenge(b)) => return Some(b),
+            Some(CommandCache::MutualAuthChallenge(b)) => return Some(b),
             old => self.command_cache = old,
         };
         None
@@ -301,13 +301,9 @@ pub struct AppSecurityStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandCache {
-    GetData(GetData),
-    AuthenticateChallenge(Bytes<16>),
-    WitnessChallenge(Bytes<16>),
+    SingleAuthChallenge(Bytes<16>),
+    MutualAuthChallenge(Bytes<16>),
 }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GetData {}
 
 impl Persistent {
     pub const PIN_RETRIES_DEFAULT: u8 = 3;

@@ -65,7 +65,7 @@
                     key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
                 ),
                 expected_status_challenge: IncorrectP1OrP2Parameter,
-                expected_status_response: ConditionsOfUseNotSatisfied,
+                expected_status_response: IncorrectP1OrP2Parameter,
             )
         ]
     ),

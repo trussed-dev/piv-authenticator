@@ -11,7 +11,6 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
-use commands::piv_types::{Algorithms, RsaAlgorithms};
 pub use commands::{Command, YubicoPivExtension};
 use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
@@ -42,11 +41,9 @@ use trussed::{client, syscall, try_syscall};
 
 use constants::*;
 
-pub type Result = iso7816::Result<()>;
+pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
-
-use crate::container::AsymmetricKeyReference;
 
 /// PIV authenticator Trussed app.
 ///
@@ -441,78 +438,262 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
-        reply.expand(&[0x7C])?;
-        let offset = reply.len();
-        let input = derp::Input::from(data);
-        input.read_all(Status::IncorrectDataParameter, |input| {
-            derp::nested(
-                input,
-                Status::IncorrectDataParameter,
-                Status::IncorrectDataParameter,
-                0x7C,
-                |input| {
-                    while !input.at_end() {
-                        let (tag, data) = match derp::read_tag_and_get_value(input) {
-                            Ok((tag, data)) => (tag, data),
-                            Err(_err) => {
-                                warn!("Failed to parse data: {:?}", _err);
-                                return Err(Status::IncorrectDataParameter);
-                            }
-                        };
+        ///  struct
+        struct Auth<'i> {
+            witness: Option<&'i [u8]>,
+            challenge: Option<&'i [u8]>,
+            response: Option<&'i [u8]>,
+            exponentiation: Option<&'i [u8]>,
+        }
 
-                        // part 2 table 7
-                        match tag {
-                            0x80 => self.witness(auth, data, reply.lend())?,
-                            0x81 => self.challenge(auth, data, reply.lend())?,
-                            0x82 => self.response(auth, data, reply.lend())?,
-                            0x85 => self.exponentiation(auth, data, reply.lend())?,
-                            _ => return Err(Status::IncorrectDataParameter),
-                        }
-                    }
-                    Ok(())
-                },
-            )
+        let input = tlv::get_do(&[0x007C], data).ok_or_else(|| {
+            warn!("No 0x7C do in GENERAL AUTHENTICATE");
+            Status::IncorrectDataParameter
         })?;
-        reply.prepend_len(offset)
+
+        let parsed = Auth {
+            witness: tlv::get_do(&[0x80], input),
+            challenge: tlv::get_do(&[0x81], input),
+            response: tlv::get_do(&[0x82], input),
+            exponentiation: tlv::get_do(&[0x85], input),
+        };
+        match parsed {
+            Auth {
+                witness: None,
+                challenge: Some(c),
+                response: Some([]),
+                exponentiation: None,
+            } => self.sign(auth, c, reply.lend())?,
+            Auth {
+                witness: None,
+                challenge: None,
+                response: Some([]),
+                exponentiation: Some(p),
+            } => self.key_agreement(auth, p, reply.lend())?,
+            Auth {
+                witness: None,
+                challenge: Some([]),
+                response: None,
+                exponentiation: None,
+            } => self.single_auth_1(auth, reply.lend())?,
+            Auth {
+                witness: None,
+                challenge: None,
+                response: Some(c),
+                exponentiation: None,
+            } => self.single_auth_2(auth, c)?,
+            Auth {
+                witness: Some([]),
+                challenge: None,
+                response: None,
+                exponentiation: None,
+            } => self.mutual_auth_1(auth, reply.lend())?,
+            Auth {
+                witness: Some(r),
+                challenge: Some(c),
+                response: None,
+                exponentiation: None,
+            } => self.mutual_auth_2(auth, r, c, reply.lend())?,
+            _ => todo!(),
+        }
+        Ok(())
     }
 
-    pub fn response<const R: usize>(
-        &mut self,
+    /// Validate the auth parameters for managememt authentication operations
+    fn validate_auth_management(
+        &self,
         auth: GeneralAuthenticate,
-        data: derp::Input<'_>,
-        reply: Reply<'_, R>,
-    ) -> Result {
-        info!("Request for response");
-
-        if data.is_empty() {
-            info!("Empty data");
-            return Ok(());
-        }
-        if auth.key_reference != KeyReference::PivCardApplicationAdministration {
-            warn!("Response with bad key ref: {:?}", auth);
+    ) -> Result<KeyWithAlg<AdministrationAlgorithm>> {
+        if auth.key_reference != AuthenticateKeyReference::PivCardApplicationAdministration {
+            warn!("Attempt to authenticate with an invalid key");
             return Err(Status::IncorrectP1OrP2Parameter);
         }
-
-        match self.state.volatile.command_cache.take() {
-            Some(CommandCache::AuthenticateChallenge(original)) => {
-                info!("Got response for challenge");
-                self.admin_challenge_validate(auth.algorithm, data, original, reply)
-            }
-            Some(CommandCache::WitnessChallenge(original)) => {
-                info!("Got response for challenge");
-                self.admin_witness_validate(auth.algorithm, data, original, reply)
-            }
-            _ => {
-                warn!("Response without a challenge or a witness");
-                Err(Status::ConditionsOfUseNotSatisfied)
-            }
+        if auth.algorithm != self.state.persistent.keys.administration.alg {
+            warn!("Attempt to authenticate with an invalid algo");
+            return Err(Status::IncorrectP1OrP2Parameter);
         }
+        Ok(self.state.persistent.keys.administration)
     }
 
-    pub fn exponentiation<const R: usize>(
+    fn single_auth_1<const R: usize>(
         &mut self,
         auth: GeneralAuthenticate,
-        data: derp::Input<'_>,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        info!("Single auth 1");
+        let key = self.validate_auth_management(auth)?;
+        let pl = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+        self.state.volatile.command_cache = Some(CommandCache::SingleAuthChallenge(
+            Bytes::from_slice(&pl).unwrap(),
+        ));
+        let data = syscall!(self
+            .trussed
+            .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
+        .ciphertext;
+
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x81])?;
+            reply.append_len(data.len())?;
+            reply.expand(&data)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
+    }
+
+    fn single_auth_2(&mut self, auth: GeneralAuthenticate, response: &[u8]) -> Result {
+        info!("Single auth 2");
+        use subtle::ConstantTimeEq;
+
+        let key = self.validate_auth_management(auth)?;
+        if response.len() != key.alg.challenge_length() {
+            warn!("Incorrect challenge length");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let Some(plaintext_challenge) = self.state.volatile.take_single_challenge() else {
+            warn!("Missing cached challenge for auth");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if response.ct_eq(&plaintext_challenge).into() {
+            warn!("Bad auth challenge");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        self.state
+            .volatile
+            .app_security_status
+            .administrator_verified = true;
+        Ok(())
+    }
+    fn mutual_auth_1<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        info!("Mutual auth 1");
+        let key = self.validate_auth_management(auth)?;
+        let pl = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+        self.state.volatile.command_cache = Some(CommandCache::MutualAuthChallenge(
+            Bytes::from_slice(&pl).unwrap(),
+        ));
+        let data = syscall!(self
+            .trussed
+            .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
+        .ciphertext;
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x80])?;
+            reply.append_len(data.len())?;
+            reply.expand(&data)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
+    }
+    fn mutual_auth_2<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        response: &[u8],
+        challenge: &[u8],
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        use subtle::ConstantTimeEq;
+
+        info!("Mutual auth 2");
+        let key = self.validate_auth_management(auth)?;
+        if challenge.len() != key.alg.challenge_length() {
+            warn!("Incorrect challenge length");
+            return Err(Status::IncorrectDataParameter);
+        }
+        if response.len() != key.alg.challenge_length() {
+            warn!("Incorrect response length");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let Some(plaintext_challenge) = self.state.volatile.take_mutual_challenge() else {
+            warn!("Missing cached challenge for auth");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if challenge.ct_eq(&plaintext_challenge).into() {
+            warn!("Bad auth challenge");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let challenge_response =
+            syscall!(self
+                .trussed
+                .encrypt(key.alg.mechanism(), key.id, challenge, &[], None))
+            .ciphertext;
+
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x82])?;
+            reply.append_len(challenge_response.len())?;
+            reply.expand(&challenge_response)?;
+        }
+        reply.prepend_len(offset)?;
+
+        self.state
+            .volatile
+            .app_security_status
+            .administrator_verified = true;
+        Ok(())
+    }
+
+    // Sign a message. For RSA, since the key is exposed as a raw key, so it can also be used for decryption
+    fn sign<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        message: &[u8],
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        info!("Request for sign");
+
+        let Ok(key_ref) = auth.key_reference.try_into() else {
+            warn!("Attempt to sign with an incorrect key");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        };
+        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
+            warn!("Attempt to use unset key");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if alg != auth.algorithm {
+            warn!("Bad algorithm: {:?}", auth.algorithm);
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+        if !self.state.volatile.app_security_status.pin_verified {
+            warn!("Authenticate challenge without pin validated");
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        let response = syscall!(self.trussed.sign(
+            alg.sign_mechanism(),
+            id,
+            message,
+            trussed::types::SignatureSerialization::Raw,
+        ))
+        .signature;
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x82])?;
+            reply.append_len(response.len())?;
+            reply.expand(&response)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
+    }
+
+    fn key_agreement<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        data: &[u8],
         mut reply: Reply<'_, R>,
     ) -> Result {
         info!("Request for exponentiation");
@@ -538,7 +719,6 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        let data = data.as_slice_less_safe();
         if data.first() != Some(&0x04) {
             warn!("Bad data format for ECDH");
             return Err(Status::IncorrectDataParameter);
@@ -574,401 +754,15 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         syscall!(self.trussed.delete(public_key));
         syscall!(self.trussed.delete(shared_secret));
 
-        reply.expand(&[0x82])?;
-        reply.append_len(serialized_secret.len())?;
-        reply.expand(&serialized_secret)
-    }
-
-    pub fn challenge<const R: usize>(
-        &mut self,
-        auth: GeneralAuthenticate,
-        data: derp::Input<'_>,
-        reply: Reply<'_, R>,
-    ) -> Result {
-        if data.is_empty() {
-            self.request_for_challenge(auth, reply)
-        } else {
-            use AuthenticateKeyReference::*;
-            match auth.key_reference {
-                PivCardApplicationAdministration => {
-                    self.admin_challenge(auth.algorithm, data, reply)
-                }
-                SecureMessaging => Err(Status::FunctionNotSupported),
-                PivAuthentication | CardAuthentication | DigitalSignature => self.sign_challenge(
-                    auth.algorithm,
-                    auth.key_reference.try_into().map_err(|_| {
-                        if cfg!(debug_assertions) {
-                            // To find errors more easily in tests and fuzzing but not crash in production
-                            panic!("Failed to convert key reference: {:?}", auth.key_reference);
-                        } else {
-                            error!("Failed to convert key reference: {:?}", auth.key_reference);
-                            Status::UnspecifiedPersistentExecutionError
-                        }
-                    })?,
-                    data,
-                    reply,
-                ),
-                KeyManagement | Retired01 | Retired02 | Retired03 | Retired04 | Retired05
-                | Retired06 | Retired07 | Retired08 | Retired09 | Retired10 | Retired11
-                | Retired12 | Retired13 | Retired14 | Retired15 | Retired16 | Retired17
-                | Retired18 | Retired19 | Retired20 => self.agreement_challenge(
-                    auth.algorithm,
-                    auth.key_reference.try_into().map_err(|_| {
-                        if cfg!(debug_assertions) {
-                            // To find errors more easily in tests and fuzzing but not crash in production
-                            panic!("Failed to convert key reference: {:?}", auth.key_reference);
-                        } else {
-                            error!("Failed to convert key reference: {:?}", auth.key_reference);
-                            Status::UnspecifiedPersistentExecutionError
-                        }
-                    })?,
-                    data,
-                    reply,
-                ),
-            }
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x82])?;
+            reply.append_len(serialized_secret.len())?;
+            reply.expand(&serialized_secret)?;
         }
-    }
-
-    pub fn agreement_challenge<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        key_ref: AsymmetricKeyReference,
-        data: derp::Input<'_>,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
-            warn!("Attempt to use unset key");
-            return Err(Status::ConditionsOfUseNotSatisfied);
-        };
-
-        if alg != requested_alg {
-            warn!("Bad algorithm: {:?}", requested_alg);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-        let rsa_alg: RsaAlgorithms = alg.try_into().map_err(|_| {
-            warn!("Tried to perform agreement on a challenge with a non-rsa algorithm");
-            Status::ConditionsOfUseNotSatisfied
-        })?;
-
-        let response = try_syscall!(self.trussed.decrypt(
-            rsa_alg.mechanism(),
-            id,
-            data.as_slice_less_safe(),
-            &[],
-            &[],
-            &[]
-        ))
-        .map_err(|_err| {
-            warn!("Failed to decrypt challenge: {:?}", _err);
-            Status::IncorrectDataParameter
-        })?
-        .plaintext
-        .ok_or_else(|| {
-            warn!("Failed to decrypt challenge, no plaintext");
-            Status::IncorrectDataParameter
-        })?;
-        reply.expand(&[0x82])?;
-        reply.append_len(response.len())?;
-        reply.expand(&response)?;
+        reply.prepend_len(offset)?;
         Ok(())
-    }
-
-    pub fn sign_challenge<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        key_ref: AsymmetricKeyReference,
-        data: derp::Input<'_>,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
-            warn!("Attempt to use unset key");
-            return Err(Status::ConditionsOfUseNotSatisfied);
-        };
-
-        if alg != requested_alg {
-            warn!("Bad algorithm: {:?}", requested_alg);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-        if !self.state.volatile.app_security_status.pin_verified {
-            warn!("Authenticate challenge without pin validated");
-            return Err(Status::SecurityStatusNotSatisfied);
-        }
-
-        // Trussed doesn't support signing pre-padded with RSA, so we remove it.
-        // PKCS#1v1.5 padding is 00 01 FF…FF 00
-        let data = data.as_slice_less_safe();
-        if data.len() < 3 {
-            warn!("Attempt to sign too little data");
-            return Err(Status::IncorrectDataParameter);
-        }
-        if data[0] != 0 || data[1] != 1 {
-            warn!("Attempt to sign with bad padding");
-            return Err(Status::IncorrectDataParameter);
-        }
-        let mut data = &data[2..];
-        loop {
-            let Some(b) = data.first() else {
-                warn!("Sign is only padding");
-                return Err(Status::IncorrectDataParameter);
-            };
-            data = &data[1..];
-            if *b == 0xFF {
-                continue;
-            }
-            if *b == 0 {
-                break;
-            }
-            warn!("Invalid padding value");
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        let response = syscall!(self.trussed.sign(
-            alg.sign_mechanism(),
-            id,
-            data,
-            trussed::types::SignatureSerialization::Raw,
-        ))
-        .signature;
-        reply.expand(&[0x82])?;
-        reply.append_len(response.len())?;
-        reply.expand(&response)?;
-        Ok(())
-    }
-
-    pub fn admin_challenge<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        data: derp::Input<'_>,
-        reply: Reply<'_, R>,
-    ) -> Result {
-        info!("Response for challenge ");
-        match self.state.volatile.take_challenge() {
-            Some(original) => self.admin_challenge_validate(requested_alg, data, original, reply),
-            None => self.admin_challenge_respond(requested_alg, data, reply),
-        }
-    }
-
-    pub fn admin_challenge_respond<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        data: derp::Input<'_>,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        let admin = &self.state.persistent.keys.administration;
-        if admin.alg != requested_alg {
-            warn!("Bad algorithm: {:?}", requested_alg);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-
-        if data.len() != admin.alg.challenge_length() {
-            warn!("Bad challenge length");
-            return Err(Status::IncorrectDataParameter);
-        }
-
-        let response = syscall!(self.trussed.encrypt(
-            admin.alg.mechanism(),
-            admin.id,
-            data.as_slice_less_safe(),
-            &[],
-            None
-        ))
-        .ciphertext;
-
-        info!(
-            "Challenge: {:02x?}, response: {:02x?}",
-            data.as_slice_less_safe(),
-            &*response
-        );
-
-        reply.expand(&[0x82])?;
-        reply.append_len(response.len())?;
-        reply.expand(&response)
-    }
-
-    pub fn admin_challenge_validate<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        data: derp::Input<'_>,
-        original: Bytes<16>,
-        _reply: Reply<'_, R>,
-    ) -> Result {
-        if self.state.persistent.keys.administration.alg != requested_alg {
-            warn!(
-                "Incorrect challenge validation algorithm. Expected: {:?}, got {:?}",
-                self.state.persistent.keys.administration.alg, requested_alg
-            );
-        }
-        use subtle::ConstantTimeEq;
-        if data.as_slice_less_safe().ct_eq(&original).into() {
-            info!("Correct challenge validation");
-            self.state
-                .volatile
-                .app_security_status
-                .administrator_verified = true;
-            Ok(())
-        } else {
-            warn!("Incorrect challenge validation");
-            Err(Status::UnspecifiedCheckingError)
-        }
-    }
-
-    pub fn request_for_challenge<const R: usize>(
-        &mut self,
-        auth: GeneralAuthenticate,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        info!("Request for challenge ");
-
-        let alg = self.state.persistent.keys.administration.alg;
-        if alg != auth.algorithm {
-            warn!("Bad algorithm: {:?}", auth.algorithm);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-        let challenge = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
-        let ciphertext = syscall!(self.trussed.encrypt(
-            alg.mechanism(),
-            self.state.persistent.keys.administration.id,
-            &challenge,
-            &[],
-            None
-        ))
-        .ciphertext;
-        self.state.volatile.command_cache = Some(CommandCache::AuthenticateChallenge(
-            Bytes::from_slice(&ciphertext).unwrap(),
-        ));
-
-        reply.expand(&[0x81])?;
-        reply.append_len(challenge.len())?;
-        reply.expand(&challenge)
-    }
-    pub fn witness<const R: usize>(
-        &mut self,
-        auth: GeneralAuthenticate,
-        data: derp::Input<'_>,
-        reply: Reply<'_, R>,
-    ) -> Result {
-        if data.is_empty() {
-            self.request_for_witness(auth, reply)
-        } else {
-            use AuthenticateKeyReference::*;
-            match auth.key_reference {
-                PivCardApplicationAdministration => self.admin_witness(auth.algorithm, data, reply),
-                _ => Err(Status::FunctionNotSupported),
-            }
-        }
-    }
-
-    pub fn request_for_witness<const R: usize>(
-        &mut self,
-        auth: GeneralAuthenticate,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        info!("Request for witness");
-
-        let alg = self.state.persistent.keys.administration.alg;
-        if alg != auth.algorithm {
-            warn!("Bad algorithm: {:?}", auth.algorithm);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-        let data = syscall!(self.trussed.random_bytes(alg.challenge_length())).bytes;
-        self.state.volatile.command_cache = Some(CommandCache::WitnessChallenge(
-            Bytes::from_slice(&data).unwrap(),
-        ));
-        info!("{:02x?}", &*data);
-
-        let challenge = syscall!(self.trussed.encrypt(
-            alg.mechanism(),
-            self.state.persistent.keys.administration.id,
-            &data,
-            &[],
-            None
-        ))
-        .ciphertext;
-
-        reply.expand(&[0x80])?;
-        reply.append_len(challenge.len())?;
-        reply.expand(&challenge)
-    }
-
-    pub fn admin_witness<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        data: derp::Input<'_>,
-        reply: Reply<'_, R>,
-    ) -> Result {
-        info!("Admin witness");
-        match self.state.volatile.take_witness() {
-            Some(original) => self.admin_witness_validate(requested_alg, data, original, reply),
-            None => self.admin_witness_respond(requested_alg, data, reply),
-        }
-    }
-
-    pub fn admin_witness_respond<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        data: derp::Input<'_>,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
-        let admin = &self.state.persistent.keys.administration;
-        if admin.alg != requested_alg {
-            warn!("Bad algorithm: {:?}", requested_alg);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-
-        if data.len() != admin.alg.challenge_length() {
-            warn!(
-                "Bad challenge length. Got {}, expected {} for algorithm: {:?}",
-                data.len(),
-                admin.alg.challenge_length(),
-                admin.alg
-            );
-            return Err(Status::IncorrectDataParameter);
-        }
-        let response = syscall!(self.trussed.decrypt(
-            admin.alg.mechanism(),
-            admin.id,
-            data.as_slice_less_safe(),
-            &[],
-            &[],
-            &[]
-        ))
-        .plaintext;
-
-        let Some(response) = response else {
-            warn!("Failed to decrypt witness");
-            return Err(Status::IncorrectDataParameter);
-        };
-
-        reply.expand(&[0x82])?;
-        reply.append_len(response.len())?;
-        reply.expand(&response)
-    }
-
-    pub fn admin_witness_validate<const R: usize>(
-        &mut self,
-        requested_alg: Algorithms,
-        data: derp::Input<'_>,
-        original: Bytes<16>,
-        _reply: Reply<'_, R>,
-    ) -> Result {
-        use subtle::ConstantTimeEq;
-        if self.state.persistent.keys.administration.alg != requested_alg {
-            warn!(
-                "Incorrect witness validation algorithm. Expected: {:?}, got {:?}",
-                self.state.persistent.keys.administration.alg, requested_alg
-            );
-        }
-        if data.as_slice_less_safe().ct_eq(&original).into() {
-            info!("Correct witness validation");
-            self.state
-                .volatile
-                .app_security_status
-                .administrator_verified = true;
-            Ok(())
-        } else {
-            warn!("Incorrect witness validation");
-            Err(Status::UnspecifiedCheckingError)
-        }
     }
 
     pub fn generate_asymmetric_keypair<const R: usize>(

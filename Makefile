@@ -16,8 +16,12 @@ test:
 
 .PHONY: check
 check:
+	RUSTLFAGS='-Dwarnings' cargo check --all-features --all-targets
+
+.PHONY: lint
+lint:
 	cargo fmt --check
-	cargo check --all-targets --all-features
+	RUSTLFAGS='-Dwarnings' cargo check --all-features --all-targets
 	cargo clippy --all-targets --all-features -- -Dwarnings
 	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
 	reuse lint
@@ -31,5 +35,5 @@ example:
 	cargo run --example virtual --features virtual 
 	
 .PHONY: ci
-ci: check tarpaulin
+ci: lint tarpaulin
 	

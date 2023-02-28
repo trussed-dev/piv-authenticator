@@ -17,7 +17,7 @@ pub fn with_vsc<F: FnOnce() -> R, R>(f: F) -> R {
 
     let (tx, rx) = mpsc::channel();
     let handle = spawn(move |stopped| {
-        trussed::virt::with_ram_client("opcard", |client| {
+        trussed_rsa_alloc::virt::with_ram_client("opcard", |client| {
             let card = Authenticator::new(client);
             let mut virtual_card = VirtualCard::new(card);
             let mut result = Ok(());

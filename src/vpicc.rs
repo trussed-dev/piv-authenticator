@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 use iso7816::{command::FromSliceError, Command, Status};
-use trussed::virt::{Client, Ram};
+use trussed::virt::Ram;
+use trussed_rsa_alloc::virt::Client;
 
 use std::convert::{TryFrom, TryInto};
 

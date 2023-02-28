@@ -38,6 +38,15 @@ fn generate() {
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
     });
+    with_vsc(|| {
+        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456").unwrap();
+        p.expect(Regex(
+            "ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}",
+        ))
+        .unwrap();
+        p.expect(Eof).unwrap();
+        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+    });
 }
 
 #[test_log::test]

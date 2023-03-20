@@ -17,7 +17,7 @@ mod setup;
 //       # actual data
 //       88 1A 89 18 AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
 
-#[test]
+#[test_log::test]
 fn put_data() {
     setup::piv(|_piv| {
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Nitrokey GmbH
+// Copyright (C) 2022 Nicolas Stalder AND Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
 #![cfg(feature = "virtual")]
 
@@ -6,8 +6,10 @@ mod setup;
 
 use std::borrow::Cow;
 
+use aes::Aes256Enc;
 use hex_literal::hex;
 use serde::Deserialize;
+use trussed::types::GenericArray;
 
 // iso7816::Status doesn't support serde
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -36,6 +38,51 @@ enum Status {
     UnspecifiedCheckingError,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Deserialize)]
+pub enum Algorithm {
+    Tdes = 0x3,
+    Rsa1024 = 0x6,
+    Rsa2048 = 0x7,
+    Aes128 = 0x8,
+    Aes192 = 0xA,
+    Aes256 = 0xC,
+    P256 = 0x11,
+    P384 = 0x14,
+
+    P521 = 0x15,
+    // non-standard!
+    Rsa3072 = 0xE0,
+    Rsa4096 = 0xE1,
+    Ed25519 = 0xE2,
+    X25519 = 0xE3,
+    Ed448 = 0xE4,
+    X448 = 0xE5,
+
+    // non-standard! picked by Alex, but maybe due for removal
+    P256Sha1 = 0xF0,
+    P256Sha256 = 0xF1,
+    P384Sha1 = 0xF2,
+    P384Sha256 = 0xF3,
+    P384Sha384 = 0xF4,
+}
+impl Algorithm {
+    pub fn challenge_len(self) -> usize {
+        match self {
+            Self::Tdes => 8,
+            Self::Aes256 => 16,
+            _ => panic!(),
+        }
+    }
+
+    pub fn key_len(self) -> usize {
+        match self {
+            Self::Tdes => 24,
+            Self::Aes256 => 32,
+            _ => panic!(),
+        }
+    }
+}
+
 fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
     let mut buf = heapless::Vec::new();
     if let Ok(len) = u8::try_from(len) {
@@ -52,7 +99,6 @@ fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
     buf
 }
 
-#[allow(unused)]
 fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     let mut buf = Vec::from(tag);
     buf.extend_from_slice(&serialize_len(data.len()));
@@ -60,7 +106,6 @@ fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     buf
 }
 
-#[allow(unused)]
 fn build_command(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8], le: u16) -> Vec<u8> {
     let mut res = vec![cla, ins, p1, p2];
     let lc = data.len();
@@ -152,8 +197,14 @@ enum OutputMatcher {
     Len(usize),
     // The () at the end are here to workaround a compiler bug. See:
     // https://github.com/rust-lang/rust/issues/89940#issuecomment-1282321806
-    And(Cow<'static, [OutputMatcher]>, #[serde(default)] ()),
-    Or(Cow<'static, [OutputMatcher]>, #[serde(default)] ()),
+    All(
+        #[serde(default)] Cow<'static, [OutputMatcher]>,
+        #[serde(default)] (),
+    ),
+    Any(
+        #[serde(default)] Cow<'static, [OutputMatcher]>,
+        #[serde(default)] (),
+    ),
     /// HEX data
     Data(Cow<'static, str>),
     Bytes(Cow<'static, [u8]>),
@@ -168,7 +219,7 @@ impl Default for OutputMatcher {
 
 fn parse_hex(data: &str) -> Vec<u8> {
     let tmp: String = data.split_whitespace().collect();
-    hex::decode(&tmp).unwrap()
+    hex::decode(tmp).unwrap()
 }
 
 impl OutputMatcher {
@@ -180,20 +231,41 @@ impl OutputMatcher {
                 data == parse_hex(expected)
             }
             Self::Bytes(expected) => {
-                println!("Validating output with {expected:x?}");
+                println!("Validating output with {expected:02x?}");
                 data == &**expected
             }
             Self::Len(len) => data.len() == *len,
-            Self::And(matchers, _) => matchers.iter().filter(|m| !m.validate(data)).count() == 0,
-            Self::Or(matchers, _) => matchers.iter().filter(|m| m.validate(data)).count() != 0,
+            Self::All(matchers, _) => matchers.iter().filter(|m| !m.validate(data)).count() == 0,
+            Self::Any(matchers, _) => matchers.iter().filter(|m| m.validate(data)).count() != 0,
         }
     }
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+struct ManagementKey {
+    algorithm: Algorithm,
+    key: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 enum IoCmd {
     IoData {
+        input: String,
+        #[serde(default)]
+        output: OutputMatcher,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    GetData {
+        input: String,
+        #[serde(default)]
+        output: OutputMatcher,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    PutData {
         input: String,
         #[serde(default)]
         output: OutputMatcher,
@@ -208,10 +280,23 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    SetManagementKey {
+        key: ManagementKey,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    AuthenticateManagement {
+        key: ManagementKey,
+        #[serde(default)]
+        expected_status_challenge: Status,
+        #[serde(default)]
+        expected_status_response: Status,
+    },
     Select,
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
+const MATCH_ANY: OutputMatcher = OutputMatcher::All(Cow::Borrowed(&[]), ());
 
 impl IoCmd {
     fn run(&self, card: &mut setup::Piv) {
@@ -221,14 +306,57 @@ impl IoCmd {
                 output,
                 expected_status,
             } => Self::run_iodata(input, output, *expected_status, card),
+            Self::GetData {
+                input,
+                output,
+                expected_status,
+            } => Self::run_get_data(input, output, *expected_status, card),
+            Self::PutData {
+                input,
+                output,
+                expected_status,
+            } => Self::run_put_data(input, output, *expected_status, card),
             Self::VerifyDefaultApplicationPin { expected_status } => {
                 Self::run_verify_default_application_pin(*expected_status, card)
             }
             Self::VerifyDefaultGlobalPin { expected_status } => {
                 Self::run_verify_default_global_pin(*expected_status, card)
             }
+            Self::AuthenticateManagement {
+                key,
+                expected_status_challenge,
+                expected_status_response,
+            } => Self::run_authenticate_management(
+                key.algorithm,
+                &key.key,
+                *expected_status_challenge,
+                *expected_status_response,
+                card,
+            ),
+            Self::SetManagementKey {
+                key,
+                expected_status,
+            } => Self::run_set_administration_key(key.algorithm, &key.key, *expected_status, card),
             Self::Select => Self::run_select(card),
         }
+    }
+
+    fn run_set_administration_key(
+        alg: Algorithm,
+        key: &str,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        let mut key_data = parse_hex(key);
+        let mut data = vec![alg as u8, 0x9b, key_data.len() as u8];
+        data.append(&mut key_data);
+
+        Self::run_bytes(
+            &build_command(0x00, 0xff, 0xff, 0xff, &data, 0),
+            &MATCH_ANY,
+            expected_status,
+            card,
+        );
     }
 
     fn run_bytes(
@@ -236,8 +364,8 @@ impl IoCmd {
         output: &OutputMatcher,
         expected_status: Status,
         card: &mut setup::Piv,
-    ) {
-        println!("Command: {:x?}", input);
+    ) -> heapless::Vec<u8, 1024> {
+        println!("Command: {input:x?}");
         let mut rep: heapless::Vec<u8, 1024> = heapless::Vec::new();
         let cmd: iso7816::Command<{ setup::COMMAND_SIZE }> = iso7816::Command::try_from(input)
             .unwrap_or_else(|err| {
@@ -252,11 +380,12 @@ impl IoCmd {
         println!("Output: {:?}\nStatus: {status:?}", hex::encode(&rep));
 
         if !output.validate(&rep) {
-            panic!("Bad output. Expected {:?}", output);
+            panic!("Bad output. Expected {output:02x?}");
         }
         if status != expected_status {
-            panic!("Bad status. Expected {:?}", expected_status);
+            panic!("Bad status. Expected {expected_status:?}");
         }
+        rep
     }
 
     fn run_iodata(
@@ -265,7 +394,71 @@ impl IoCmd {
         expected_status: Status,
         card: &mut setup::Piv,
     ) {
-        Self::run_bytes(&parse_hex(input), output, expected_status, card)
+        Self::run_bytes(&parse_hex(input), output, expected_status, card);
+    }
+
+    fn run_get_data(
+        input: &str,
+        output: &OutputMatcher,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        Self::run_bytes(
+            &build_command(0x00, 0xCB, 0x3F, 0xFF, &parse_hex(input), 0),
+            output,
+            expected_status,
+            card,
+        );
+    }
+
+    fn run_put_data(
+        input: &str,
+        output: &OutputMatcher,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        Self::run_bytes(
+            &build_command(0x00, 0xDB, 0x3F, 0xFF, &parse_hex(input), 0),
+            output,
+            expected_status,
+            card,
+        );
+    }
+
+    fn run_authenticate_management(
+        alg: Algorithm,
+        key: &str,
+        expected_status_challenge: Status,
+        expected_status_response: Status,
+        card: &mut setup::Piv,
+    ) {
+        use des::{
+            cipher::{BlockEncrypt, KeyInit},
+            TdesEde3,
+        };
+        let command = build_command(0x00, 0x87, alg as u8, 0x9B, &hex!("7C 02 81 00"), 0);
+        let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
+        let key = parse_hex(key);
+        if expected_status_challenge != Status::Success {
+            res = heapless::Vec::from_slice(&vec![0; alg.challenge_len() + 6]).unwrap();
+        }
+
+        // Remove header
+        let challenge = &mut res[4..][..alg.challenge_len()];
+        match alg {
+            Algorithm::Tdes => {
+                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
+                cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
+            }
+            Algorithm::Aes256 => {
+                let cipher = Aes256Enc::new(GenericArray::from_slice(&key));
+                cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
+            }
+            _ => panic!(),
+        }
+        let second_data = tlv(&[0x7C], &tlv(&[0x82], challenge));
+        let command = build_command(0x00, 0x87, alg as u8, 0x9B, &second_data, 0);
+        Self::run_bytes(&command, &MATCH_ANY, expected_status_response, card);
     }
 
     fn run_verify_default_global_pin(expected_status: Status, card: &mut setup::Piv) {
@@ -274,21 +467,22 @@ impl IoCmd {
             &MATCH_EMPTY,
             expected_status,
             card,
-        )
+        );
     }
+
     fn run_verify_default_application_pin(expected_status: Status, card: &mut setup::Piv) {
         Self::run_bytes(
             &hex!("00 20 00 80 08 313233343536FFFF"),
             &MATCH_EMPTY,
             expected_status,
             card,
-        )
+        );
     }
 
     fn run_select(card: &mut setup::Piv) {
         let matcher = OutputMatcher::Bytes(Cow::Borrowed(&hex!(
             "
-            61 63 // Card application property template
+            61 66 // Card application property template
                 4f 06 000010000100 // Application identifier
                 50 0c 536f6c6f4b65797320504956 // Application label = b\"Solokeys PIV\"
 
@@ -296,12 +490,13 @@ impl IoCmd {
                 5f50 2d 68747470733a2f2f6769746875622e636f6d2f736f6c6f6b6579732f7069762d61757468656e74696361746f72 
             
                 // Cryptographic Algorithm Identifier Template
-                ac 12 
+                ac 15 
                     80 01 03 // TDES - ECB
                     80 01 0c // AES256 - ECB
                     80 01 11 // P-256
                     80 01 e2 // Ed25519
                     80 01 e3 // X25519
+                    80 01 07 // RSA 2048
                     06 01 00
                 // Coexistent Tag Allocation Authority Template 
                 79 07 
@@ -313,7 +508,7 @@ impl IoCmd {
             &matcher,
             Status::Success,
             card,
-        )
+        );
     }
 }
 

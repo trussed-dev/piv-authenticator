@@ -11,11 +11,13 @@ use core::convert::{TryFrom, TryInto};
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
+use crate::container::{Container, KeyReference};
+
 use crate::state::TouchPolicy;
 pub use crate::{
     container::{
-        self as containers, AttestKeyReference, AuthenticateKeyReference,
-        ChangeReferenceKeyReference, GenerateAsymmetricKeyReference, VerifyKeyReference,
+        self as containers, AsymmetricKeyReference, AttestKeyReference, AuthenticateKeyReference,
+        ChangeReferenceKeyReference, GenerateKeyReference, VerifyKeyReference,
     },
     piv_types, Pin, Puk,
 };
@@ -30,7 +32,7 @@ pub enum YubicoPivExtension {
     SetPinRetries,
     Attest(AttestKeyReference),
     GetSerial, // also used via 0x01
-    GetMetadata,
+    GetMetadata(KeyReference),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,14 +53,14 @@ pub enum Command<'l> {
     /// Change PIN or PUK
     ChangeReference(ChangeReference),
     /// If the PIN is blocked, reset it using the PUK
-    ResetPinRetries(ResetPinRetries),
+    ResetRetryCounter(ResetRetryCounter),
     /// The most general purpose method, performing actual cryptographic operations
     ///
     /// In particular, this can also decrypt or similar.
     GeneralAuthenticate(GeneralAuthenticate),
     /// Store a data object / container.
-    PutData(PutData),
-    GenerateAsymmetric(GenerateAsymmetricKeyReference),
+    PutData(PutData<'l>),
+    GenerateAsymmetric(GenerateKeyReference),
 
     /* Yubico commands */
     YkExtension(YubicoPivExtension),
@@ -66,8 +68,8 @@ pub enum Command<'l> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GeneralAuthenticate {
-    algorithm: piv_types::Algorithms,
-    key_reference: AuthenticateKeyReference,
+    pub algorithm: piv_types::Algorithms,
+    pub key_reference: AuthenticateKeyReference,
 }
 
 impl<'l> Command<'l> {
@@ -111,8 +113,7 @@ impl TryFrom<&[u8]> for GetData {
         if tagged_slice.tag() != flexiber::Tag::application(0x1C) {
             return Err(Status::IncorrectDataParameter);
         }
-        let container: containers::Container = containers::Tag::new(tagged_slice.as_bytes())
-            .try_into()
+        let container = containers::Container::try_from(tagged_slice.as_bytes())
             .map_err(|_| Status::IncorrectDataParameter)?;
 
         info!("request to GetData for container {:?}", container);
@@ -218,19 +219,19 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ResetPinRetries {
-    pub padded_pin: [u8; 8],
+pub struct ResetRetryCounter {
+    pub pin: [u8; 8],
     pub puk: [u8; 8],
 }
 
-impl TryFrom<&[u8]> for ResetPinRetries {
+impl TryFrom<&[u8]> for ResetRetryCounter {
     type Error = Status;
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         if data.len() != 16 {
             return Err(Status::IncorrectDataParameter);
         }
         Ok(Self {
-            padded_pin: data[..8].try_into().unwrap(),
+            pin: data[..8].try_into().unwrap(),
             puk: data[8..].try_into().unwrap(),
         })
     }
@@ -246,12 +247,48 @@ pub struct AuthenticateArguments<'l> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PutData {}
+pub enum PutData<'data> {
+    DiscoveryObject(&'data [u8]),
+    BitGroupTemplate(&'data [u8]),
+    Any(Container, &'data [u8]),
+}
 
-impl TryFrom<&[u8]> for PutData {
+impl<'data> TryFrom<&'data [u8]> for PutData<'data> {
     type Error = Status;
-    fn try_from(_data: &[u8]) -> Result<Self, Self::Error> {
-        todo!();
+    fn try_from(data: &'data [u8]) -> Result<Self, Self::Error> {
+        use crate::tlv::take_do;
+        let (tag, inner, rem) = take_do(data).ok_or_else(|| {
+            warn!("Failed to parse PUT DATA: {:02x?}", data);
+            Status::IncorrectDataParameter
+        })?;
+        if matches!(tag, 0x7E | 0x7F61) && !rem.is_empty() {
+            warn!("Empty remainder expected, got: {:02x?}", rem);
+        }
+
+        let container: Container = match tag {
+            0x7E => return Ok(PutData::DiscoveryObject(inner)),
+            0x7F61 => return Ok(PutData::BitGroupTemplate(inner)),
+            0x5C => Container::try_from(inner).map_err(|_| Status::IncorrectDataParameter)?,
+            _ => return Err(Status::IncorrectDataParameter),
+        };
+
+        let (tag, inner, rem) = take_do(rem).ok_or_else(|| {
+            warn!(
+                "Failed to parse PUT DATA's second field: {:02x?}, {:02x?}",
+                data, rem
+            );
+            Status::IncorrectDataParameter
+        })?;
+
+        if !rem.is_empty() {
+            warn!("Empty second remainder expected, got: {:02x?}", rem);
+        }
+
+        if tag != 0x53 {
+            warn!("Expected 0x53 tag, got: 0x{:02x?}", rem);
+        }
+
+        Ok(PutData::Any(container, inner))
     }
 }
 
@@ -310,7 +347,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::ResetRetryCounter, 0x00, 0x80) => {
-                Self::ResetPinRetries(ResetPinRetries::try_from(data.as_slice())?)
+                Self::ResetRetryCounter(ResetRetryCounter::try_from(data.as_slice())?)
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
@@ -327,7 +364,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {
-                Self::GenerateAsymmetric(GenerateAsymmetricKeyReference::try_from(p2)?)
+                Self::GenerateAsymmetric(GenerateKeyReference::try_from(p2)?)
             }
             // (0x00, 0x01, 0x10, 0x00)
             (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {
@@ -359,9 +396,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             (0x00, Instruction::Unknown(0xf8), _, _) => {
                 Self::YkExtension(YubicoPivExtension::GetSerial)
             }
-            (0x00, Instruction::Unknown(0xf7), _, _) => {
-                Self::YkExtension(YubicoPivExtension::GetMetadata)
-            }
+            (0x00, Instruction::Unknown(0xf7), 0x00, reference) => Self::YkExtension(
+                YubicoPivExtension::GetMetadata(KeyReference::try_from(reference)?),
+            ),
 
             _ => return Err(Status::FunctionNotSupported),
         })

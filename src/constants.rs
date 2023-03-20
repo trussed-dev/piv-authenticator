@@ -5,6 +5,8 @@
 
 use hex_literal::hex;
 
+use crate::state::AdministrationAlgorithm;
+
 pub const RID_LENGTH: usize = 5;
 
 // top nibble of first byte is "category", here "A" = International
@@ -269,6 +271,38 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &[u8; 24] = &hex!(
 "
 );
 
+pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm =
+    AdministrationAlgorithm::Tdes;
+
 // stolen from le yubico
-pub const DISCOVERY_OBJECT: &[u8; 20] =
-    b"~\x12O\x0b\xa0\x00\x00\x03\x08\x00\x00\x10\x00\x01\x00_/\x02@\x00";
+pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
+    " 
+    4f 0b // PIV AID
+       a000000308000010000100
+    5f2f 02 // PIN usage Policy
+         4000"
+);
+
+use crate::Container;
+pub const RETIRED_CERTS: [Container; 20] = [
+    Container::RetiredCert01,
+    Container::RetiredCert02,
+    Container::RetiredCert03,
+    Container::RetiredCert04,
+    Container::RetiredCert05,
+    Container::RetiredCert06,
+    Container::RetiredCert07,
+    Container::RetiredCert08,
+    Container::RetiredCert09,
+    Container::RetiredCert10,
+    Container::RetiredCert11,
+    Container::RetiredCert12,
+    Container::RetiredCert13,
+    Container::RetiredCert14,
+    Container::RetiredCert15,
+    Container::RetiredCert16,
+    Container::RetiredCert17,
+    Container::RetiredCert18,
+    Container::RetiredCert19,
+    Container::RetiredCert20,
+];

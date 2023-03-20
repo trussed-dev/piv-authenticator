@@ -2,25 +2,28 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 use core::convert::{TryFrom, TryInto};
+use core::mem::replace;
 
+use flexiber::EncodableHeapless;
+use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
 use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
-    types::{KeyId, Location, PathBuf},
+    types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
 };
 
-use crate::constants::*;
+use crate::piv_types::CardHolderUniqueIdentifier;
+use crate::{constants::*, piv_types::AsymmetricAlgorithms};
+use crate::{
+    container::{AsymmetricKeyReference, Container, ReadAccessRule, SecurityCondition},
+    piv_types::Algorithms,
+};
 
 use crate::{Pin, Puk};
 
-pub enum Key {
-    Ed25519(KeyId),
-    P256(KeyId),
-    X25519(KeyId),
-}
 pub enum PinPolicy {
     Never,
     Once,
@@ -34,128 +37,153 @@ pub enum TouchPolicy {
     Cached,
 }
 
-pub struct Slot {
-    pub key: Option<KeyId>,
-    pub pin_policy: PinPolicy,
-    // touch_policy: TouchPolicy,
-}
-
-impl Default for Slot {
-    fn default() -> Self {
-        Self {
-            key: None,
-            pin_policy: PinPolicy::Once, /*touch_policy: TouchPolicy::Never*/
-        }
+crate::container::enum_subset! {
+    #[derive(Debug, serde::Deserialize, serde::Serialize)]
+    pub enum AdministrationAlgorithm: Algorithms {
+        Tdes,
+        Aes256
     }
 }
 
-impl Slot {
-    pub fn default(name: SlotName) -> Self {
-        use SlotName::*;
-        match name {
-            // Management => Slot { pin_policy: PinPolicy::Never, ..Default::default() },
-            Signature => Slot {
-                pin_policy: PinPolicy::Always,
-                ..Default::default()
-            },
-            Pinless => Slot {
-                pin_policy: PinPolicy::Never,
-                ..Default::default()
-            },
-            _ => Default::default(),
+impl AdministrationAlgorithm {
+    pub fn challenge_length(self) -> usize {
+        match self {
+            Self::Tdes => 8,
+            Self::Aes256 => 16,
+        }
+    }
+
+    pub fn mechanism(self) -> Mechanism {
+        match self {
+            Self::Tdes => Mechanism::Tdes,
+            Self::Aes256 => Mechanism::Aes256Cbc,
+        }
+    }
+
+    pub fn key_len(self) -> usize {
+        match self {
+            Self::Tdes => 24,
+            Self::Aes256 => 32,
         }
     }
 }
 
-pub struct RetiredSlotIndex(u8);
-
-impl core::convert::TryFrom<u8> for RetiredSlotIndex {
-    type Error = u8;
-    fn try_from(i: u8) -> core::result::Result<Self, Self::Error> {
-        if (1..=20).contains(&i) {
-            Ok(Self(i))
-        } else {
-            Err(i)
-        }
-    }
-}
-pub enum SlotName {
-    Identity,
-    Management, // Personalization? Administration?
-    Signature,
-    Decryption, // Management after all?
-    Pinless,
-    Retired(RetiredSlotIndex),
-    Attestation,
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct KeyWithAlg<A> {
+    pub id: KeyId,
+    pub alg: A,
 }
 
-impl SlotName {
-    pub fn default_pin_policy(&self) -> PinPolicy {
-        use PinPolicy::*;
-        use SlotName::*;
-        match *self {
-            Signature => Always,
-            Pinless | Management | Attestation => Never,
-            _ => Once,
-        }
-    }
-
-    pub fn default_slot(&self) -> Slot {
-        Slot {
-            key: None,
-            pin_policy: self.default_pin_policy(),
-        }
-    }
-
-    pub fn reference(&self) -> u8 {
-        use SlotName::*;
-        match *self {
-            Identity => 0x9a,
-            Management => 0x9b,
-            Signature => 0x9c,
-            Decryption => 0x9d,
-            Pinless => 0x9e,
-            Retired(RetiredSlotIndex(i)) => 0x81 + i,
-            Attestation => 0xf9,
-        }
-    }
-    pub fn tag(&self) -> u32 {
-        use SlotName::*;
-        match *self {
-            Identity => 0x5fc105,
-            Management => 0,
-            Signature => 0x5fc10a,
-            Decryption => 0x5fc10b,
-            Pinless => 0x5fc101,
-            Retired(RetiredSlotIndex(i)) => 0x5fc10c + i as u32,
-            Attestation => 0x5fff01,
-        }
-    }
+macro_rules! generate_into_key_with_alg {
+    ($($name:ident),*) => {
+        $(
+            impl From<KeyWithAlg<$name>> for KeyWithAlg<Algorithms> {
+                fn from(other: KeyWithAlg<$name>) -> Self {
+                    KeyWithAlg {
+                        id: other.id,
+                        alg: other.alg.into()
+                    }
+                }
+            }
+        )*
+    };
 }
+
+generate_into_key_with_alg!(AsymmetricAlgorithms, AdministrationAlgorithm);
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Keys {
     // 9a "PIV Authentication Key" (YK: PIV Authentication)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication_key: Option<KeyId>,
+    pub authentication: KeyWithAlg<AsymmetricAlgorithms>,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
-    pub management_key: KeyId,
+    pub administration: KeyWithAlg<AdministrationAlgorithm>,
+    pub is_admin_default: bool,
     // 9c "Digital Signature Key" (YK: Digital Signature)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature_key: Option<KeyId>,
+    pub signature: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9d "Key Management Key" (YK: Key Management)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption_key: Option<KeyId>,
+    pub key_management: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 9e "Card Authentication Key" (YK: Card Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinless_authentication_key: Option<KeyId>,
+    pub card_authentication: Option<KeyWithAlg<AsymmetricAlgorithms>>,
     // 0x82..=0x95 (130-149)
-    pub retired_keys: [Option<KeyId>; 20],
+    pub retired_keys: [Option<KeyWithAlg<AsymmetricAlgorithms>>; 20],
+    // pub secure_messaging
+}
+
+impl Keys {
+    pub fn asymetric_for_reference(
+        &self,
+        key: AsymmetricKeyReference,
+    ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        match key {
+            AsymmetricKeyReference::PivAuthentication => Some(self.authentication),
+            AsymmetricKeyReference::DigitalSignature => self.signature,
+            AsymmetricKeyReference::KeyManagement => self.key_management,
+            AsymmetricKeyReference::CardAuthentication => self.card_authentication,
+            AsymmetricKeyReference::Retired01 => self.retired_keys[1],
+            AsymmetricKeyReference::Retired02 => self.retired_keys[2],
+            AsymmetricKeyReference::Retired03 => self.retired_keys[3],
+            AsymmetricKeyReference::Retired04 => self.retired_keys[4],
+            AsymmetricKeyReference::Retired05 => self.retired_keys[5],
+            AsymmetricKeyReference::Retired06 => self.retired_keys[6],
+            AsymmetricKeyReference::Retired07 => self.retired_keys[7],
+            AsymmetricKeyReference::Retired08 => self.retired_keys[8],
+            AsymmetricKeyReference::Retired09 => self.retired_keys[9],
+            AsymmetricKeyReference::Retired10 => self.retired_keys[10],
+            AsymmetricKeyReference::Retired11 => self.retired_keys[11],
+            AsymmetricKeyReference::Retired12 => self.retired_keys[12],
+            AsymmetricKeyReference::Retired13 => self.retired_keys[13],
+            AsymmetricKeyReference::Retired14 => self.retired_keys[14],
+            AsymmetricKeyReference::Retired15 => self.retired_keys[15],
+            AsymmetricKeyReference::Retired16 => self.retired_keys[16],
+            AsymmetricKeyReference::Retired17 => self.retired_keys[17],
+            AsymmetricKeyReference::Retired18 => self.retired_keys[18],
+            AsymmetricKeyReference::Retired19 => self.retired_keys[19],
+            AsymmetricKeyReference::Retired20 => self.retired_keys[20],
+        }
+    }
+
+    pub fn set_asymetric_for_reference(
+        &mut self,
+        key: AsymmetricKeyReference,
+        new: KeyWithAlg<AsymmetricAlgorithms>,
+    ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        match key {
+            AsymmetricKeyReference::PivAuthentication => {
+                Some(replace(&mut self.authentication, new))
+            }
+            AsymmetricKeyReference::DigitalSignature => self.signature.replace(new),
+            AsymmetricKeyReference::KeyManagement => self.key_management.replace(new),
+            AsymmetricKeyReference::CardAuthentication => self.card_authentication.replace(new),
+            AsymmetricKeyReference::Retired01 => self.retired_keys[1].replace(new),
+            AsymmetricKeyReference::Retired02 => self.retired_keys[2].replace(new),
+            AsymmetricKeyReference::Retired03 => self.retired_keys[3].replace(new),
+            AsymmetricKeyReference::Retired04 => self.retired_keys[4].replace(new),
+            AsymmetricKeyReference::Retired05 => self.retired_keys[5].replace(new),
+            AsymmetricKeyReference::Retired06 => self.retired_keys[6].replace(new),
+            AsymmetricKeyReference::Retired07 => self.retired_keys[7].replace(new),
+            AsymmetricKeyReference::Retired08 => self.retired_keys[8].replace(new),
+            AsymmetricKeyReference::Retired09 => self.retired_keys[9].replace(new),
+            AsymmetricKeyReference::Retired10 => self.retired_keys[10].replace(new),
+            AsymmetricKeyReference::Retired11 => self.retired_keys[11].replace(new),
+            AsymmetricKeyReference::Retired12 => self.retired_keys[12].replace(new),
+            AsymmetricKeyReference::Retired13 => self.retired_keys[13].replace(new),
+            AsymmetricKeyReference::Retired14 => self.retired_keys[14].replace(new),
+            AsymmetricKeyReference::Retired15 => self.retired_keys[15].replace(new),
+            AsymmetricKeyReference::Retired16 => self.retired_keys[16].replace(new),
+            AsymmetricKeyReference::Retired17 => self.retired_keys[17].replace(new),
+            AsymmetricKeyReference::Retired18 => self.retired_keys[18].replace(new),
+            AsymmetricKeyReference::Retired19 => self.retired_keys[19].replace(new),
+            AsymmetricKeyReference::Retired20 => self.retired_keys[20].replace(new),
+        }
+    }
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct State {
-    pub runtime: Runtime,
+    pub volatile: Volatile,
     pub persistent: Option<Persistent>,
 }
 
@@ -165,7 +193,7 @@ impl State {
             self.persistent = Some(Persistent::load_or_initialize(client)?);
         }
         Ok(LoadedState {
-            runtime: &mut self.runtime,
+            volatile: &mut self.volatile,
             persistent: self.persistent.as_mut().unwrap(),
         })
     }
@@ -184,7 +212,7 @@ impl State {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct LoadedState<'t> {
-    pub runtime: &'t mut Runtime,
+    pub volatile: &'t mut Volatile,
     pub persistent: &'t mut Persistent,
 }
 
@@ -202,12 +230,10 @@ pub struct Persistent {
     // pin_hash: Option<[u8; 16]>,
     // Ideally, we'd dogfood a "Monotonic Counter" from `trussed`.
     timestamp: u32,
-    // must be a valid RFC 4122 UUID 1, 2 or 4
-    guid: [u8; 16],
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Runtime {
+pub struct Volatile {
     // aid: Option<
     // consecutive_pin_mismatches: u8,
     pub global_security_status: GlobalSecurityStatus,
@@ -215,59 +241,6 @@ pub struct Runtime {
     pub app_security_status: AppSecurityStatus,
     pub command_cache: Option<CommandCache>,
 }
-
-// pub trait Aid {
-//     const AID: &'static [u8];
-//     const RIGHT_TRUNCATED_LENGTH: usize;
-
-//     fn len() -> usize {
-//         Self::AID.len()
-//     }
-
-//     fn full() -> &'static [u8] {
-//         Self::AID
-//     }
-
-//     fn right_truncated() -> &'static [u8] {
-//         &Self::AID[..Self::RIGHT_TRUNCATED_LENGTH]
-//     }
-
-//     fn pix() -> &'static [u8] {
-//         &Self::AID[5..]
-//     }
-
-//     fn rid() -> &'static [u8] {
-//         &Self::AID[..5]
-//     }
-// }
-
-// #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-// pub enum SelectableAid {
-//     Piv(PivAid),
-//     YubicoOtp(YubicoOtpAid),
-// }
-
-// impl Default for SelectableAid {
-//     fn default() -> Self {
-//         Self::Piv(Default::default())
-//     }
-// }
-
-// #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-// pub struct PivAid {}
-
-// impl Aid for PivAid {
-//     const AID: &'static [u8] = &PIV_AID;
-//     const RIGHT_TRUNCATED_LENGTH: usize = 9;
-// }
-
-// #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-// pub struct YubicoOtpAid {}
-
-// impl Aid for YubicoOtpAid {
-//     const AID: &'static [u8] = &YUBICO_OTP_AID;
-//     const RIGHT_TRUNCATED_LENGTH: usize = 8;
-// }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {}
@@ -277,6 +250,40 @@ pub enum SecurityStatus {
     JustVerified,
     Verified,
     NotVerified,
+}
+
+impl Volatile {
+    pub fn security_valid(&self, condition: SecurityCondition) -> bool {
+        use SecurityCondition::*;
+        match condition {
+            Pin => self.app_security_status.pin_verified,
+            Always => true,
+        }
+    }
+
+    pub fn read_valid(&self, condition: ReadAccessRule) -> bool {
+        use ReadAccessRule::*;
+        match condition {
+            Pin | PinOrOcc => self.app_security_status.pin_verified,
+            Always => true,
+        }
+    }
+
+    pub fn take_single_challenge(&mut self) -> Option<Bytes<16>> {
+        match self.command_cache.take() {
+            Some(CommandCache::SingleAuthChallenge(b)) => return Some(b),
+            old => self.command_cache = old,
+        };
+        None
+    }
+
+    pub fn take_mutual_challenge(&mut self) -> Option<Bytes<16>> {
+        match self.command_cache.take() {
+            Some(CommandCache::MutualAuthChallenge(b)) => return Some(b),
+            old => self.command_cache = old,
+        };
+        None
+    }
 }
 
 impl Default for SecurityStatus {
@@ -289,21 +296,13 @@ impl Default for SecurityStatus {
 pub struct AppSecurityStatus {
     pub pin_verified: bool,
     pub puk_verified: bool,
-    pub management_verified: bool,
+    pub administrator_verified: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandCache {
-    GetData(GetData),
-    AuthenticateManagement(AuthenticateManagement),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GetData {}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AuthenticateManagement {
-    pub challenge: [u8; 8],
+    SingleAuthChallenge(Bytes<16>),
+    MutualAuthChallenge(Bytes<16>),
 }
 
 impl Persistent {
@@ -313,10 +312,6 @@ impl Persistent {
     const FILENAME: &'static [u8] = b"persistent-state.cbor";
     const DEFAULT_PIN: &'static [u8] = b"123456\xff\xff";
     const DEFAULT_PUK: &'static [u8] = b"12345678";
-
-    pub fn guid(&self) -> [u8; 16] {
-        self.guid
-    }
 
     pub fn remaining_pin_retries(&self) -> u8 {
         if self.consecutive_pin_mismatches >= Self::PIN_RETRIES_DEFAULT {
@@ -335,24 +330,44 @@ impl Persistent {
     }
 
     // FIXME: revisit with trussed pin management
-    pub fn verify_pin(&self, other_pin: &Pin) -> bool {
-        // hprintln!("verifying pin {:?} against {:?}", other_pin, &self.pin).ok();
-        self.pin == *other_pin
+    pub fn verify_pin(&mut self, other_pin: &Pin, client: &mut impl trussed::Client) -> bool {
+        if self.remaining_pin_retries() == 0 {
+            return false;
+        }
+        self.consecutive_pin_mismatches += 1;
+        self.save(client);
+        if self.pin == *other_pin {
+            self.consecutive_pin_mismatches = 0;
+            true
+        } else {
+            false
+        }
     }
 
     // FIXME: revisit with trussed pin management
-    pub fn verify_puk(&self, other_puk: &Puk) -> bool {
-        // hprintln!("verifying puk {:?} against {:?}", other_puk, &self.puk).ok();
-        self.puk == *other_puk
+    pub fn verify_puk(&mut self, other_puk: &Puk, client: &mut impl trussed::Client) -> bool {
+        if self.remaining_puk_retries() == 0 {
+            return false;
+        }
+        self.consecutive_puk_mismatches += 1;
+        self.save(client);
+        if self.puk == *other_puk {
+            self.consecutive_puk_mismatches = 0;
+            true
+        } else {
+            false
+        }
     }
 
     pub fn set_pin(&mut self, new_pin: Pin, client: &mut impl trussed::Client) {
         self.pin = new_pin;
+        self.consecutive_pin_mismatches = 0;
         self.save(client);
     }
 
     pub fn set_puk(&mut self, new_puk: Puk, client: &mut impl trussed::Client) {
         self.puk = new_puk;
+        self.consecutive_puk_mismatches = 0;
         self.save(client);
     }
 
@@ -410,33 +425,84 @@ impl Persistent {
         Self::PUK_RETRIES_DEFAULT
     }
 
-    pub fn reset_management_key(&mut self, client: &mut impl trussed::Client) {
-        self.set_management_key(YUBICO_DEFAULT_MANAGEMENT_KEY, client);
+    pub fn reset_administration_key(&mut self, client: &mut impl trussed::Client) {
+        self.set_administration_key(
+            YUBICO_DEFAULT_MANAGEMENT_KEY,
+            YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
+            client,
+        );
     }
 
-    pub fn set_management_key(
+    pub fn set_administration_key(
         &mut self,
-        management_key: &[u8; 24],
+        management_key: &[u8],
+        alg: AdministrationAlgorithm,
         client: &mut impl trussed::Client,
     ) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
-        let new_management_key =
-            syscall!(client
-                .unsafe_inject_shared_key(management_key, trussed::types::Location::Internal,))
-            .key;
-        let old_management_key = self.keys.management_key;
-        self.keys.management_key = new_management_key;
+        let id = syscall!(client.unsafe_inject_key(
+            alg.mechanism(),
+            management_key,
+            trussed::types::Location::Internal,
+            KeySerialization::Raw
+        ))
+        .key;
+        let old_management_key = self.keys.administration.id;
+        self.keys.administration = KeyWithAlg { id, alg };
         self.save(client);
         syscall!(client.delete(old_management_key));
     }
 
-    pub fn initialize(client: &mut impl trussed::Client) -> Self {
-        info!("initializing PIV state");
-        let management_key = syscall!(client.unsafe_inject_shared_key(
-            YUBICO_DEFAULT_MANAGEMENT_KEY,
-            trussed::types::Location::Internal,
+    fn set_asymmetric_key(
+        &mut self,
+        key: AsymmetricKeyReference,
+        id: KeyId,
+        alg: AsymmetricAlgorithms,
+    ) -> Option<KeyWithAlg<AsymmetricAlgorithms>> {
+        self.keys
+            .set_asymetric_for_reference(key, KeyWithAlg { id, alg })
+    }
+
+    pub fn generate_asymmetric_key(
+        &mut self,
+        key: AsymmetricKeyReference,
+        alg: AsymmetricAlgorithms,
+        client: &mut impl trussed::Client,
+    ) -> KeyId {
+        let id = syscall!(client.generate_key(
+            alg.key_mechanism(),
+            StorageAttributes::default().set_persistence(Location::Internal)
         ))
         .key;
+        let old = self.set_asymmetric_key(key, id, alg);
+        self.save(client);
+        if let Some(old) = old {
+            syscall!(client.delete(old.id));
+        }
+        id
+    }
+
+    pub fn initialize(client: &mut impl trussed::Client) -> Self {
+        info!("initializing PIV state");
+        let administration = KeyWithAlg {
+            id: syscall!(client.unsafe_inject_key(
+                YUBICO_DEFAULT_MANAGEMENT_KEY_ALG.mechanism(),
+                YUBICO_DEFAULT_MANAGEMENT_KEY,
+                trussed::types::Location::Internal,
+                KeySerialization::Raw
+            ))
+            .key,
+            alg: YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
+        };
+
+        let authentication = KeyWithAlg {
+            id: syscall!(client.generate_key(
+                Mechanism::P256,
+                StorageAttributes::new().set_persistence(Location::Internal)
+            ))
+            .key,
+            alg: AsymmetricAlgorithms::P256,
+        };
 
         let mut guid: [u8; 16] = syscall!(client.random_bytes(16))
             .bytes
@@ -447,12 +513,24 @@ impl Persistent {
         guid[6] = (guid[6] & 0xf) | 0x40;
         guid[8] = (guid[8] & 0x3f) | 0x80;
 
+        let guid_file: Vec<u8, 1024> = CardHolderUniqueIdentifier::default()
+            .with_guid(guid)
+            .to_heapless_vec()
+            .unwrap();
+        ContainerStorage(Container::CardHolderUniqueIdentifier)
+            .save(
+                client,
+                &guid_file[2..], // Remove the unnecessary 53 tag
+            )
+            .ok();
+
         let keys = Keys {
-            authentication_key: None,
-            management_key,
-            signature_key: None,
-            encryption_key: None,
-            pinless_authentication_key: None,
+            authentication,
+            administration,
+            is_admin_default: true,
+            signature: None,
+            key_management: None,
+            card_authentication: None,
             retired_keys: Default::default(),
         };
 
@@ -463,7 +541,6 @@ impl Persistent {
             pin: Pin::try_from(Self::DEFAULT_PIN).unwrap(),
             puk: Puk::try_from(Self::DEFAULT_PUK).unwrap(),
             timestamp: 0,
-            guid,
         };
         state.save(client);
         state
@@ -521,5 +598,110 @@ fn load_if_exists(
                 Err(Status::UnspecifiedPersistentExecutionError)
             }
         },
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ContainerStorage(pub Container);
+
+impl ContainerStorage {
+    fn path(self) -> PathBuf {
+        PathBuf::from(match self.0 {
+            Container::CardCapabilityContainer => "CardCapabilityContainer",
+            Container::CardHolderUniqueIdentifier => "CardHolderUniqueIdentifier",
+            Container::X509CertificateFor9A => "X509CertificateFor9A",
+            Container::CardholderFingerprints => "CardholderFingerprints",
+            Container::SecurityObject => "SecurityObject",
+            Container::CardholderFacialImage => "CardholderFacialImage",
+            Container::X509CertificateFor9E => "X509CertificateFor9E",
+            Container::X509CertificateFor9C => "X509CertificateFor9C",
+            Container::X509CertificateFor9D => "X509CertificateFor9D",
+            Container::PrintedInformation => "PrintedInformation",
+            Container::DiscoveryObject => "DiscoveryObject",
+            Container::KeyHistoryObject => "KeyHistoryObject",
+            Container::RetiredCert01 => "RetiredCert01",
+            Container::RetiredCert02 => "RetiredCert02",
+            Container::RetiredCert03 => "RetiredCert03",
+            Container::RetiredCert04 => "RetiredCert04",
+            Container::RetiredCert05 => "RetiredCert05",
+            Container::RetiredCert06 => "RetiredCert06",
+            Container::RetiredCert07 => "RetiredCert07",
+            Container::RetiredCert08 => "RetiredCert08",
+            Container::RetiredCert09 => "RetiredCert09",
+            Container::RetiredCert10 => "RetiredCert10",
+            Container::RetiredCert11 => "RetiredCert11",
+            Container::RetiredCert12 => "RetiredCert12",
+            Container::RetiredCert13 => "RetiredCert13",
+            Container::RetiredCert14 => "RetiredCert14",
+            Container::RetiredCert15 => "RetiredCert15",
+            Container::RetiredCert16 => "RetiredCert16",
+            Container::RetiredCert17 => "RetiredCert17",
+            Container::RetiredCert18 => "RetiredCert18",
+            Container::RetiredCert19 => "RetiredCert19",
+            Container::RetiredCert20 => "RetiredCert20",
+            Container::CardholderIrisImages => "CardholderIrisImages",
+            Container::BiometricInformationTemplatesGroupTemplate => {
+                "BiometricInformationTemplatesGroupTemplate"
+            }
+            Container::SecureMessagingCertificateSigner => "SecureMessagingCertificateSigner",
+            Container::PairingCodeReferenceDataContainer => "PairingCodeReferenceDataContainer",
+        })
+    }
+
+    fn default(self) -> Option<Vec<u8, MAX_MESSAGE_LENGTH>> {
+        match self.0 {
+            Container::CardHolderUniqueIdentifier => panic!("CHUID should alway be set"),
+            Container::CardCapabilityContainer => Some(
+                crate::piv_types::CardCapabilityContainer::default()
+                    .to_heapless_vec()
+                    .unwrap(),
+            ),
+            Container::DiscoveryObject => Some(Vec::from_slice(&DISCOVERY_OBJECT).unwrap()),
+            _ => None,
+        }
+    }
+
+    pub fn exists(self, client: &mut impl trussed::Client) -> Result<bool, Status> {
+        match try_syscall!(client.entry_metadata(Location::Internal, self.path())) {
+            Ok(Metadata { metadata: None }) => Ok(false),
+            Ok(Metadata {
+                metadata: Some(metadata),
+            }) if metadata.is_file() => Ok(true),
+            Ok(Metadata {
+                metadata: Some(_metadata),
+            }) => {
+                error!(
+                    "File {} exists but isn't a file: {_metadata:?}",
+                    self.path()
+                );
+                Err(Status::UnspecifiedPersistentExecutionError)
+            }
+            Err(_err) => {
+                error!("File {} couldn't be read: {_err:?}", self.path());
+                Err(Status::UnspecifiedPersistentExecutionError)
+            }
+        }
+    }
+
+    pub fn load(
+        self,
+        client: &mut impl trussed::Client,
+    ) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
+        load_if_exists(client, Location::Internal, &self.path())
+            .map(|data| data.or_else(|| self.default().map(Bytes::from)))
+    }
+
+    pub fn save(self, client: &mut impl trussed::Client, bytes: &[u8]) -> Result<(), Status> {
+        let msg = Bytes::from(heapless::Vec::try_from(bytes).map_err(|_| {
+            error!("Buffer full");
+            Status::IncorrectDataParameter
+        })?);
+        try_syscall!(client.write_file(Location::Internal, self.path(), msg, None)).map_err(
+            |_err| {
+                error!("Failed to store data: {_err:?}");
+                Status::UnspecifiedNonpersistentExecutionError
+            },
+        )?;
+        Ok(())
     }
 }

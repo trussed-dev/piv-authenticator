@@ -11,18 +11,22 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
-use commands::GeneralAuthenticate;
 pub use commands::{Command, YubicoPivExtension};
+use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
 pub mod container;
-use container::AttestKeyReference;
+use container::{
+    AttestKeyReference, AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference,
+};
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
 pub mod piv_types;
+mod reply;
 pub mod state;
+mod tlv;
 
-pub use piv_types::{Pin, Puk};
+pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 
 #[cfg(feature = "virtual")]
 pub mod vpicc;
@@ -30,14 +34,16 @@ pub mod vpicc;
 use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
+use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
-use trussed::client;
-use trussed::{syscall, try_syscall};
+use trussed::types::{KeySerialization, Location, StorageAttributes};
+use trussed::{client, syscall, try_syscall};
 
 use constants::*;
 
-pub type Result = iso7816::Result<()>;
-use state::{LoadedState, State};
+pub type Result<O = ()> = iso7816::Result<O>;
+use reply::Reply;
+use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
 /// PIV authenticator Trussed app.
 ///
@@ -86,17 +92,19 @@ where
     // The way apdu-dispatch currently works, this would deselect, resetting security indicators.
     pub fn deselect(&mut self) {}
 
-    pub fn select<const R: usize>(&mut self, reply: &mut Data<R>) -> Result {
+    pub fn select<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
         use piv_types::Algorithms::*;
         info!("selecting PIV maybe");
 
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
             .with_application_label(APPLICATION_LABEL)
             .with_application_url(APPLICATION_URL)
-            .with_supported_cryptographic_algorithms(&[Tdes, Aes256, P256, Ed25519, X25519]);
+            .with_supported_cryptographic_algorithms(&[
+                Tdes, Aes256, P256, Ed25519, X25519, Rsa2048,
+            ]);
 
         application_property_template
-            .encode_to_heapless_vec(reply)
+            .encode_to_heapless_vec(*reply)
             .unwrap();
         info!("returning: {:02X?}", reply);
         Ok(())
@@ -107,110 +115,39 @@ where
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
     ) -> Result {
-        info!("PIV responding to {:?}", command);
+        info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
         info!("parsed: {:?}", &parsed_command);
+        let reply = Reply(reply);
 
         match parsed_command {
             Command::Verify(verify) => self.load()?.verify(verify),
             Command::ChangeReference(change_reference) => {
                 self.load()?.change_reference(change_reference)
             }
-            Command::GetData(container) => self.get_data(container, reply),
+            Command::GetData(container) => self.load()?.get_data(container, reply),
+            Command::PutData(put_data) => self.load()?.put_data(put_data),
             Command::Select(_aid) => self.select(reply),
             Command::GeneralAuthenticate(authenticate) => {
                 self.load()?
                     .general_authenticate(authenticate, command.data(), reply)
             }
+            Command::GenerateAsymmetric(reference) => {
+                self.load()?
+                    .generate_asymmetric_keypair(reference, command.data(), reply)
+            }
             Command::YkExtension(yk_command) => {
                 self.yubico_piv_extension(command.data(), yk_command, reply)
             }
-            _ => todo!(),
+            Command::ResetRetryCounter(reset) => self.load()?.reset_retry_counter(reset),
         }
-    }
-
-    fn get_data<const R: usize>(
-        &mut self,
-        container: container::Container,
-        reply: &mut Data<R>,
-    ) -> Result {
-        // TODO: check security status, else return Status::SecurityStatusNotSatisfied
-
-        // Table 3, Part 1, SP 800-73-4
-        // https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf#page=30
-        use crate::container::Container;
-        match container {
-            Container::DiscoveryObject => {
-                // Err(Status::InstructionNotSupportedOrInvalid)
-                reply.extend_from_slice(DISCOVERY_OBJECT).ok();
-                // todo!("discovery object"),
-            }
-
-            Container::BiometricInformationTemplatesGroupTemplate => {
-                return Err(Status::InstructionNotSupportedOrInvalid);
-                // todo!("biometric information template"),
-            }
-
-            // '5FC1 07' (351B)
-            Container::CardCapabilityContainer => {
-                piv_types::CardCapabilityContainer::default()
-                    .encode_to_heapless_vec(reply)
-                    .unwrap();
-                info!("returning CCC {:02X?}", reply);
-            }
-
-            // '5FC1 02' (351B)
-            Container::CardHolderUniqueIdentifier => {
-                let guid = self.state.persistent(&mut self.trussed)?.guid();
-                piv_types::CardHolderUniqueIdentifier::default()
-                    .with_guid(guid)
-                    .encode_to_heapless_vec(reply)
-                    .unwrap();
-                info!("returning CHUID {:02X?}", reply);
-            }
-
-            // // '5FC1 05' (351B)
-            // Container::X509CertificateForPivAuthentication => {
-            //     // return Err(Status::NotFound);
-
-            //     // info!("loading 9a cert");
-            //     // it seems like fetching this certificate is the way Filo's agent decides
-            //     // whether the key is "already setup":
-            //     // https://github.com/FiloSottile/yubikey-agent/blob/8781bc0082db5d35712a2244e3ab3086f415dd59/setup.go#L69-L70
-            //     let data = try_syscall!(self.trussed.read_file(
-            //         trussed::types::Location::Internal,
-            //         trussed::types::PathBuf::from(b"authentication-key.x5c"),
-            //     )).map_err(|_| {
-            //         // info!("error loading: {:?}", &e);
-            //         Status::NotFound
-            //     } )?.data;
-
-            //     // todo: cleanup
-            //     let tag = flexiber::Tag::application(0x13); // 0x53
-            //     flexiber::TaggedSlice::from(tag, &data)
-            //         .unwrap()
-            //         .encode_to_heapless_vec(reply)
-            //         .unwrap();
-            // }
-
-            // // '5F FF01' (754B)
-            // YubicoObjects::AttestationCertificate => {
-            //     let data = Data<R>::from_slice(YUBICO_ATTESTATION_CERTIFICATE).unwrap();
-            //     reply.extend_from_slice(&data).ok();
-            // }
-            _ => {
-                warn!("Unimplemented GET DATA object: {container:?}");
-                return Err(Status::FunctionNotSupported);
-            }
-        }
-        Ok(())
     }
 
     pub fn yubico_piv_extension<const R: usize>(
         &mut self,
         data: &[u8],
         instruction: YubicoPivExtension,
-        reply: &mut Data<R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         info!("yubico extension: {:?}", &instruction);
         match instruction {
@@ -238,10 +175,13 @@ where
                 // TODO: find out what all needs resetting :)
                 persistent_state.reset_pin(&mut self.trussed);
                 persistent_state.reset_puk(&mut self.trussed);
-                persistent_state.reset_management_key(&mut self.trussed);
-                self.state.runtime.app_security_status.pin_verified = false;
-                self.state.runtime.app_security_status.puk_verified = false;
-                self.state.runtime.app_security_status.management_verified = false;
+                persistent_state.reset_administration_key(&mut self.trussed);
+                self.state.volatile.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.puk_verified = false;
+                self.state
+                    .volatile
+                    .app_security_status
+                    .administrator_verified = false;
 
                 try_syscall!(self.trussed.remove_file(
                     trussed::types::Location::Internal,
@@ -256,32 +196,12 @@ where
                 .ok();
             }
 
-            YubicoPivExtension::SetManagementKey(_touch_policy) => {
-                // cmd := apdu{
-                //     instruction: insSetMGMKey,
-                //     param1:      0xff,
-                //     param2:      0xff,
-                //     data: append([]byte{
-                //         alg3DES, keyCardManagement, 24,
-                //     }, key[:]...),
-                // }
-                // TODO check we are authenticated with old management key
-
-                // example:  03 9B 18
-                //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
-                if data.len() != 3 + 24 {
-                    return Err(Status::IncorrectDataParameter);
-                }
-                let (prefix, new_management_key) = data.split_at(3);
-                if prefix != [0x03, 0x9b, 0x18] {
-                    return Err(Status::IncorrectDataParameter);
-                }
-                let new_management_key: [u8; 24] = new_management_key.try_into().unwrap();
-                self.state
-                    .persistent(&mut self.trussed)?
-                    .set_management_key(&new_management_key, &mut self.trussed);
+            YubicoPivExtension::SetManagementKey(touch_policy) => {
+                self.load()?
+                    .yubico_set_administration_key(data, touch_policy, reply)?;
             }
 
+            YubicoPivExtension::GetMetadata(_reference) => { /* TODO */ }
             _ => return Err(Status::FunctionNotSupported),
         }
         Ok(())
@@ -289,6 +209,66 @@ where
 }
 
 impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
+    pub fn yubico_set_administration_key<const R: usize>(
+        &mut self,
+        data: &[u8],
+        _touch_policy: TouchPolicy,
+        _reply: Reply<'_, R>,
+    ) -> Result {
+        // cmd := apdu{
+        //     instruction: insSetMGMKey,
+        //     param1:      0xff,
+        //     param2:      0xff,
+        //     data: append([]byte{
+        //         alg3DES, keyCardManagement, 24,
+        //     }, key[:]...),
+        // }
+
+        // TODO _touch_policy
+
+        if !self
+            .state
+            .volatile
+            .app_security_status
+            .administrator_verified
+        {
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        // example:  03 9B 18
+        //      B0 20 7A 20 DC 39 0B 1B A5 56 CC EB 8D CE 7A 8A C8 23 E6 F5 0D 89 17 AA
+        if data.len() < 4 {
+            warn!("Set management key with incorrect data");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let key_data = &data[3..];
+
+        let Ok(alg) = AdministrationAlgorithm::try_from(data[0]) else {
+            warn!("Set management key with incorrect alg: {:x}", data[0]);
+            return Err(Status::IncorrectDataParameter);
+        };
+
+        if KeyReference::PivCardApplicationAdministration != data[1] {
+            warn!(
+                "Set management key with incorrect reference: {:x}, expected: {:x}",
+                data[1],
+                KeyReference::PivCardApplicationAdministration as u8
+            );
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        if data[2] as usize != key_data.len() || alg.key_len() != key_data.len() {
+            warn!("Set management key with incorrect data length: claimed: {}, required by algorithm: {}, real: {}", data[2], alg.key_len(), key_data.len());
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        self.state
+            .persistent
+            .set_administration_key(key_data, alg, self.trussed);
+        Ok(())
+    }
+
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
@@ -297,11 +277,11 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 return Err(Status::OperationBlocked);
             }
 
-            if self.state.persistent.verify_pin(&pin) {
+            if self.state.persistent.verify_pin(&pin, self.trussed) {
                 self.state
                     .persistent
                     .reset_consecutive_pin_mismatches(self.trussed);
-                self.state.runtime.app_security_status.pin_verified = true;
+                self.state.volatile.app_security_status.pin_verified = true;
                 Ok(())
             } else {
                 let remaining = self
@@ -309,7 +289,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                     .persistent
                     .increment_consecutive_pin_mismatches(self.trussed);
                 // should we logout here?
-                self.state.runtime.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_verified = false;
                 Err(Status::RemainingRetries(remaining))
             }
         } else {
@@ -323,7 +303,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             Verify::Login(login) => self.login(login),
 
             Verify::Logout(_) => {
-                self.state.runtime.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_verified = false;
                 Ok(())
             }
 
@@ -331,7 +311,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 if key_reference != commands::VerifyKeyReference::ApplicationPin {
                     return Err(Status::FunctionNotSupported);
                 }
-                if self.state.runtime.app_security_status.pin_verified {
+                if self.state.volatile.app_security_status.pin_verified {
                     Ok(())
                 } else {
                     let retries = self.state.persistent.remaining_pin_retries();
@@ -354,12 +334,12 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::OperationBlocked);
         }
 
-        if !self.state.persistent.verify_pin(&old_pin) {
+        if !self.state.persistent.verify_pin(&old_pin, self.trussed) {
             let remaining = self
                 .state
                 .persistent
                 .increment_consecutive_pin_mismatches(self.trussed);
-            self.state.runtime.app_security_status.pin_verified = false;
+            self.state.volatile.app_security_status.pin_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
@@ -367,7 +347,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             .persistent
             .reset_consecutive_pin_mismatches(self.trussed);
         self.state.persistent.set_pin(new_pin, self.trussed);
-        self.state.runtime.app_security_status.pin_verified = true;
+        self.state.volatile.app_security_status.pin_verified = true;
         Ok(())
     }
 
@@ -376,12 +356,12 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             return Err(Status::OperationBlocked);
         }
 
-        if !self.state.persistent.verify_puk(&old_puk) {
+        if !self.state.persistent.verify_puk(&old_puk, self.trussed) {
             let remaining = self
                 .state
                 .persistent
                 .increment_consecutive_puk_mismatches(self.trussed);
-            self.state.runtime.app_security_status.puk_verified = false;
+            self.state.volatile.app_security_status.puk_verified = false;
             return Err(Status::RemainingRetries(remaining));
         }
 
@@ -389,7 +369,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
             .persistent
             .reset_consecutive_puk_mismatches(self.trussed);
         self.state.persistent.set_puk(new_puk, self.trussed);
-        self.state.runtime.app_security_status.puk_verified = true;
+        self.state.volatile.app_security_status.puk_verified = true;
         Ok(())
     }
 
@@ -425,7 +405,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
-        reply: &mut Data<R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
         //
@@ -445,65 +425,358 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // expected response: "7C L1 82 L2 SEQ(INT r, INT s)"
 
         // refine as we gain more capability
-        let mut input = derp::Reader::new(derp::Input::from(data));
 
-        let Ok((tag,data)) = derp::read_tag_and_get_value(&mut input) else {
+        if !self
+            .state
+            .volatile
+            .security_valid(auth.key_reference.use_security_condition())
+        {
+            warn!(
+                "Security condition not satisfied for key {:?}",
+                auth.key_reference
+            );
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        ///  struct
+        struct Auth<'i> {
+            witness: Option<&'i [u8]>,
+            challenge: Option<&'i [u8]>,
+            response: Option<&'i [u8]>,
+            exponentiation: Option<&'i [u8]>,
+        }
+
+        let input = tlv::get_do(&[0x007C], data).ok_or_else(|| {
+            warn!("No 0x7C do in GENERAL AUTHENTICATE");
+            Status::IncorrectDataParameter
+        })?;
+
+        let parsed = Auth {
+            witness: tlv::get_do(&[0x80], input),
+            challenge: tlv::get_do(&[0x81], input),
+            response: tlv::get_do(&[0x82], input),
+            exponentiation: tlv::get_do(&[0x85], input),
+        };
+        match parsed {
+            Auth {
+                witness: None,
+                challenge: Some(c),
+                response: Some([]),
+                exponentiation: None,
+            } => self.sign(auth, c, reply.lend())?,
+            Auth {
+                witness: None,
+                challenge: None,
+                response: Some([]),
+                exponentiation: Some(p),
+            } => self.key_agreement(auth, p, reply.lend())?,
+            Auth {
+                witness: None,
+                challenge: Some([]),
+                response: None,
+                exponentiation: None,
+            } => self.single_auth_1(auth, reply.lend())?,
+            Auth {
+                witness: None,
+                challenge: None,
+                response: Some(c),
+                exponentiation: None,
+            } => self.single_auth_2(auth, c)?,
+            Auth {
+                witness: Some([]),
+                challenge: None,
+                response: None,
+                exponentiation: None,
+            } => self.mutual_auth_1(auth, reply.lend())?,
+            Auth {
+                witness: Some(r),
+                challenge: Some(c),
+                response: None,
+                exponentiation: None,
+            } => self.mutual_auth_2(auth, r, c, reply.lend())?,
+            _ => todo!(),
+        }
+        Ok(())
+    }
+
+    /// Validate the auth parameters for managememt authentication operations
+    fn validate_auth_management(
+        &self,
+        auth: GeneralAuthenticate,
+    ) -> Result<KeyWithAlg<AdministrationAlgorithm>> {
+        if auth.key_reference != AuthenticateKeyReference::PivCardApplicationAdministration {
+            warn!("Attempt to authenticate with an invalid key");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+        if auth.algorithm != self.state.persistent.keys.administration.alg {
+            warn!("Attempt to authenticate with an invalid algo");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+        Ok(self.state.persistent.keys.administration)
+    }
+
+    fn single_auth_1<const R: usize>(
+        &mut self,
+        auth: GeneralAuthenticate,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        info!("Single auth 1");
+        let key = self.validate_auth_management(auth)?;
+        let pl = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+        self.state.volatile.command_cache = Some(CommandCache::SingleAuthChallenge(
+            Bytes::from_slice(&pl).unwrap(),
+        ));
+        let data = syscall!(self
+            .trussed
+            .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
+        .ciphertext;
+
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x81])?;
+            reply.append_len(data.len())?;
+            reply.expand(&data)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
+    }
+
+    fn single_auth_2(&mut self, auth: GeneralAuthenticate, response: &[u8]) -> Result {
+        info!("Single auth 2");
+        use subtle::ConstantTimeEq;
+
+        let key = self.validate_auth_management(auth)?;
+        if response.len() != key.alg.challenge_length() {
+            warn!("Incorrect challenge length");
             return Err(Status::IncorrectDataParameter);
+        }
+
+        let Some(plaintext_challenge) = self.state.volatile.take_single_challenge() else {
+            warn!("Missing cached challenge for auth");
+            return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        // part 2 table 7
-        match tag {
-            0x80 => self.request_for_witness(auth, data, reply),
-            0x81 => self.request_for_challenge(auth, data, reply),
-            0x82 => self.request_for_response(auth, data, reply),
-            0x85 => self.request_for_exponentiation(auth, data, reply),
-            _ => Err(Status::IncorrectDataParameter),
+        if response.ct_eq(&plaintext_challenge).into() {
+            warn!("Bad auth challenge");
+            return Err(Status::IncorrectDataParameter);
         }
-    }
 
-    pub fn request_for_response<const R: usize>(
+        self.state
+            .volatile
+            .app_security_status
+            .administrator_verified = true;
+        Ok(())
+    }
+    fn mutual_auth_1<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        auth: GeneralAuthenticate,
+        mut reply: Reply<'_, R>,
     ) -> Result {
-        todo!()
+        info!("Mutual auth 1");
+        let key = self.validate_auth_management(auth)?;
+        let pl = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+        self.state.volatile.command_cache = Some(CommandCache::MutualAuthChallenge(
+            Bytes::from_slice(&pl).unwrap(),
+        ));
+        let data = syscall!(self
+            .trussed
+            .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
+        .ciphertext;
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x80])?;
+            reply.append_len(data.len())?;
+            reply.expand(&data)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
     }
-
-    pub fn request_for_exponentiation<const R: usize>(
+    fn mutual_auth_2<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        auth: GeneralAuthenticate,
+        response: &[u8],
+        challenge: &[u8],
+        mut reply: Reply<'_, R>,
     ) -> Result {
-        todo!()
+        use subtle::ConstantTimeEq;
+
+        info!("Mutual auth 2");
+        let key = self.validate_auth_management(auth)?;
+        if challenge.len() != key.alg.challenge_length() {
+            warn!("Incorrect challenge length");
+            return Err(Status::IncorrectDataParameter);
+        }
+        if response.len() != key.alg.challenge_length() {
+            warn!("Incorrect response length");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let Some(plaintext_challenge) = self.state.volatile.take_mutual_challenge() else {
+            warn!("Missing cached challenge for auth");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if challenge.ct_eq(&plaintext_challenge).into() {
+            warn!("Bad auth challenge");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let challenge_response =
+            syscall!(self
+                .trussed
+                .encrypt(key.alg.mechanism(), key.id, challenge, &[], None))
+            .ciphertext;
+
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x82])?;
+            reply.append_len(challenge_response.len())?;
+            reply.expand(&challenge_response)?;
+        }
+        reply.prepend_len(offset)?;
+
+        self.state
+            .volatile
+            .app_security_status
+            .administrator_verified = true;
+        Ok(())
     }
 
-    pub fn request_for_challenge<const R: usize>(
+    // Sign a message. For RSA, since the key is exposed as a raw key, so it can also be used for decryption
+    fn sign<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
+        auth: GeneralAuthenticate,
+        message: &[u8],
+        mut reply: Reply<'_, R>,
     ) -> Result {
-        todo!()
+        info!("Request for sign");
+
+        let Ok(key_ref) = auth.key_reference.try_into() else {
+            warn!("Attempt to sign with an incorrect key");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        };
+        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
+            warn!("Attempt to use unset key");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if alg != auth.algorithm {
+            warn!("Bad algorithm: {:?}", auth.algorithm);
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+        if !self.state.volatile.app_security_status.pin_verified {
+            warn!("Authenticate challenge without pin validated");
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        let response = syscall!(self.trussed.sign(
+            alg.sign_mechanism(),
+            id,
+            message,
+            trussed::types::SignatureSerialization::Raw,
+        ))
+        .signature;
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x82])?;
+            reply.append_len(response.len())?;
+            reply.expand(&response)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
     }
 
-    pub fn request_for_witness<const R: usize>(
+    fn key_agreement<const R: usize>(
         &mut self,
-        _auth: GeneralAuthenticate,
-        _data: derp::Input<'_>,
-        _reply: &mut Data<R>,
-    ) -> Result {
-        todo!()
-    }
-
-    #[allow(unused)]
-    pub fn generate_asymmetric_keypair<const R: usize, const C: usize>(
-        &mut self,
+        auth: GeneralAuthenticate,
         data: &[u8],
-        reply: &mut Data<R>,
+        mut reply: Reply<'_, R>,
     ) -> Result {
-        if !self.state.runtime.app_security_status.management_verified {
+        info!("Request for exponentiation");
+        let key_reference = auth.key_reference.try_into().map_err(|_| {
+            warn!(
+                "Attempt to use non asymetric key for exponentiation: {:?}",
+                auth.key_reference
+            );
+            Status::IncorrectP1OrP2Parameter
+        })?;
+        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_reference) else {
+            warn!("Attempt to use unset key");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if alg != auth.algorithm {
+            warn!("Attempt to exponentiate with incorrect algorithm");
+            return Err(Status::IncorrectP1OrP2Parameter);
+        }
+
+        let Some(mechanism) = alg.ecdh_mechanism() else {
+            warn!("Attempt to exponentiate with non ECDH algorithm");
+            return Err(Status::ConditionsOfUseNotSatisfied);
+        };
+
+        if data.first() != Some(&0x04) {
+            warn!("Bad data format for ECDH");
+            return Err(Status::IncorrectDataParameter);
+        }
+
+        let public_key = try_syscall!(self.trussed.deserialize_key(
+            mechanism,
+            &data[1..],
+            KeySerialization::Raw,
+            StorageAttributes::default().set_persistence(Location::Volatile)
+        ))
+        .map_err(|_err| {
+            warn!("Failed to load public key: {:?}", _err);
+            Status::IncorrectDataParameter
+        })?
+        .key;
+        let shared_secret = syscall!(self.trussed.agree(
+            mechanism,
+            id,
+            public_key,
+            StorageAttributes::default()
+                .set_persistence(Location::Volatile)
+                .set_serializable(true)
+        ))
+        .shared_secret;
+
+        let serialized_secret = syscall!(self.trussed.serialize_key(
+            trussed::types::Mechanism::SharedSecret,
+            shared_secret,
+            KeySerialization::Raw
+        ))
+        .serialized_key;
+        syscall!(self.trussed.delete(public_key));
+        syscall!(self.trussed.delete(shared_secret));
+
+        reply.expand(&[0x7C])?;
+        let offset = reply.len();
+        {
+            reply.expand(&[0x82])?;
+            reply.append_len(serialized_secret.len())?;
+            reply.expand(&serialized_secret)?;
+        }
+        reply.prepend_len(offset)?;
+        Ok(())
+    }
+
+    pub fn generate_asymmetric_keypair<const R: usize>(
+        &mut self,
+        reference: GenerateKeyReference,
+        data: &[u8],
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        if !self
+            .state
+            .volatile
+            .app_security_status
+            .administrator_verified
+        {
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
@@ -531,187 +804,188 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         // TODO: iterate on this, don't expect tags..
         let input = derp::Input::from(data);
         // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
-        let (mechanism, _pin_policy, _touch_policy) = input
-            .read_all(derp::Error::Read, |input| {
-                derp::nested(input, 0xac, |input| {
-                    let mechanism = derp::expect_tag_and_get_value(input, 0x80)?;
-                    // let parameter = derp::expect_tag_and_get_value(input, 0x81)?;
-                    let pin_policy = derp::expect_tag_and_get_value(input, 0xaa)?;
-                    let touch_policy = derp::expect_tag_and_get_value(input, 0xab)?;
-                    // Ok((mechanism.as_slice_less_safe(), parameter.as_slice_less_safe()))
-                    Ok((
-                        mechanism.as_slice_less_safe(),
-                        pin_policy.as_slice_less_safe(),
-                        touch_policy.as_slice_less_safe(),
-                    ))
-                })
-            })
-            .map_err(|_e| {
-                info!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
-                Status::IncorrectDataParameter
-            })?;
+        let mechanism_data = input.read_all(Status::IncorrectDataParameter, |input| {
+            derp::nested(
+                input,
+                Status::IncorrectDataParameter,
+                Status::IncorrectDataParameter,
+                0xac,
+                |input| {
+                    derp::expect_tag_and_get_value(input, 0x80)
+                        .map(|input| input.as_slice_less_safe())
+                        .map_err(|_e| {
+                            warn!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
+                            Status::IncorrectDataParameter
+                        })
+                },
+            )
+        })?;
 
-        // if mechanism != &[0x11] {
-        // HA! patch in Ed255
-        if mechanism != [0x22] {
-            return Err(Status::InstructionNotSupportedOrInvalid);
-        }
+        let [mechanism] = mechanism_data else {
+            warn!("Mechanism of len not 1: {mechanism_data:02x?}");
+            return Err(Status::IncorrectDataParameter);
+        };
 
-        // ble policy
+        let parsed_mechanism: AsymmetricAlgorithms = (*mechanism).try_into().map_err(|_| {
+            warn!("Unknown mechanism: {mechanism:x}");
+            Status::IncorrectDataParameter
+        })?;
 
-        if let Some(key) = self.state.persistent.keys.authentication_key {
-            syscall!(self.trussed.delete(key));
-        }
+        let secret_key = self.state.persistent.generate_asymmetric_key(
+            reference.into(),
+            parsed_mechanism,
+            self.trussed,
+        );
 
-        // let key = syscall!(self.trussed.generate_p256_private_key(
-        // let key = syscall!(self.trussed.generate_p256_private_key(
-        let key = syscall!(self
-            .trussed
-            .generate_ed255_private_key(trussed::types::Location::Internal,))
-        .key;
-
-        // // TEMP
-        // let mechanism = trussed::types::Mechanism::P256Prehashed;
-        // let mechanism = trussed::types::Mechanism::P256;
-        // let commitment = &[37u8; 32];
-        // // blocking::dbg!(commitment);
-        // let serialization = trussed::types::SignatureSerialization::Asn1Der;
-        // // blocking::dbg!(&key);
-        // let signature = block!(self.trussed.sign(mechanism, key.clone(), commitment, serialization).map_err(|e| {
-        //     blocking::dbg!(e);
-        //     e
-        // }).unwrap())
-        //     .map_err(|error| {
-        //         // NoSuchKey
-        //         blocking::dbg!(error);
-        //         Status::UnspecifiedNonpersistentExecutionError }
-        //     )?
-        //     .signature;
-        // blocking::dbg!(&signature);
-        self.state.persistent.keys.authentication_key = Some(key);
-        self.state.persistent.save(self.trussed);
-
-        // let public_key = syscall!(self.trussed.derive_p256_public_key(
-        let public_key = syscall!(self
-            .trussed
-            .derive_ed255_public_key(key, trussed::types::Location::Volatile,))
-        .key;
-
-        let serialized_public_key = syscall!(self.trussed.serialize_key(
-            // trussed::types::Mechanism::P256,
-            trussed::types::Mechanism::Ed255,
-            public_key,
-            trussed::types::KeySerialization::Raw,
+        let public_key = syscall!(self.trussed.derive_key(
+            parsed_mechanism.key_mechanism(),
+            secret_key,
+            None,
+            StorageAttributes::default().set_persistence(Location::Volatile)
         ))
-        .serialized_key;
+        .key;
 
-        // info!("supposed SEC1 pubkey, len {}: {:X?}", serialized_public_key.len(), &serialized_public_key);
+        match parsed_mechanism {
+            AsymmetricAlgorithms::P256 => {
+                let serialized_key = syscall!(self.trussed.serialize_key(
+                    parsed_mechanism.key_mechanism(),
+                    public_key,
+                    trussed::types::KeySerialization::Raw
+                ))
+                .serialized_key;
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                reply.expand(&[0x86])?;
+                reply.append_len(serialized_key.len() + 1)?;
+                reply.expand(&[0x04])?;
+                reply.expand(&serialized_key)?;
+                reply.prepend_len(offset)?;
+            }
+            AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
+                use trussed_rsa_alloc::RsaPublicParts;
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                let tmp = syscall!(self.trussed.serialize_key(
+                    parsed_mechanism.key_mechanism(),
+                    public_key,
+                    trussed::types::KeySerialization::RsaParts
+                ))
+                .serialized_key;
+                let serialized: RsaPublicParts =
+                    trussed::postcard_deserialize(&tmp).map_err(|_err| {
+                        error!("Failed to parse RSA parts: {:?}", _err);
+                        Status::UnspecifiedNonpersistentExecutionError
+                    })?;
+                reply.expand(&[0x81])?;
+                reply.append_len(serialized.n.len())?;
+                reply.expand(serialized.n)?;
 
-        // P256 SEC1 has 65 bytes, Ed255 pubkeys have 32
-        // let l2 = 65;
-        let l2 = 32;
-        let l1 = l2 + 2;
+                reply.expand(&[0x82])?;
+                reply.append_len(serialized.e.len())?;
+                reply.expand(serialized.e)?;
 
-        reply
-            .extend_from_slice(&[0x7f, 0x49, l1, 0x86, l2])
-            .unwrap();
-        reply.extend_from_slice(&serialized_public_key).unwrap();
+                reply.prepend_len(offset)?;
+            }
+        };
+        syscall!(self.trussed.delete(public_key));
 
         Ok(())
     }
 
-    #[allow(unused)]
-    pub fn put_data(&mut self, data: &[u8]) -> Result {
-        info!("PutData");
-
-        // if !self.state.runtime.app_security_status.management_verified {
-        //     return Err(Status::SecurityStatusNotSatisfied);
-        // }
-
-        // # PutData
-        // 00 DB 3F FF 23
-        //    # data object: 5FC109
-        //    5C 03 5F C1 09
-        //    # data:
-        //    53 1C
-        //       # actual data
-        //       88 1A 89 18 AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
-        //
-
-        let input = derp::Input::from(data);
-        let (data_object, data) = input
-            .read_all(derp::Error::Read, |input| {
-                let data_object = derp::expect_tag_and_get_value(input, 0x5c)?;
-                let data = derp::expect_tag_and_get_value(input, 0x53)?;
-                Ok((data_object.as_slice_less_safe(), data.as_slice_less_safe()))
-                // }).unwrap();
-            })
-            .map_err(|_e| {
-                info!("error parsing PutData: {:?}", &_e);
-                Status::IncorrectDataParameter
-            })?;
-
-        // info!("PutData in {:?}: {:?}", data_object, data);
-
-        if data_object == [0x5f, 0xc1, 0x09] {
-            // "Printed Information", supposedly
-            // Yubico uses this to store its "Metadata"
-            //
-            // 88 1A
-            //    89 18
-            //       # we see here the raw management key? amazing XD
-            //       AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
-
-            // TODO: use smarter quota rule, actual data sent is 28B
-            if data.len() >= 512 {
-                return Err(Status::UnspecifiedCheckingError);
-            }
-
-            try_syscall!(self.trussed.write_file(
-                trussed::types::Location::Internal,
-                trussed::types::PathBuf::from(b"printed-information"),
-                trussed::types::Message::from_slice(data).unwrap(),
-                None,
-            ))
-            .map_err(|_| Status::NotEnoughMemory)?;
-
-            return Ok(());
+    fn get_data<const R: usize>(
+        &mut self,
+        container: Container,
+        mut reply: Reply<'_, R>,
+    ) -> Result {
+        if !self
+            .state
+            .volatile
+            .read_valid(container.contact_access_rule())
+        {
+            warn!("Unauthorized attempt to access: {:?}", container);
+            return Err(Status::SecurityStatusNotSatisfied);
         }
 
-        if data_object == [0x5f, 0xc1, 0x05] {
-            // "X.509 Certificate for PIV Authentication", supposedly
-            // IOW, the cert for "authentication key"
-            // Yubico uses this to store its "Metadata"
-            //
-            // 88 1A
-            //    89 18
-            //       # we see here the raw management key? amazing XD
-            //       AA 81 D5 48 A5 EC 26 01 60 BA 06 F6 EC 3B B6 05 00 2E B6 3D 4B 28 7F 86
-
-            // TODO: use smarter quota rule, actual data sent is 28B
-            if data.len() >= 512 {
-                return Err(Status::UnspecifiedCheckingError);
-            }
-
-            try_syscall!(self.trussed.write_file(
-                trussed::types::Location::Internal,
-                trussed::types::PathBuf::from(b"authentication-key.x5c"),
-                trussed::types::Message::from_slice(data).unwrap(),
-                None,
-            ))
-            .map_err(|_| Status::NotEnoughMemory)?;
-
-            return Ok(());
+        use state::ContainerStorage;
+        let tag = match container {
+            Container::DiscoveryObject => [0x7E].as_slice(),
+            Container::BiometricInformationTemplatesGroupTemplate => &[0x7F, 0x61],
+            _ => &[0x53],
+        };
+        reply.expand(tag)?;
+        let offset = reply.len();
+        match container {
+            Container::KeyHistoryObject => self.get_key_history_object(reply.lend())?,
+            _ => match ContainerStorage(container).load(self.trussed)? {
+                Some(data) => reply.expand(&data)?,
+                None => return Err(Status::NotFound),
+            },
         }
+        reply.prepend_len(offset)?;
 
-        Err(Status::IncorrectDataParameter)
+        Ok(())
     }
 
-    // match container {
-    //     containers::Container::CardHolderUniqueIdentifier =>
-    //         piv_types::CardHolderUniqueIdentifier::default()
-    //         .encode
-    //     _ => todo!(),
-    // }
-    // todo!();
+    fn put_data(&mut self, put_data: PutData<'_>) -> Result {
+        if !self
+            .state
+            .volatile
+            .app_security_status
+            .administrator_verified
+        {
+            warn!("Unauthorized attempt at PUT DATA: {:?}", put_data);
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        let (container, data) = match put_data {
+            PutData::Any(container, data) => (container, data),
+            PutData::BitGroupTemplate(data) => {
+                (Container::BiometricInformationTemplatesGroupTemplate, data)
+            }
+            PutData::DiscoveryObject(data) => (Container::DiscoveryObject, data),
+        };
+
+        use state::ContainerStorage;
+        ContainerStorage(container).save(self.trussed, data)
+    }
+
+    fn reset_retry_counter(&mut self, data: ResetRetryCounter) -> Result {
+        if !self
+            .state
+            .persistent
+            .verify_puk(&Puk(data.puk), self.trussed)
+        {
+            return Err(Status::VerificationFailed);
+        }
+        self.state.persistent.set_pin(Pin(data.pin), self.trussed);
+
+        Ok(())
+    }
+
+    fn get_key_history_object<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
+        let num_keys = self
+            .state
+            .persistent
+            .keys
+            .retired_keys
+            .iter()
+            .filter(|k| k.is_some())
+            .count() as u8;
+        let mut num_certs = 0u8;
+
+        use state::ContainerStorage;
+
+        for c in RETIRED_CERTS {
+            if ContainerStorage(c).exists(self.trussed)? {
+                num_certs += 1;
+            }
+        }
+
+        reply.expand(&[0xC1, 0x01])?;
+        reply.expand(&[num_certs])?;
+        reply.expand(&[0xC2, 0x01])?;
+        reply.expand(&[num_keys.saturating_sub(num_certs)])?;
+        reply.expand(&[0xFE, 0x00])?;
+        Ok(())
+    }
 }

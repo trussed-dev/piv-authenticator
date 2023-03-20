@@ -23,12 +23,18 @@ impl From<untrusted::EndOfInput> for Error {
 }
 
 /// Return the value of the given tag and apply a decoding function to it.
-pub fn nested<'a, F, R>(input: &mut Reader<'a>, tag: u8, decoder: F) -> Result<R>
+pub fn nested<'a, F, R, E>(
+    input: &mut Reader<'a>,
+    incomplete_end: E,
+    bad_tag: E,
+    tag: u8,
+    decoder: F,
+) -> core::result::Result<R, E>
 where
-    F: FnOnce(&mut untrusted::Reader<'a>) -> Result<R>,
+    F: FnOnce(&mut untrusted::Reader<'a>) -> core::result::Result<R, E>,
 {
-    let inner = expect_tag_and_get_value(input, tag)?;
-    inner.read_all(Error::Read, decoder)
+    let inner = expect_tag_and_get_value(input, tag).map_err(|_| bad_tag)?;
+    inner.read_all(incomplete_end, decoder)
 }
 
 /// Read a tag and return it's value. Errors when the expect and actual tag do not match.
@@ -41,7 +47,7 @@ pub fn expect_tag_and_get_value<'a>(input: &mut Reader<'a>, tag: u8) -> Result<I
 }
 
 /// Read a tag and its value. Errors when the expected and actual tag and values do not match.
-pub fn expect_tag_and_value<'a>(input: &mut Reader<'a>, tag: u8, value: &[u8]) -> Result<()> {
+pub fn expect_tag_and_value(input: &mut Reader, tag: u8, value: &[u8]) -> Result<()> {
     let (actual_tag, inner) = read_tag_and_get_value(input)?;
     if usize::from(tag) != usize::from(actual_tag) {
         return Err(Error::WrongTag);

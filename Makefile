@@ -4,6 +4,7 @@
 .NOTPARALLEL:
 
 export RUST_LOG ?= info,cargo_tarpaulin=off
+TEST_FEATURES ?=virtual,pivy-tests,opensc-tests
 
 .PHONY: build-cortex-m4
 build-cortex-m4:
@@ -11,24 +12,28 @@ build-cortex-m4:
 
 .PHONY: test
 test:
-	cargo test --features virtual
+	cargo test --features $(TEST_FEATURES)
 
 .PHONY: check
 check:
+	RUSTLFAGS='-Dwarnings' cargo check --all-features --all-targets
+
+.PHONY: lint
+lint:
 	cargo fmt --check
-	cargo check --all-targets --all-features
+	RUSTLFAGS='-Dwarnings' cargo check --all-features --all-targets
 	cargo clippy --all-targets --all-features -- -Dwarnings
 	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
 	reuse lint
 	
 .PHONY: tarpaulin
 tarpaulin:
-	cargo tarpaulin --features virtual -o Html -o Xml
+	cargo tarpaulin --features $(TEST_FEATURES) -o Html -o Xml
 
 .PHONY: example
 example:
 	cargo run --example virtual --features virtual 
 	
 .PHONY: ci
-ci: check tarpaulin
+ci: lint tarpaulin
 	

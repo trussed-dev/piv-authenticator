@@ -1,7 +1,7 @@
 // Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
 
-use crate::{Authenticator, /*constants::PIV_AID,*/ Result};
+use crate::{reply::Reply, Authenticator, /*constants::PIV_AID,*/ Result};
 
 use apdu_dispatch::{app::App, command, response, Command};
 use trussed::client;
@@ -12,7 +12,7 @@ where
     T: client::Client + client::Ed255 + client::Tdes,
 {
     fn select(&mut self, _apdu: &Command, reply: &mut response::Data) -> Result {
-        self.select(reply)
+        self.select(Reply(reply))
     }
 
     fn deselect(&mut self) {
@@ -25,6 +25,6 @@ where
         apdu: &Command,
         reply: &mut response::Data,
     ) -> Result {
-        self.respond(apdu, reply)
+        self.respond(apdu, &mut Reply(reply))
     }
 }

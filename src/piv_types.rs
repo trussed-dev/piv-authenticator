@@ -6,6 +6,7 @@ use core::convert::{TryFrom, TryInto};
 use flexiber::Encodable;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
+use trussed::types::Mechanism;
 
 #[macro_export]
 macro_rules! enum_u8 {
@@ -18,6 +19,7 @@ macro_rules! enum_u8 {
     ) => {
         $(#[$outer])*
         #[repr(u8)]
+        #[derive(Clone, Copy)]
         $vis enum $name {
             $(
                 $var = $num,
@@ -35,6 +37,23 @@ macro_rules! enum_u8 {
                 }
             }
         }
+
+        impl PartialEq<u8> for $name {
+            fn eq(&self, other: &u8) -> bool {
+                *self as u8 == *other
+            }
+        }
+
+        impl<T: Into<$name> + Copy> PartialEq<T> for $name {
+            fn eq(&self, other: &T) -> bool {
+                let other: $name = (*other).into();
+                matches!((self,other), $(
+                    | ($name::$var, $name::$var)
+                )*)
+            }
+        }
+
+        impl Eq for $name {}
     }
 }
 
@@ -42,35 +61,12 @@ macro_rules! enum_u8 {
 ///
 /// We are more lenient, and allow ASCII 0x20..=0x7E.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Pin {
-    padded_pin: [u8; 8],
-    len: usize,
-}
+pub struct Pin(pub [u8; 8]);
 
 impl TryFrom<&[u8]> for Pin {
     type Error = ();
     fn try_from(padded_pin: &[u8]) -> Result<Self, Self::Error> {
-        let padded_pin: [u8; 8] = padded_pin.try_into().map_err(|_| ())?;
-        let first_pad_byte = padded_pin[..8].iter().position(|&b| b == 0xff);
-        let unpadded_pin = match first_pad_byte {
-            Some(l) => &padded_pin[..l],
-            None => &padded_pin,
-        };
-        match unpadded_pin.len() {
-            len @ 6..=8 => {
-                let verifier = if cfg!(feature = "strict-pin") {
-                    |&byte| (b'0'..=b'9').contains(&byte)
-                } else {
-                    |&byte| (32..=127).contains(&byte)
-                };
-                if unpadded_pin.iter().all(verifier) {
-                    Ok(Pin { padded_pin, len })
-                } else {
-                    Err(())
-                }
-            }
-            _ => Err(()),
-        }
+        Ok(Self(padded_pin.try_into().map_err(|_| ())?))
     }
 }
 
@@ -86,7 +82,7 @@ impl TryFrom<&[u8]> for Puk {
 }
 
 enum_u8! {
-    #[derive(Clone, Copy, Eq, PartialEq, Debug)]
+    #[derive(Debug,Deserialize,Serialize)]
     // As additional reference, see:
     // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
     //
@@ -123,6 +119,101 @@ enum_u8! {
         P384Sha384 = 0xF4,
     }
 }
+
+crate::container::enum_subset! {
+    #[derive(Debug,Deserialize,Serialize)]
+    pub enum AsymmetricAlgorithms: Algorithms {
+        Rsa2048,
+        Rsa4096,
+        P256,
+
+        // Not supported
+        // Rsa1024 = 0x6,
+        // Rsa3072 = 0xE0,
+        // P384 = 0x14,
+        // P521 = 0x15,
+
+        // non-standard! in piv-go though!
+        // Ed255_prev = 0x22,
+        // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
+        // non-standard!
+        // Ed25519 = 0xE2,
+        // X25519 = 0xE3,
+        // Ed448 = 0xE4,
+        // X448 = 0xE5,
+
+    }
+}
+
+impl AsymmetricAlgorithms {
+    pub fn key_mechanism(self) -> Mechanism {
+        match self {
+            Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            Self::Rsa4096 => Mechanism::Rsa4096Raw,
+            Self::P256 => Mechanism::P256,
+        }
+    }
+
+    pub fn ecdh_mechanism(self) -> Option<Mechanism> {
+        use AsymmetricAlgorithms::*;
+        match self {
+            P256 => Some(Mechanism::P256),
+            /* P384 | P521 | X25519 | X448 */
+            _ => None,
+        }
+    }
+
+    pub fn sign_mechanism(self) -> Mechanism {
+        match self {
+            Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            Self::Rsa4096 => Mechanism::Rsa4096Raw,
+            Self::P256 => Mechanism::P256Prehashed,
+        }
+    }
+
+    pub fn is_rsa(self) -> bool {
+        use AsymmetricAlgorithms::*;
+        matches!(self, Rsa2048 | Rsa4096)
+    }
+}
+
+macro_rules! impl_use_try_into {
+    ($sup:ident => {$(($from:ident, $into:ident)),*}) => {
+        $(
+            impl TryFrom<$from> for $into {
+                type Error = iso7816::Status;
+                fn try_from(v: $from) -> core::result::Result<$into, iso7816::Status> {
+                    let sup: $sup = v.into();
+                    sup.try_into()
+                }
+            }
+        )*
+    };
+}
+
+crate::container::enum_subset! {
+    #[derive(Debug,Deserialize,Serialize)]
+    pub enum RsaAlgorithms: Algorithms {
+        Rsa2048,
+        Rsa4096,
+    }
+}
+
+impl RsaAlgorithms {
+    pub fn mechanism(self) -> Mechanism {
+        match self {
+            Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            Self::Rsa4096 => Mechanism::Rsa4096Raw,
+        }
+    }
+}
+
+impl_use_try_into!(
+    Algorithms => {
+        (AsymmetricAlgorithms, RsaAlgorithms)
+   }
+);
+
 /// TODO:
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct CryptographicAlgorithmTemplate<'a> {
@@ -236,65 +327,64 @@ impl<'a> ApplicationPropertyTemplate<'a> {
         }
     }
 }
+// /// TODO: This should be an enum of sorts, maybe.
+// ///
+// /// The data objects that appear in the dynamic authentication template (tag '7C') in the data field
+// /// of the GENERAL AUTHENTICATE card command depend on the authentication protocol being executed.
+// ///
+// /// Note that the empty tags (i.e., tags with no data) return the same tag with content
+// /// (they can be seen as “requests for requests”):
+// /// - '80 00' Returns '80 TL \<encrypted random\>' (as per definition)
+// /// - '81 00' Returns '81 TL \<random\>' (as per external authenticate example)
+// #[derive(Clone, Copy, Default, Encodable, Eq, PartialEq)]
+// #[tlv(application, constructed, number = "0x1C")] // = 0x7C
+// pub struct DynamicAuthenticationTemplate<'l> {
+//     /// The Witness (tag '80') contains encrypted data (unrevealed fact).
+//     /// This data is decrypted by the card.
+//     #[tlv(simple = "0x80")]
+//     witness: Option<&'l [u8]>,
 
-/// TODO: This should be an enum of sorts, maybe.
-///
-/// The data objects that appear in the dynamic authentication template (tag '7C') in the data field
-/// of the GENERAL AUTHENTICATE card command depend on the authentication protocol being executed.
-///
-/// Note that the empty tags (i.e., tags with no data) return the same tag with content
-/// (they can be seen as “requests for requests”):
-/// - '80 00' Returns '80 TL <encrypted random>' (as per definition)
-/// - '81 00' Returns '81 TL <random>' (as per external authenticate example)
-#[derive(Clone, Copy, Default, Encodable, Eq, PartialEq)]
-#[tlv(application, constructed, number = "0x1C")] // = 0x7C
-pub struct DynamicAuthenticationTemplate<'l> {
-    /// The Witness (tag '80') contains encrypted data (unrevealed fact).
-    /// This data is decrypted by the card.
-    #[tlv(simple = "0x80")]
-    witness: Option<&'l [u8]>,
+//     ///  The Challenge (tag '81') contains clear data (byte sequence),
+//     ///  which is encrypted by the card.
+//     #[tlv(simple = "0x81")]
+//     challenge: Option<&'l [u8]>,
 
-    ///  The Challenge (tag '81') contains clear data (byte sequence),
-    ///  which is encrypted by the card.
-    #[tlv(simple = "0x81")]
-    challenge: Option<&'l [u8]>,
+//     /// The Response (tag '82') contains either the decrypted data from tag '80'
+//     /// or the encrypted data from tag '81'.
+//     #[tlv(simple = "0x82")]
+//     response: Option<&'l [u8]>,
 
-    /// The Response (tag '82') contains either the decrypted data from tag '80'
-    /// or the encrypted data from tag '81'.
-    #[tlv(simple = "0x82")]
-    response: Option<&'l [u8]>,
+//     /// Not documented in SP-800-73-4
+//     #[tlv(simple = "0x85")]
+//     exponentiation: Option<&'l [u8]>,
+// }
 
-    /// Not documented in SP-800-73-4
-    #[tlv(simple = "0x85")]
-    exponentiation: Option<&'l [u8]>,
-}
-
-impl<'a> DynamicAuthenticationTemplate<'a> {
-    pub fn with_challenge(challenge: &'a [u8]) -> Self {
-        Self {
-            challenge: Some(challenge),
-            ..Default::default()
-        }
-    }
-    pub fn with_exponentiation(exponentiation: &'a [u8]) -> Self {
-        Self {
-            exponentiation: Some(exponentiation),
-            ..Default::default()
-        }
-    }
-    pub fn with_response(response: &'a [u8]) -> Self {
-        Self {
-            response: Some(response),
-            ..Default::default()
-        }
-    }
-    pub fn with_witness(witness: &'a [u8]) -> Self {
-        Self {
-            witness: Some(witness),
-            ..Default::default()
-        }
-    }
-}
+// impl<'a> DynamicAuthenticationTemplate<'a> {
+//     pub fn with_challenge(challenge: &'a [u8]) -> Self {
+//         Self {
+//             challenge: Some(challenge),
+//             ..Default::default()
+//         }
+//     }
+//     pub fn with_exponentiation(exponentiation: &'a [u8]) -> Self {
+//         Self {
+//             exponentiation: Some(exponentiation),
+//             ..Default::default()
+//         }
+//     }
+//     pub fn with_response(response: &'a [u8]) -> Self {
+//         Self {
+//             response: Some(response),
+//             ..Default::default()
+//         }
+//     }
+//     pub fn with_witness(witness: &'a [u8]) -> Self {
+//         Self {
+//             witness: Some(witness),
+//             ..Default::default()
+//         }
+//     }
+// }
 
 /// The Card Holder Unique Identifier (CHUID) data object is defined in accordance with the Technical
 /// Implementation Guidance: Smart Card Enabled Physical Access Control Systems (TIG SCEPACS)

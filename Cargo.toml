@@ -72,9 +72,8 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-# trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey-4"}
-trussed = { git = "https://github.com/trussed-dev/trussed", rev = "d9276a689d68ffeb4c5d9ac635b18232be172f45"}
-# littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-1" }
+ trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey.8"}
+littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-2" }
 
 [profile.dev.package.rsa]
 opt-level = 2

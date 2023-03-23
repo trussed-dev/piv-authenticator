@@ -11,11 +11,13 @@
 
 // TODO: add CLI
 
+use piv_authenticator::{Authenticator, Options};
+
 fn main() {
     env_logger::init();
 
     trussed_rsa_alloc::virt::with_ram_client("piv-authenticator", |client| {
-        let card = piv_authenticator::Authenticator::new(client);
+        let card = Authenticator::new(client, Options::default());
         let mut virtual_card = piv_authenticator::vpicc::VirtualCard::new(card);
         let vpicc = vpicc::connect().expect("failed to connect to vpicc");
         vpicc

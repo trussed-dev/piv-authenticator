@@ -45,17 +45,38 @@ pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Options {
+    storage: Location,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            storage: Location::External,
+        }
+    }
+}
+
+impl Options {
+    pub fn storage(self, storage: Location) -> Self {
+        Self { storage, ..self }
+    }
+}
+
 /// PIV authenticator Trussed app.
 ///
 /// The `C` parameter is necessary, as PIV includes command sequences,
 /// where we need to store the previous command, so we need to know how
 /// much space to allocate.
 pub struct Authenticator<T> {
+    options: Options,
     state: State,
     trussed: T,
 }
 
 struct LoadedAuthenticator<'a, T> {
+    options: &'a mut Options,
     state: LoadedState<'a>,
     trussed: &'a mut T,
 }
@@ -70,13 +91,14 @@ impl<T> Authenticator<T>
 where
     T: client::Client + client::Ed255 + client::Tdes,
 {
-    pub fn new(trussed: T) -> Self {
+    pub fn new(trussed: T, options: Options) -> Self {
         // seems like RefCell is not the right thing, we want something like `Rc` instead,
         // which can be cloned and injected into other parts of the App that use Trussed.
         // let trussed = RefCell::new(trussed);
         Self {
             // state: state::State::new(trussed.clone()),
             state: Default::default(),
+            options,
             trussed,
         }
     }
@@ -85,6 +107,7 @@ where
         Ok(LoadedAuthenticator {
             state: self.state.load(&mut self.trussed)?,
             trussed: &mut self.trussed,
+            options: &mut self.options,
         })
     }
 

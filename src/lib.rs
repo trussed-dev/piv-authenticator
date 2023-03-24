@@ -500,7 +500,21 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 response: None,
                 exponentiation: None,
             } => self.mutual_auth_2(auth, r, c, reply.lend())?,
-            _ => todo!(),
+            Auth {
+                witness,
+                challenge,
+                response,
+                exponentiation,
+            } => {
+                warn!(
+                    "General authenticate with unexpected data: witness: {:?}, challenge: {:?}, response: {:?}, exponentiation: {:?}",
+                    witness.map(|s|s.len()),
+                    challenge.map(|s|s.len()),
+                    response.map(|s|s.len()),
+                    exponentiation.map(|s|s.len()),
+                );
+                return Err(Status::IncorrectDataParameter);
+            }
         }
         Ok(())
     }

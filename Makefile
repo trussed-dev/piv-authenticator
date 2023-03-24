@@ -21,7 +21,7 @@ check:
 .PHONY: lint
 lint:
 	cargo fmt --check
-	RUSTLFAGS='-Dwarnings' cargo check --all-features --all-targets
+	cargo check --all-features --all-targets
 	cargo clippy --all-targets --all-features -- -Dwarnings
 	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
 	reuse lint

@@ -188,9 +188,13 @@ pub struct State {
 }
 
 impl State {
-    pub fn load(&mut self, client: &mut impl trussed::Client) -> Result<LoadedState<'_>, Status> {
+    pub fn load(
+        &mut self,
+        client: &mut impl trussed::Client,
+        storage: Location,
+    ) -> Result<LoadedState<'_>, Status> {
         if self.persistent.is_none() {
-            self.persistent = Some(Persistent::load_or_initialize(client)?);
+            self.persistent = Some(Persistent::load_or_initialize(client, storage)?);
         }
         Ok(LoadedState {
             volatile: &mut self.volatile,
@@ -201,8 +205,9 @@ impl State {
     pub fn persistent(
         &mut self,
         client: &mut impl trussed::Client,
+        storage: Location,
     ) -> Result<&mut Persistent, Status> {
-        Ok(self.load(client)?.persistent)
+        Ok(self.load(client, storage)?.persistent)
     }
 
     pub fn new() -> Self {
@@ -214,6 +219,11 @@ impl State {
 pub struct LoadedState<'t> {
     pub volatile: &'t mut Volatile,
     pub persistent: &'t mut Persistent,
+}
+
+/// exists only to please serde, which doesn't accept enum variants in `#[serde(default=…)]`
+fn volatile() -> Location {
+    Location::Volatile
 }
 
 #[derive(Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -230,6 +240,8 @@ pub struct Persistent {
     // pin_hash: Option<[u8; 16]>,
     // Ideally, we'd dogfood a "Monotonic Counter" from `trussed`.
     timestamp: u32,
+    #[serde(skip, default = "volatile")]
+    storage: Location,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -443,7 +455,7 @@ impl Persistent {
         let id = syscall!(client.unsafe_inject_key(
             alg.mechanism(),
             management_key,
-            trussed::types::Location::Internal,
+            self.storage,
             KeySerialization::Raw
         ))
         .key;
@@ -471,7 +483,7 @@ impl Persistent {
     ) -> KeyId {
         let id = syscall!(client.generate_key(
             alg.key_mechanism(),
-            StorageAttributes::default().set_persistence(Location::Internal)
+            StorageAttributes::default().set_persistence(self.storage)
         ))
         .key;
         let old = self.set_asymmetric_key(key, id, alg);
@@ -482,13 +494,13 @@ impl Persistent {
         id
     }
 
-    pub fn initialize(client: &mut impl trussed::Client) -> Self {
+    pub fn initialize(client: &mut impl trussed::Client, storage: Location) -> Self {
         info!("initializing PIV state");
         let administration = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
                 YUBICO_DEFAULT_MANAGEMENT_KEY_ALG.mechanism(),
                 YUBICO_DEFAULT_MANAGEMENT_KEY,
-                trussed::types::Location::Internal,
+                storage,
                 KeySerialization::Raw
             ))
             .key,
@@ -498,7 +510,7 @@ impl Persistent {
         let authentication = KeyWithAlg {
             id: syscall!(client.generate_key(
                 Mechanism::P256,
-                StorageAttributes::new().set_persistence(Location::Internal)
+                StorageAttributes::new().set_persistence(storage)
             ))
             .key,
             alg: AsymmetricAlgorithms::P256,
@@ -521,6 +533,7 @@ impl Persistent {
             .save(
                 client,
                 &guid_file[2..], // Remove the unnecessary 53 tag
+                storage,
             )
             .ok();
 
@@ -541,34 +554,35 @@ impl Persistent {
             pin: Pin::try_from(Self::DEFAULT_PIN).unwrap(),
             puk: Puk::try_from(Self::DEFAULT_PUK).unwrap(),
             timestamp: 0,
+            // In case of forgotten to rebind, ensure the bug is found
+            storage: Location::Volatile,
         };
         state.save(client);
         state
     }
 
-    pub fn load_or_initialize(client: &mut impl trussed::Client) -> Result<Self, Status> {
+    pub fn load_or_initialize(
+        client: &mut impl trussed::Client,
+        storage: Location,
+    ) -> Result<Self, Status> {
         // todo: can't seem to combine load + initialize without code repetition
-        let data = load_if_exists(client, Location::Internal, &PathBuf::from(Self::FILENAME))?;
+        let data = load_if_exists(client, storage, &PathBuf::from(Self::FILENAME))?;
         let Some(bytes) = data else {
-            return Ok( Self::initialize(client));
+            return Ok( Self::initialize(client, storage));
         };
 
-        let parsed = trussed::cbor_deserialize(&bytes).map_err(|_err| {
+        let mut parsed: Self = trussed::cbor_deserialize(&bytes).map_err(|_err| {
             error!("{_err:?}");
             Status::UnspecifiedPersistentExecutionError
         })?;
+        parsed.storage = storage;
         Ok(parsed)
     }
 
     pub fn save(&mut self, client: &mut impl trussed::Client) {
         let data: trussed::types::Message = trussed::cbor_serialize_bytes(&self).unwrap();
 
-        syscall!(client.write_file(
-            Location::Internal,
-            PathBuf::from(Self::FILENAME),
-            data,
-            None,
-        ));
+        syscall!(client.write_file(self.storage, PathBuf::from(Self::FILENAME), data, None,));
     }
 
     pub fn timestamp(&mut self, client: &mut impl trussed::Client) -> u32 {
@@ -661,8 +675,12 @@ impl ContainerStorage {
         }
     }
 
-    pub fn exists(self, client: &mut impl trussed::Client) -> Result<bool, Status> {
-        match try_syscall!(client.entry_metadata(Location::Internal, self.path())) {
+    pub fn exists(
+        self,
+        client: &mut impl trussed::Client,
+        storage: Location,
+    ) -> Result<bool, Status> {
+        match try_syscall!(client.entry_metadata(storage, self.path())) {
             Ok(Metadata { metadata: None }) => Ok(false),
             Ok(Metadata {
                 metadata: Some(metadata),
@@ -686,22 +704,26 @@ impl ContainerStorage {
     pub fn load(
         self,
         client: &mut impl trussed::Client,
+        storage: Location,
     ) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
-        load_if_exists(client, Location::Internal, &self.path())
+        load_if_exists(client, storage, &self.path())
             .map(|data| data.or_else(|| self.default().map(Bytes::from)))
     }
 
-    pub fn save(self, client: &mut impl trussed::Client, bytes: &[u8]) -> Result<(), Status> {
+    pub fn save(
+        self,
+        client: &mut impl trussed::Client,
+        bytes: &[u8],
+        storage: Location,
+    ) -> Result<(), Status> {
         let msg = Bytes::from(heapless::Vec::try_from(bytes).map_err(|_| {
             error!("Buffer full");
             Status::IncorrectDataParameter
         })?);
-        try_syscall!(client.write_file(Location::Internal, self.path(), msg, None)).map_err(
-            |_err| {
-                error!("Failed to store data: {_err:?}");
-                Status::UnspecifiedNonpersistentExecutionError
-            },
-        )?;
+        try_syscall!(client.write_file(storage, self.path(), msg, None)).map_err(|_err| {
+            error!("Failed to store data: {_err:?}");
+            Status::UnspecifiedNonpersistentExecutionError
+        })?;
         Ok(())
     }
 }

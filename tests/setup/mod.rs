@@ -11,6 +11,7 @@ macro_rules! cmd {
     };
 }
 
+use piv_authenticator::{Authenticator, Options};
 use trussed::virt::Ram;
 use trussed_rsa_alloc::virt::Client;
 
@@ -18,7 +19,7 @@ pub type Piv = piv_authenticator::Authenticator<Client<Ram>>;
 
 pub fn piv<R>(test: impl FnOnce(&mut Piv) -> R) -> R {
     trussed_rsa_alloc::virt::with_ram_client("test", |client| {
-        let mut piv_app = piv_authenticator::Authenticator::new(client);
+        let mut piv_app = Authenticator::new(client, Options::default());
         test(&mut piv_app)
     })
 }

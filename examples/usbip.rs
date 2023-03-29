@@ -22,7 +22,7 @@ impl trussed_usbip::Apps<ClientImplementation<Syscall<virt::Platform<Ram>>>, ()>
         _data: (),
     ) -> Self {
         PivApp {
-            piv: piv::Authenticator::new(make_client("piv")),
+            piv: piv::Authenticator::new(make_client("piv"), piv::Options::default()),
         }
     }
 

@@ -36,7 +36,7 @@ use core::convert::TryInto;
 use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
-use trussed::types::{KeySerialization, Location, StorageAttributes};
+use trussed::types::{KeySerialization, Location, PathBuf, StorageAttributes};
 use trussed::{client, syscall, try_syscall};
 
 use constants::*;
@@ -45,17 +45,38 @@ pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Options {
+    storage: Location,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            storage: Location::External,
+        }
+    }
+}
+
+impl Options {
+    pub fn storage(self, storage: Location) -> Self {
+        Self { storage, ..self }
+    }
+}
+
 /// PIV authenticator Trussed app.
 ///
 /// The `C` parameter is necessary, as PIV includes command sequences,
 /// where we need to store the previous command, so we need to know how
 /// much space to allocate.
 pub struct Authenticator<T> {
+    options: Options,
     state: State,
     trussed: T,
 }
 
 struct LoadedAuthenticator<'a, T> {
+    options: &'a mut Options,
     state: LoadedState<'a>,
     trussed: &'a mut T,
 }
@@ -70,21 +91,23 @@ impl<T> Authenticator<T>
 where
     T: client::Client + client::Ed255 + client::Tdes,
 {
-    pub fn new(trussed: T) -> Self {
+    pub fn new(trussed: T, options: Options) -> Self {
         // seems like RefCell is not the right thing, we want something like `Rc` instead,
         // which can be cloned and injected into other parts of the App that use Trussed.
         // let trussed = RefCell::new(trussed);
         Self {
             // state: state::State::new(trussed.clone()),
             state: Default::default(),
+            options,
             trussed,
         }
     }
 
     fn load(&mut self) -> core::result::Result<LoadedAuthenticator<'_, T>, Status> {
         Ok(LoadedAuthenticator {
-            state: self.state.load(&mut self.trussed)?,
+            state: self.state.load(&mut self.trussed, self.options.storage)?,
             trussed: &mut self.trussed,
+            options: &mut self.options,
         })
     }
 
@@ -170,30 +193,13 @@ where
             }
 
             YubicoPivExtension::Reset => {
-                let persistent_state = self.state.persistent(&mut self.trussed)?;
+                let this = self.load()?;
 
                 // TODO: find out what all needs resetting :)
-                persistent_state.reset_pin(&mut self.trussed);
-                persistent_state.reset_puk(&mut self.trussed);
-                persistent_state.reset_administration_key(&mut self.trussed);
-                self.state.volatile.app_security_status.pin_verified = false;
-                self.state.volatile.app_security_status.puk_verified = false;
-                self.state
-                    .volatile
-                    .app_security_status
-                    .administrator_verified = false;
-
-                try_syscall!(self.trussed.remove_file(
-                    trussed::types::Location::Internal,
-                    trussed::types::PathBuf::from(b"printed-information"),
-                ))
-                .ok();
-
-                try_syscall!(self.trussed.remove_file(
-                    trussed::types::Location::Internal,
-                    trussed::types::PathBuf::from(b"authentication-key.x5c"),
-                ))
-                .ok();
+                for location in [Location::Volatile, Location::External, Location::Internal] {
+                    try_syscall!(this.trussed.delete_all(location)).ok();
+                    try_syscall!(this.trussed.remove_dir_all(location, PathBuf::new())).ok();
+                }
             }
 
             YubicoPivExtension::SetManagementKey(touch_policy) => {
@@ -916,7 +922,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         let offset = reply.len();
         match container {
             Container::KeyHistoryObject => self.get_key_history_object(reply.lend())?,
-            _ => match ContainerStorage(container).load(self.trussed)? {
+            _ => match ContainerStorage(container).load(self.trussed, self.options.storage)? {
                 Some(data) => reply.expand(&data)?,
                 None => return Err(Status::NotFound),
             },
@@ -946,7 +952,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         };
 
         use state::ContainerStorage;
-        ContainerStorage(container).save(self.trussed, data)
+        ContainerStorage(container).save(self.trussed, data, self.options.storage)
     }
 
     fn reset_retry_counter(&mut self, data: ResetRetryCounter) -> Result {
@@ -976,7 +982,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         use state::ContainerStorage;
 
         for c in RETIRED_CERTS {
-            if ContainerStorage(c).exists(self.trussed)? {
+            if ContainerStorage(c).exists(self.trussed, self.options.storage)? {
                 num_certs += 1;
             }
         }

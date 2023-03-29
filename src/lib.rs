@@ -936,10 +936,15 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         let offset = reply.len();
         match container {
             Container::KeyHistoryObject => self.get_key_history_object(reply.lend())?,
-            _ => match ContainerStorage(container).load(self.trussed, self.options.storage)? {
-                Some(data) => reply.expand(&data)?,
-                None => return Err(Status::NotFound),
-            },
+            _ => {
+                if !ContainerStorage(container).load(
+                    self.trussed,
+                    self.options.storage,
+                    reply.lend(),
+                )? {
+                    return Err(Status::NotFound);
+                }
+            }
         }
         reply.prepend_len(offset)?;
 

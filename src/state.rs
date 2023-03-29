@@ -774,14 +774,35 @@ impl ContainerStorage {
         bytes: &[u8],
         storage: Location,
     ) -> Result<(), Status> {
-        let msg = Bytes::from(heapless::Vec::try_from(bytes).map_err(|_| {
-            error!("Buffer full");
-            Status::IncorrectDataParameter
-        })?);
+        let mut msg = Bytes::new();
+        let chunk_size = msg.capacity();
+        let mut chunks = bytes.chunks(chunk_size).map(|chunk| {
+            Bytes::from(
+                heapless::Vec::try_from(chunk)
+                    .expect("Iteration over chunks yields maximum of chunk_size"),
+            )
+        });
+        msg = chunks.next().unwrap_or_default();
+        let mut written = msg.len();
         try_syscall!(client.write_file(storage, self.path(), msg, None)).map_err(|_err| {
             error!("Failed to store data: {_err:?}");
             Status::UnspecifiedNonpersistentExecutionError
         })?;
+        for chunk in chunks {
+            let off = written;
+            written += chunk.len();
+            println!("Written {written}");
+            try_syscall!(client.write_file_chunk(
+                storage,
+                self.path(),
+                chunk,
+                OpenSeekFrom::Start(off as u32)
+            ))
+            .map_err(|_err| {
+                error!("Failed to store data: {_err:?}");
+                Status::UnspecifiedNonpersistentExecutionError
+            })?;
+        }
         Ok(())
     }
 }

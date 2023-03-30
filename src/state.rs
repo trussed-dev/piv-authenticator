@@ -632,6 +632,7 @@ fn load_if_exists_streaming<const R: usize>(
         Ok(r) => {
             read_len += r.data.len();
             file_len = r.len;
+            buffer.append_len(file_len)?;
             buffer.expand(&r.data)?;
         }
         Err(_) => match try_syscall!(client.entry_metadata(location, path.clone())) {
@@ -752,6 +753,7 @@ impl ContainerStorage {
         }
     }
 
+    // Write the length of the file and write
     pub fn load<const R: usize>(
         self,
         client: &mut impl trussed::Client,
@@ -763,6 +765,7 @@ impl ContainerStorage {
         }
 
         if let Some(data) = self.default() {
+            reply.append_len(data.len())?;
             reply.expand(&data)?;
             Ok(true)
         } else {

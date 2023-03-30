@@ -28,7 +28,7 @@ mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 
-#[cfg(feature = "virtual")]
+#[cfg(feature = "vpicc")]
 pub mod vpicc;
 
 use core::convert::TryInto;

@@ -12,17 +12,17 @@ use crate::Authenticator;
 const REQUEST_LEN: usize = 7609;
 const RESPONSE_LEN: usize = 7609;
 
-/// Virtual PIV smartcard implementation.
+/// Vpicc PIV smartcard implementation.
 ///
-/// This struct provides a virtual PIV smart card implementation that can be used with
+/// This struct provides a vpicc PIV smart card implementation that can be used with
 /// `vpicc-rs` and [`vsmartcard`](https://frankmorgner.github.io/vsmartcard/) to emulate the card.
-pub struct VirtualCard {
+pub struct VpiccCard {
     request_buffer: RequestBuffer<REQUEST_LEN>,
     response_buffer: ResponseBuffer<RESPONSE_LEN>,
     card: Authenticator<Client<Ram>>,
 }
 
-impl VirtualCard {
+impl VpiccCard {
     /// Creates a new virtual smart card from the given card.
     pub fn new(card: Authenticator<Client<Ram>>) -> Self {
         Self {
@@ -47,7 +47,7 @@ impl VirtualCard {
     }
 }
 
-impl vpicc::VSmartCard for VirtualCard {
+impl vpicc::VSmartCard for VpiccCard {
     fn power_on(&mut self) {}
 
     fn power_off(&mut self) {

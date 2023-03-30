@@ -9,7 +9,8 @@ use card::with_vsc;
 
 use expectrl::{spawn, Eof, Regex, WaitStatus};
 
-use std::io::Write;
+use std::include_str;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
 #[test_log::test]
@@ -73,6 +74,34 @@ fn ecdh() {
                 PIV_slot_9A@6E9BCA45D8AF4B9D95AA2E8C8C23BA49"        ).unwrap();
         drop(stdin);
 
+        assert_eq!(p.wait().unwrap().code(), Some(0));
+    });
+}
+
+#[test_log::test]
+fn large_cert() {
+    with_vsc(|| {
+        let mut p = Command::new("pivy-tool")
+            .args(["write-cert", "9A"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdin = p.stdin.take().unwrap();
+        stdin.write_all(include_bytes!("large-cert.der")).unwrap();
+        drop(stdin);
+        assert_eq!(p.wait().unwrap().code(), Some(0));
+
+        let mut p = Command::new("pivy-tool")
+            .args(["cert", "9A"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdout = p.stdout.take().unwrap();
+        let mut buf = String::new();
+        stdout.read_to_string(&mut buf).unwrap();
+        assert_eq!(buf, include_str!("large-cert.pem"));
         assert_eq!(p.wait().unwrap().code(), Some(0));
     });
 }

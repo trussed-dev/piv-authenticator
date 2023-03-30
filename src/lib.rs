@@ -140,7 +140,7 @@ where
     ) -> Result {
         info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
-        info!("parsed: {:?}", &parsed_command);
+        info!("parsed: {:02x?}", &parsed_command);
         let reply = Reply(reply);
 
         match parsed_command {

@@ -907,9 +907,12 @@ impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthent
             _ => &[0x53],
         };
         reply.expand(tag)?;
-        let offset = reply.len();
         match container {
-            Container::KeyHistoryObject => self.get_key_history_object(reply.lend())?,
+            Container::KeyHistoryObject => {
+                let offset = reply.len();
+                self.get_key_history_object(reply.lend())?;
+                reply.prepend_len(offset)?;
+            }
             _ => {
                 if !ContainerStorage(container).load(
                     self.trussed,
@@ -920,7 +923,6 @@ impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthent
                 }
             }
         }
-        reply.prepend_len(offset)?;
 
         Ok(())
     }

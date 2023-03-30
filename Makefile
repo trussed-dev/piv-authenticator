@@ -30,8 +30,8 @@ lint:
 tarpaulin:
 	cargo tarpaulin --features $(TEST_FEATURES) -o Html -o Xml
 
-.PHONY: example
-example:
+.PHONY: vpicc-example
+vpicc-example:
 	cargo run --example vpicc --features vpicc 
 	
 .PHONY: ci

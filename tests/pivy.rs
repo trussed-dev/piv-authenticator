@@ -78,6 +78,8 @@ fn ecdh() {
     });
 }
 
+const LARGE_CERT: &str = include_str!("large-cert.pem");
+
 #[test_log::test]
 fn large_cert() {
     with_vsc(|| {
@@ -88,7 +90,7 @@ fn large_cert() {
             .spawn()
             .unwrap();
         let mut stdin = p.stdin.take().unwrap();
-        stdin.write_all(include_bytes!("large-cert.der")).unwrap();
+        stdin.write_all(LARGE_CERT.as_bytes()).unwrap();
         drop(stdin);
         assert_eq!(p.wait().unwrap().code(), Some(0));
 
@@ -101,7 +103,7 @@ fn large_cert() {
         let mut stdout = p.stdout.take().unwrap();
         let mut buf = String::new();
         stdout.read_to_string(&mut buf).unwrap();
-        assert_eq!(buf, include_str!("large-cert.pem"));
+        assert_eq!(buf, LARGE_CERT);
         assert_eq!(p.wait().unwrap().code(), Some(0));
     });
 }

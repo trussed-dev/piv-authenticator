@@ -1,6 +1,6 @@
 // Copyright (C) 2022 Nicolas Stalder AND Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
-#![cfg(feature = "virtual")]
+#![cfg(feature = "vpicc")]
 
 mod setup;
 

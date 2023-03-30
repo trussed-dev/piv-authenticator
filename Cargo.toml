@@ -11,8 +11,8 @@ repository = "https://github.com/solokeys/piv-authenticator"
 documentation = "https://docs.rs/piv-authenticator"
 
 [[example]]
-name = "virtual"
-required-features = ["virtual"]
+name = "vpicc"
+required-features = ["vpicc"]
 
 
 [[example]]
@@ -60,7 +60,7 @@ rand = "0.8.5"
 default = []
 strict-pin = []
 std = []
-virtual = ["std", "vpicc", "trussed-rsa-alloc/virt"]
+vpicc = ["std", "dep:vpicc", "trussed-rsa-alloc/virt"]
 pivy-tests = []
 opensc-tests = []
 

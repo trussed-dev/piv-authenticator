@@ -14,6 +14,7 @@ use trussed::{
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
+    utils,
 };
 use trussed_auth::AuthClient;
 
@@ -773,62 +774,15 @@ impl ContainerStorage {
         }
     }
 
-    fn save_inner(
-        &self,
-        client: &mut impl trussed::Client,
-        bytes: &[u8],
-        storage: Location,
-    ) -> Result<(), Status> {
-        let mut msg = Bytes::new();
-        let chunk_size = msg.capacity();
-        let mut chunks = bytes.chunks(chunk_size).map(|chunk| {
-            Bytes::from(
-                heapless::Vec::try_from(chunk)
-                    .expect("Iteration over chunks yields maximum of chunk_size"),
-            )
-        });
-        msg = chunks.next().unwrap_or_default();
-        let mut written = msg.len();
-        try_syscall!(client.start_chunked_write(storage, self.path(), msg, None)).map_err(
-            |_err| {
-                error!("Failed to store data: {_err:?}");
-                Status::UnspecifiedNonpersistentExecutionError
-            },
-        )?;
-        for chunk in chunks {
-            let off = written;
-            written += chunk.len();
-            try_syscall!(client.write_file_chunk(
-                storage,
-                self.path(),
-                chunk,
-                OpenSeekFrom::Start(off as u32)
-            ))
-            .map_err(|_err| {
-                error!("Failed to store data: {_err:?}");
-                Status::UnspecifiedNonpersistentExecutionError
-            })?;
-        }
-        Ok(())
-    }
-
     pub fn save(
         self,
         client: &mut impl trussed::Client,
         bytes: &[u8],
         storage: Location,
     ) -> Result<(), Status> {
-        let res = self.save_inner(client, bytes, storage);
-        if res.is_ok() {
-            try_syscall!(client.flush_chunks(storage, self.path()))
-                .map(drop)
-                .map_err(|_err| {
-                    error!("Failed to flush data: {_err:?}");
-                    Status::UnspecifiedNonpersistentExecutionError
-                })
-        } else {
-            syscall!(client.abort_chunked_write(storage, self.path()));
-            res
-        }
+        utils::write_all(client, storage, self.path(), bytes, None).map_err(|_err| {
+            error!("Failed to write data object: {:?}", _err);
+            Status::UnspecifiedNonpersistentExecutionError
+        })
     }
 }

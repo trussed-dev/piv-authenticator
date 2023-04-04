@@ -74,7 +74,7 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/sosthene-nitrokey/trussed", rev = "25ae084251b76bacfa8919eb8"}
+trussed = { git = "https://github.com/sosthene-nitrokey/trussed", rev = "3eeda2a21106cb31120e08f5ae67a490b3d47bd6" }
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth", tag = "v0.2.1"}
 littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-2" }
 

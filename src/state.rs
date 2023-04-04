@@ -773,8 +773,8 @@ impl ContainerStorage {
         }
     }
 
-    pub fn save(
-        self,
+    fn save_inner(
+        &self,
         client: &mut impl trussed::Client,
         bytes: &[u8],
         storage: Location,
@@ -789,10 +789,12 @@ impl ContainerStorage {
         });
         msg = chunks.next().unwrap_or_default();
         let mut written = msg.len();
-        try_syscall!(client.write_file(storage, self.path(), msg, None)).map_err(|_err| {
-            error!("Failed to store data: {_err:?}");
-            Status::UnspecifiedNonpersistentExecutionError
-        })?;
+        try_syscall!(client.start_chunked_write(storage, self.path(), msg, None)).map_err(
+            |_err| {
+                error!("Failed to store data: {_err:?}");
+                Status::UnspecifiedNonpersistentExecutionError
+            },
+        )?;
         for chunk in chunks {
             let off = written;
             written += chunk.len();
@@ -808,5 +810,25 @@ impl ContainerStorage {
             })?;
         }
         Ok(())
+    }
+
+    pub fn save(
+        self,
+        client: &mut impl trussed::Client,
+        bytes: &[u8],
+        storage: Location,
+    ) -> Result<(), Status> {
+        let res = self.save_inner(client, bytes, storage);
+        if res.is_ok() {
+            try_syscall!(client.flush_chunks(storage, self.path()))
+                .map(drop)
+                .map_err(|_err| {
+                    error!("Failed to flush data: {_err:?}");
+                    Status::UnspecifiedNonpersistentExecutionError
+                })
+        } else {
+            syscall!(client.abort_chunked_write(storage, self.path()));
+            res
+        }
     }
 }

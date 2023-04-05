@@ -14,6 +14,7 @@ use trussed::{
     syscall, try_syscall,
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
 };
+use trussed_auth::AuthClient;
 
 use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
@@ -188,9 +189,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn load(
+    pub fn load<T: trussed::Client + AuthClient>(
         &mut self,
-        client: &mut impl trussed::Client,
+        client: &mut T,
         storage: Location,
     ) -> Result<LoadedState<'_>, Status> {
         if self.persistent.is_none() {
@@ -202,9 +203,9 @@ impl State {
         })
     }
 
-    pub fn persistent(
+    pub fn persistent<T: trussed::Client + AuthClient>(
         &mut self,
-        client: &mut impl trussed::Client,
+        client: &mut T,
         storage: Location,
     ) -> Result<&mut Persistent, Status> {
         Ok(self.load(client, storage)?.persistent)
@@ -226,18 +227,23 @@ fn volatile() -> Location {
     Location::Volatile
 }
 
+enum PinType {
+    Puk,
+    UserPin,
+}
+
+impl From<PinType> for trussed_auth::PinId {
+    fn from(value: PinType) -> Self {
+        match value {
+            PinType::UserPin => 0.into(),
+            PinType::Puk => 1.into(),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Persistent {
     pub keys: Keys,
-    consecutive_pin_mismatches: u8,
-    consecutive_puk_mismatches: u8,
-    // the PIN can be 6-8 digits, padded with 0xFF if <8
-    // we just store all of them for now.
-    pin: Pin,
-    // the PUK should be 8 digits, but it seems Yubico allows 6-8
-    // like for PIN
-    puk: Puk,
-    // pin_hash: Option<[u8; 16]>,
     // Ideally, we'd dogfood a "Monotonic Counter" from `trussed`.
     timestamp: u32,
     #[serde(skip, default = "volatile")]
@@ -322,119 +328,114 @@ impl Persistent {
     // hmm...!
     pub const PUK_RETRIES_DEFAULT: u8 = 5;
     const FILENAME: &'static [u8] = b"persistent-state.cbor";
-    const DEFAULT_PIN: &'static [u8] = b"123456\xff\xff";
-    const DEFAULT_PUK: &'static [u8] = b"12345678";
+    const DEFAULT_PIN: Pin = Pin(*b"123456\xff\xff");
+    const DEFAULT_PUK: Puk = Puk(*b"12345678");
 
-    pub fn remaining_pin_retries(&self) -> u8 {
-        if self.consecutive_pin_mismatches >= Self::PIN_RETRIES_DEFAULT {
-            0
-        } else {
-            Self::PIN_RETRIES_DEFAULT - self.consecutive_pin_mismatches
-        }
+    pub fn remaining_pin_retries<T: trussed::Client + AuthClient>(&self, client: &mut T) -> u8 {
+        try_syscall!(client.pin_retries(PinType::UserPin))
+            .map(|r| r.retries.unwrap_or_default())
+            .unwrap_or(0)
     }
 
-    pub fn remaining_puk_retries(&self) -> u8 {
-        if self.consecutive_puk_mismatches >= Self::PUK_RETRIES_DEFAULT {
-            0
-        } else {
-            Self::PUK_RETRIES_DEFAULT - self.consecutive_puk_mismatches
-        }
+    pub fn remaining_puk_retries<T: trussed::Client + AuthClient>(&self, client: &mut T) -> u8 {
+        try_syscall!(client.pin_retries(PinType::Puk))
+            .map(|r| r.retries.unwrap_or_default())
+            .unwrap_or(0)
     }
 
-    // FIXME: revisit with trussed pin management
-    pub fn verify_pin(&mut self, other_pin: &Pin, client: &mut impl trussed::Client) -> bool {
-        if self.remaining_pin_retries() == 0 {
-            return false;
-        }
-        self.consecutive_pin_mismatches += 1;
-        self.save(client);
-        if self.pin == *other_pin {
-            self.consecutive_pin_mismatches = 0;
-            true
-        } else {
-            false
-        }
-    }
-
-    // FIXME: revisit with trussed pin management
-    pub fn verify_puk(&mut self, other_puk: &Puk, client: &mut impl trussed::Client) -> bool {
-        if self.remaining_puk_retries() == 0 {
-            return false;
-        }
-        self.consecutive_puk_mismatches += 1;
-        self.save(client);
-        if self.puk == *other_puk {
-            self.consecutive_puk_mismatches = 0;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn set_pin(&mut self, new_pin: Pin, client: &mut impl trussed::Client) {
-        self.pin = new_pin;
-        self.consecutive_pin_mismatches = 0;
-        self.save(client);
-    }
-
-    pub fn set_puk(&mut self, new_puk: Puk, client: &mut impl trussed::Client) {
-        self.puk = new_puk;
-        self.consecutive_puk_mismatches = 0;
-        self.save(client);
-    }
-
-    pub fn reset_pin(&mut self, client: &mut impl trussed::Client) {
-        self.set_pin(Pin::try_from(Self::DEFAULT_PIN).unwrap(), client);
-        self.reset_consecutive_pin_mismatches(client);
-    }
-
-    pub fn reset_puk(&mut self, client: &mut impl trussed::Client) {
-        self.set_puk(Puk::try_from(Self::DEFAULT_PUK).unwrap(), client);
-        self.reset_consecutive_puk_mismatches(client);
-    }
-
-    pub fn increment_consecutive_pin_mismatches(
+    pub fn verify_pin<T: trussed::Client + AuthClient>(
         &mut self,
-        client: &mut impl trussed::Client,
-    ) -> u8 {
-        if self.consecutive_pin_mismatches >= Self::PIN_RETRIES_DEFAULT {
-            return 0;
-        }
-
-        self.consecutive_pin_mismatches += 1;
-        self.save(client);
-        Self::PIN_RETRIES_DEFAULT - self.consecutive_pin_mismatches
+        value: &Pin,
+        client: &mut T,
+    ) -> bool {
+        let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
+        try_syscall!(client.check_pin(PinType::UserPin, pin))
+            .map(|r| r.success)
+            .unwrap_or(false)
     }
 
-    pub fn increment_consecutive_puk_mismatches(
+    pub fn verify_puk<T: trussed::Client + AuthClient>(
         &mut self,
-        client: &mut impl trussed::Client,
-    ) -> u8 {
-        if self.consecutive_puk_mismatches >= Self::PUK_RETRIES_DEFAULT {
-            return 0;
-        }
-
-        self.consecutive_puk_mismatches += 1;
-        self.save(client);
-        Self::PUK_RETRIES_DEFAULT - self.consecutive_puk_mismatches
+        value: &Puk,
+        client: &mut T,
+    ) -> bool {
+        let puk = Bytes::from_slice(&value.0).expect("Convertion of static array");
+        try_syscall!(client.check_pin(PinType::Puk, puk))
+            .map(|r| r.success)
+            .unwrap_or(false)
     }
 
-    pub fn reset_consecutive_pin_mismatches(&mut self, client: &mut impl trussed::Client) -> u8 {
-        if self.consecutive_pin_mismatches != 0 {
-            self.consecutive_pin_mismatches = 0;
-            self.save(client);
-        }
-
-        Self::PIN_RETRIES_DEFAULT
+    pub fn change_pin<T: trussed::Client + AuthClient>(
+        &mut self,
+        old_value: &Pin,
+        new_value: &Pin,
+        client: &mut T,
+    ) -> bool {
+        let old_pin = Bytes::from_slice(&old_value.0).expect("Convertion of static array");
+        let new_pin = Bytes::from_slice(&new_value.0).expect("Convertion of static array");
+        try_syscall!(client.change_pin(PinType::UserPin, old_pin, new_pin))
+            .map(|r| r.success)
+            .unwrap_or(false)
     }
 
-    pub fn reset_consecutive_puk_mismatches(&mut self, client: &mut impl trussed::Client) -> u8 {
-        if self.consecutive_puk_mismatches != 0 {
-            self.consecutive_puk_mismatches = 0;
-            self.save(client);
-        }
+    pub fn change_puk<T: trussed::Client + AuthClient>(
+        &mut self,
+        old_value: &Puk,
+        new_value: &Puk,
+        client: &mut T,
+    ) -> bool {
+        let old_puk = Bytes::from_slice(&old_value.0).expect("Convertion of static array");
+        let new_puk = Bytes::from_slice(&new_value.0).expect("Convertion of static array");
+        try_syscall!(client.change_pin(PinType::UserPin, old_puk, new_puk))
+            .map(|r| r.success)
+            .unwrap_or(false)
+    }
 
-        Self::PUK_RETRIES_DEFAULT
+    pub fn set_pin<T: trussed::Client + AuthClient>(
+        &mut self,
+        new_pin: Pin,
+        client: &mut T,
+    ) -> Result<(), Status> {
+        let new_pin = Bytes::from_slice(&new_pin.0).expect("Convertion of static array");
+        try_syscall!(client.set_pin(
+            PinType::UserPin,
+            new_pin,
+            Some(Self::PIN_RETRIES_DEFAULT),
+            true
+        ))
+        .map_err(|_err| {
+            error!("Failed to set pin");
+            Status::UnspecifiedPersistentExecutionError
+        })
+        .map(drop)
+    }
+
+    pub fn set_puk<T: trussed::Client + AuthClient>(
+        &mut self,
+        new_puk: Puk,
+        client: &mut T,
+    ) -> Result<(), Status> {
+        let new_puk = Bytes::from_slice(&new_puk.0).expect("Convertion of static array");
+        try_syscall!(client.set_pin(PinType::Puk, new_puk, Some(Self::PUK_RETRIES_DEFAULT), true))
+            .map_err(|_err| {
+                error!("Failed to set puk");
+                Status::UnspecifiedPersistentExecutionError
+            })
+            .map(drop)
+    }
+    pub fn reset_pin<T: trussed::Client + AuthClient>(
+        &mut self,
+        new_pin: Pin,
+        client: &mut T,
+    ) -> Result<(), Status> {
+        self.set_pin(new_pin, client)
+    }
+    pub fn reset_puk<T: trussed::Client + AuthClient>(
+        &mut self,
+        new_puk: Puk,
+        client: &mut T,
+    ) -> Result<(), Status> {
+        self.set_puk(new_puk, client)
     }
 
     pub fn reset_administration_key(&mut self, client: &mut impl trussed::Client) {
@@ -494,7 +495,10 @@ impl Persistent {
         id
     }
 
-    pub fn initialize(client: &mut impl trussed::Client, storage: Location) -> Self {
+    pub fn initialize<T: trussed::Client + AuthClient>(
+        client: &mut T,
+        storage: Location,
+    ) -> Result<Self, Status> {
         info!("initializing PIV state");
         let administration = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
@@ -549,26 +553,24 @@ impl Persistent {
 
         let mut state = Self {
             keys,
-            consecutive_pin_mismatches: 0,
-            consecutive_puk_mismatches: 0,
-            pin: Pin::try_from(Self::DEFAULT_PIN).unwrap(),
-            puk: Puk::try_from(Self::DEFAULT_PUK).unwrap(),
             timestamp: 0,
             // In case of forgotten to rebind, ensure the bug is found
             storage: Location::Volatile,
         };
         state.save(client);
-        state
+        state.reset_pin(Self::DEFAULT_PIN, client)?;
+        state.reset_puk(Self::DEFAULT_PUK, client)?;
+        Ok(state)
     }
 
-    pub fn load_or_initialize(
-        client: &mut impl trussed::Client,
+    pub fn load_or_initialize<T: trussed::Client + AuthClient>(
+        client: &mut T,
         storage: Location,
     ) -> Result<Self, Status> {
         // todo: can't seem to combine load + initialize without code repetition
         let data = load_if_exists(client, storage, &PathBuf::from(Self::FILENAME))?;
         let Some(bytes) = data else {
-            return Ok( Self::initialize(client, storage));
+            return Self::initialize(client, storage);
         };
 
         let mut parsed: Self = trussed::cbor_deserialize(&bytes).map_err(|_err| {

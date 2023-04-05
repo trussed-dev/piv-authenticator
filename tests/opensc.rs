@@ -1,7 +1,7 @@
 // Copyright (C) 2022  Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
 
-#![cfg(all(feature = "virtual", feature = "opensc-tests"))]
+#![cfg(all(feature = "vpicc", feature = "opensc-tests"))]
 
 mod card;
 

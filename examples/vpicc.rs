@@ -18,10 +18,10 @@ fn main() {
 
     trussed_rsa_alloc::virt::with_ram_client("piv-authenticator", |client| {
         let card = Authenticator::new(client, Options::default());
-        let mut virtual_card = piv_authenticator::vpicc::VirtualCard::new(card);
+        let mut vpicc_card = piv_authenticator::vpicc::VpiccCard::new(card);
         let vpicc = vpicc::connect().expect("failed to connect to vpicc");
         vpicc
-            .run(&mut virtual_card)
-            .expect("failed to run virtual smartcard");
+            .run(&mut vpicc_card)
+            .expect("failed to run vpicc smartcard");
     });
 }

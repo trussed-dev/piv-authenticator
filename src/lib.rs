@@ -26,6 +26,8 @@ mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 
+#[cfg(feature = "virt")]
+pub mod virt;
 #[cfg(feature = "vpicc")]
 pub mod vpicc;
 

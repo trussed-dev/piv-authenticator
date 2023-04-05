@@ -3,9 +3,15 @@
 
 use trussed::virt::{self, Ram, UserInterface};
 use trussed::{ClientImplementation, Platform};
+use trussed_usbip::ClientBuilder;
 
-use piv_authenticator as piv;
-use trussed_usbip::Syscall;
+use piv_authenticator::{
+    self as piv,
+    virt::dispatch::{self, Dispatch},
+};
+
+type VirtClient =
+    ClientImplementation<trussed_usbip::Service<Ram, dispatch::Dispatch>, dispatch::Dispatch>;
 
 const MANUFACTURER: &str = "Nitrokey";
 const PRODUCT: &str = "Nitrokey 3";
@@ -13,16 +19,17 @@ const VID: u16 = 0x20a0;
 const PID: u16 = 0x42b2;
 
 struct PivApp {
-    piv: piv::Authenticator<ClientImplementation<Syscall<virt::Platform<Ram>>>>,
+    piv: piv::Authenticator<VirtClient>,
 }
 
-impl trussed_usbip::Apps<ClientImplementation<Syscall<virt::Platform<Ram>>>, ()> for PivApp {
-    fn new(
-        make_client: impl Fn(&str) -> ClientImplementation<Syscall<virt::Platform<Ram>>>,
-        _data: (),
-    ) -> Self {
+impl trussed_usbip::Apps<VirtClient, Dispatch> for PivApp {
+    type Data = ();
+    fn new<B: ClientBuilder<VirtClient, Dispatch>>(builder: &B, _data: ()) -> Self {
         PivApp {
-            piv: piv::Authenticator::new(make_client("piv"), piv::Options::default()),
+            piv: piv::Authenticator::new(
+                builder.build("piv", dispatch::BACKENDS),
+                piv::Options::default(),
+            ),
         }
     }
 
@@ -44,11 +51,13 @@ fn main() {
         vid: VID,
         pid: PID,
     };
-    trussed_usbip::Runner::new(virt::Ram::default(), options)
+    trussed_usbip::Builder::new(virt::Ram::default(), options)
+        .dispatch(Dispatch::new())
         .init_platform(move |platform| {
             let ui: Box<dyn trussed::platform::UserInterface + Send + Sync> =
                 Box::new(UserInterface::new());
             platform.user_interface().set_inner(ui);
         })
-        .exec::<PivApp, _, _>(|_platform| {});
+        .build::<PivApp>()
+        .exec(|_platform| {});
 }

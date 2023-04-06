@@ -46,19 +46,29 @@ use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, Stat
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     storage: Location,
+    label: &'static [u8],
+    url: &'static [u8],
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
             storage: Location::External,
+            label: NITROKEY_APPLICATION_LABEL,
+            url: NITROKEY_APPLICATION_URL,
         }
     }
 }
 
 impl Options {
     pub fn storage(self, storage: Location) -> Self {
-        Self { storage }
+        Self { storage, ..self }
+    }
+    pub fn url(self, url: &'static [u8]) -> Self {
+        Self { url, ..self }
+    }
+    pub fn label(self, label: &'static [u8]) -> Self {
+        Self { label, ..self }
     }
 }
 
@@ -118,8 +128,8 @@ where
         info!("selecting PIV maybe");
 
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
-            .with_application_label(APPLICATION_LABEL)
-            .with_application_url(APPLICATION_URL)
+            .with_application_label(self.options.label)
+            .with_application_url(self.options.url)
             .with_supported_cryptographic_algorithms(&[
                 Tdes, Aes256, P256, Ed25519, X25519, Rsa2048,
             ]);

@@ -145,7 +145,6 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &[u8; 24] = &hex!(
 pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm =
     AdministrationAlgorithm::Tdes;
 
-// stolen from le yubico
 pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
     " 
     4f 0b // PIV AID

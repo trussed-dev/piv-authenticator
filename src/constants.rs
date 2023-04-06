@@ -133,7 +133,6 @@ impl DataObjects {
     pub const KeyHistoryObject: &'static [u8] = &[0x5f, 0xc1, 0x0c];
 }
 
-// pub const YUBICO_DEFAULT_MANAGEMENT_KEY: & [u8; 24] = b"123456781234567812345678";
 pub const YUBICO_DEFAULT_MANAGEMENT_KEY: &[u8; 24] = &hex!(
     "
     0102030405060708

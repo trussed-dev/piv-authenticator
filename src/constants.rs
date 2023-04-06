@@ -12,10 +12,10 @@ pub const RID_LENGTH: usize = 5;
 // top nibble of first byte is "category", here "A" = International
 // this category has 5 byte "registered application provider identifier"
 // (international RID, the other 9 nibbles is between 0x0 and 0x9).
-pub const NIST_RID: &[u8; 5] = &hex!("A000000 308");
-pub const YUBICO_RID: &[u8; 5] = &hex!("A000000 527");
+pub const NIST_RID: &[u8; RID_LENGTH] = &hex!("A000000 308");
+pub const YUBICO_RID: &[u8; RID_LENGTH] = &hex!("A000000 527");
 // our very own RID (847 = 7*11*11 FWIW)
-pub const SOLOKEYS_RID: &[u8; 5] = &hex!("A000000 847");
+pub const SOLOKEYS_RID: &[u8; RID_LENGTH] = &hex!("A000000 847");
 
 pub const PIV_APP: [u8; 4] = hex!("0000 1000");
 pub const DERIVED_PIV_APP: [u8; 4] = hex!("0000 2000");

@@ -58,7 +58,7 @@ impl Default for Options {
 
 impl Options {
     pub fn storage(self, storage: Location) -> Self {
-        Self { storage, ..self }
+        Self { storage }
     }
 }
 
@@ -493,17 +493,17 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 exponentiation: None,
             } => self.mutual_auth_2(auth, r, c, reply.lend())?,
             Auth {
-                witness,
-                challenge,
-                response,
-                exponentiation,
+                witness: _witness,
+                challenge: _challenge,
+                response: _response,
+                exponentiation: _exponentiation,
             } => {
                 warn!(
                     "General authenticate with unexpected data: witness: {:?}, challenge: {:?}, response: {:?}, exponentiation: {:?}",
-                    witness.map(|s|s.len()),
-                    challenge.map(|s|s.len()),
-                    response.map(|s|s.len()),
-                    exponentiation.map(|s|s.len()),
+                    _witness.map(|s|s.len()),
+                    _challenge.map(|s|s.len()),
+                    _response.map(|s|s.len()),
+                    _exponentiation.map(|s|s.len()),
                 );
                 return Err(Status::IncorrectDataParameter);
             }

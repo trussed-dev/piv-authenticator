@@ -15,9 +15,7 @@ pub use commands::{Command, YubicoPivExtension};
 use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
 pub mod container;
-use container::{
-    AttestKeyReference, AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference,
-};
+use container::{AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference};
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
@@ -184,13 +182,7 @@ where
                 reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
             }
 
-            YubicoPivExtension::Attest(slot) => {
-                match slot {
-                    AttestKeyReference::PivAuthentication => reply
-                        .extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A)
-                        .ok(),
-                };
-            }
+            YubicoPivExtension::Attest(_slot) => return Err(Status::FunctionNotSupported),
 
             YubicoPivExtension::Reset => {
                 let this = self.load()?;

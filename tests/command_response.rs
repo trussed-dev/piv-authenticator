@@ -12,8 +12,9 @@ use serde::Deserialize;
 use trussed::types::GenericArray;
 
 // iso7816::Status doesn't support serde
-#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Deserialize, Debug, PartialEq, Clone, Copy, Default)]
 enum Status {
+    #[default]
     Success,
     MoreAvailable(u8),
     VerificationFailed,
@@ -175,12 +176,6 @@ impl TryFrom<u16> for Status {
             sw @ 0x6100..=0x61FF => Self::MoreAvailable(sw as u8),
             other => return Err(other),
         })
-    }
-}
-
-impl Default for Status {
-    fn default() -> Status {
-        Status::Success
     }
 }
 
@@ -484,10 +479,10 @@ impl IoCmd {
             "
             61 66 // Card application property template
                 4f 06 000010000100 // Application identifier
-                50 0c 536f6c6f4b65797320504956 // Application label = b\"Solokeys PIV\"
+                50 0c 4e6974726f6b657920504956 // Application label = b\"Nitrokey PIV\"
 
-                // URL = b\"https://github.com/solokeys/piv-authenticator\"
-                5f50 2d 68747470733a2f2f6769746875622e636f6d2f736f6c6f6b6579732f7069762d61757468656e74696361746f72 
+                // URL = b\"https://github.com/Nitrokey/piv-authenticator\"
+                5f50 2d 68747470733a2f2f6769746875622e636f6d2f4e6974726f6b65792f7069762d61757468656e74696361746f72
             
                 // Cryptographic Algorithm Identifier Template
                 ac 15 

@@ -15,9 +15,7 @@ pub use commands::{Command, YubicoPivExtension};
 use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
 pub mod container;
-use container::{
-    AttestKeyReference, AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference,
-};
+use container::{AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference};
 pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
@@ -48,12 +46,16 @@ use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, Stat
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     storage: Location,
+    label: &'static [u8],
+    url: &'static [u8],
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
             storage: Location::External,
+            label: NITROKEY_APPLICATION_LABEL,
+            url: NITROKEY_APPLICATION_URL,
         }
     }
 }
@@ -61,6 +63,12 @@ impl Default for Options {
 impl Options {
     pub fn storage(self, storage: Location) -> Self {
         Self { storage, ..self }
+    }
+    pub fn url(self, url: &'static [u8]) -> Self {
+        Self { url, ..self }
+    }
+    pub fn label(self, label: &'static [u8]) -> Self {
+        Self { label, ..self }
     }
 }
 
@@ -120,8 +128,8 @@ where
         info!("selecting PIV maybe");
 
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
-            .with_application_label(APPLICATION_LABEL)
-            .with_application_url(APPLICATION_URL)
+            .with_application_label(self.options.label)
+            .with_application_url(self.options.url)
             .with_supported_cryptographic_algorithms(&[
                 Tdes, Aes256, P256, Ed25519, X25519, Rsa2048,
             ]);
@@ -184,13 +192,7 @@ where
                 reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
             }
 
-            YubicoPivExtension::Attest(slot) => {
-                match slot {
-                    AttestKeyReference::PivAuthentication => reply
-                        .extend_from_slice(YUBICO_ATTESTATION_CERTIFICATE_FOR_9A)
-                        .ok(),
-                };
-            }
+            YubicoPivExtension::Attest(_slot) => return Err(Status::FunctionNotSupported),
 
             YubicoPivExtension::Reset => {
                 let this = self.load()?;
@@ -501,17 +503,17 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 exponentiation: None,
             } => self.mutual_auth_2(auth, r, c, reply.lend())?,
             Auth {
-                witness,
-                challenge,
-                response,
-                exponentiation,
+                witness: _witness,
+                challenge: _challenge,
+                response: _response,
+                exponentiation: _exponentiation,
             } => {
                 warn!(
                     "General authenticate with unexpected data: witness: {:?}, challenge: {:?}, response: {:?}, exponentiation: {:?}",
-                    witness.map(|s|s.len()),
-                    challenge.map(|s|s.len()),
-                    response.map(|s|s.len()),
-                    exponentiation.map(|s|s.len()),
+                    _witness.map(|s|s.len()),
+                    _challenge.map(|s|s.len()),
+                    _response.map(|s|s.len()),
+                    _exponentiation.map(|s|s.len()),
                 );
                 return Err(Status::IncorrectDataParameter);
             }

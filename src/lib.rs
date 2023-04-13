@@ -26,6 +26,8 @@ mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 
+#[cfg(feature = "virt")]
+pub mod virt;
 #[cfg(feature = "vpicc")]
 pub mod vpicc;
 
@@ -36,6 +38,7 @@ use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
 use trussed::types::{KeySerialization, Location, PathBuf, StorageAttributes};
 use trussed::{client, syscall, try_syscall};
+use trussed_auth::AuthClient;
 
 use constants::*;
 
@@ -62,7 +65,7 @@ impl Default for Options {
 
 impl Options {
     pub fn storage(self, storage: Location) -> Self {
-        Self { storage, ..self }
+        Self { storage }
     }
     pub fn url(self, url: &'static [u8]) -> Self {
         Self { url, ..self }
@@ -97,7 +100,7 @@ impl<T> iso7816::App for Authenticator<T> {
 
 impl<T> Authenticator<T>
 where
-    T: client::Client + client::Ed255 + client::Tdes,
+    T: client::Client + AuthClient + client::Ed255 + client::Tdes,
 {
     pub fn new(trussed: T, options: Options) -> Self {
         // seems like RefCell is not the right thing, we want something like `Rc` instead,
@@ -216,7 +219,7 @@ where
     }
 }
 
-impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
+impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
     pub fn yubico_set_administration_key<const R: usize>(
         &mut self,
         data: &[u8],
@@ -280,24 +283,13 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
-            // the actual PIN verification
-            if self.state.persistent.remaining_pin_retries() == 0 {
-                return Err(Status::OperationBlocked);
-            }
-
             if self.state.persistent.verify_pin(&pin, self.trussed) {
-                self.state
-                    .persistent
-                    .reset_consecutive_pin_mismatches(self.trussed);
                 self.state.volatile.app_security_status.pin_verified = true;
                 Ok(())
             } else {
-                let remaining = self
-                    .state
-                    .persistent
-                    .increment_consecutive_pin_mismatches(self.trussed);
                 // should we logout here?
                 self.state.volatile.app_security_status.pin_verified = false;
+                let remaining = self.state.persistent.remaining_pin_retries(self.trussed);
                 Err(Status::RemainingRetries(remaining))
             }
         } else {
@@ -322,7 +314,7 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
                 if self.state.volatile.app_security_status.pin_verified {
                     Ok(())
                 } else {
-                    let retries = self.state.persistent.remaining_pin_retries();
+                    let retries = self.state.persistent.remaining_pin_retries(self.trussed);
                     Err(Status::RemainingRetries(retries))
                 }
             }
@@ -338,45 +330,25 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
     }
 
     pub fn change_pin(&mut self, old_pin: commands::Pin, new_pin: commands::Pin) -> Result {
-        if self.state.persistent.remaining_pin_retries() == 0 {
-            return Err(Status::OperationBlocked);
-        }
-
-        if !self.state.persistent.verify_pin(&old_pin, self.trussed) {
-            let remaining = self
-                .state
-                .persistent
-                .increment_consecutive_pin_mismatches(self.trussed);
-            self.state.volatile.app_security_status.pin_verified = false;
-            return Err(Status::RemainingRetries(remaining));
-        }
-
-        self.state
+        if !self
+            .state
             .persistent
-            .reset_consecutive_pin_mismatches(self.trussed);
-        self.state.persistent.set_pin(new_pin, self.trussed);
+            .change_pin(&old_pin, &new_pin, self.trussed)
+        {
+            return Err(Status::VerificationFailed);
+        }
         self.state.volatile.app_security_status.pin_verified = true;
         Ok(())
     }
 
     pub fn change_puk(&mut self, old_puk: commands::Puk, new_puk: commands::Puk) -> Result {
-        if self.state.persistent.remaining_puk_retries() == 0 {
-            return Err(Status::OperationBlocked);
-        }
-
-        if !self.state.persistent.verify_puk(&old_puk, self.trussed) {
-            let remaining = self
-                .state
-                .persistent
-                .increment_consecutive_puk_mismatches(self.trussed);
-            self.state.volatile.app_security_status.puk_verified = false;
-            return Err(Status::RemainingRetries(remaining));
-        }
-
-        self.state
+        if !self
+            .state
             .persistent
-            .reset_consecutive_puk_mismatches(self.trussed);
-        self.state.persistent.set_puk(new_puk, self.trussed);
+            .change_puk(&old_puk, &new_puk, self.trussed)
+        {
+            return Err(Status::VerificationFailed);
+        }
         self.state.volatile.app_security_status.puk_verified = true;
         Ok(())
     }
@@ -979,7 +951,9 @@ impl<'a, T: trussed::Client + trussed::client::Ed255> LoadedAuthenticator<'a, T>
         {
             return Err(Status::VerificationFailed);
         }
-        self.state.persistent.set_pin(Pin(data.pin), self.trussed);
+        self.state
+            .persistent
+            .reset_pin(Pin(data.pin), self.trussed)?;
 
         Ok(())
     }

@@ -5,11 +5,12 @@ use crate::{reply::Reply, Authenticator, /*constants::PIV_AID,*/ Result};
 
 use apdu_dispatch::{app::App, command, response, Command};
 use trussed::client;
+use trussed_auth::AuthClient;
 
 #[cfg(feature = "apdu-dispatch")]
 impl<T> App<{ command::SIZE }, { response::SIZE }> for Authenticator<T>
 where
-    T: client::Client + client::Ed255 + client::Tdes,
+    T: client::Client + AuthClient + client::Ed255 + client::Tdes,
 {
     fn select(&mut self, _apdu: &Command, reply: &mut response::Data) -> Result {
         self.select(Reply(reply))

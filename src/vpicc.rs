@@ -3,7 +3,8 @@
 
 use iso7816::{command::FromSliceError, Command, Status};
 use trussed::virt::Ram;
-use trussed_rsa_alloc::virt::Client;
+
+use crate::virt::VirtClient;
 
 use std::convert::{TryFrom, TryInto};
 
@@ -19,12 +20,12 @@ const RESPONSE_LEN: usize = 7609;
 pub struct VpiccCard {
     request_buffer: RequestBuffer<REQUEST_LEN>,
     response_buffer: ResponseBuffer<RESPONSE_LEN>,
-    card: Authenticator<Client<Ram>>,
+    card: Authenticator<VirtClient<Ram>>,
 }
 
 impl VpiccCard {
     /// Creates a new virtual smart card from the given card.
-    pub fn new(card: Authenticator<Client<Ram>>) -> Self {
+    pub fn new(card: Authenticator<VirtClient<Ram>>) -> Self {
         Self {
             request_buffer: Default::default(),
             response_buffer: Default::default(),

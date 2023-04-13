@@ -661,7 +661,9 @@ fn load_if_exists_streaming<const R: usize>(
                 read_len += r.data.len();
                 buffer.expand(&r.data)?;
             }
-            Err(_err) => error!("Failed to read chunk: {:?}", _err),
+            Err(_err) => {
+                error!("Failed to read chunk: {:?}", _err);
+            }
         }
     }
 

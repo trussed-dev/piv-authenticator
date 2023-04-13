@@ -151,7 +151,7 @@ where
     ) -> Result {
         info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
-        info!("parsed: {:?}", &parsed_command);
+        info!("parsed: {:02x?}", &parsed_command);
         let reply = Reply(reply);
 
         match parsed_command {
@@ -907,15 +907,22 @@ impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthent
             _ => &[0x53],
         };
         reply.expand(tag)?;
-        let offset = reply.len();
         match container {
-            Container::KeyHistoryObject => self.get_key_history_object(reply.lend())?,
-            _ => match ContainerStorage(container).load(self.trussed, self.options.storage)? {
-                Some(data) => reply.expand(&data)?,
-                None => return Err(Status::NotFound),
-            },
+            Container::KeyHistoryObject => {
+                let offset = reply.len();
+                self.get_key_history_object(reply.lend())?;
+                reply.prepend_len(offset)?;
+            }
+            _ => {
+                if !ContainerStorage(container).load(
+                    self.trussed,
+                    self.options.storage,
+                    reply.lend(),
+                )? {
+                    return Err(Status::NotFound);
+                }
+            }
         }
-        reply.prepend_len(offset)?;
 
         Ok(())
     }

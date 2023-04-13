@@ -8,15 +8,18 @@ use flexiber::EncodableHeapless;
 use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
+use trussed::types::OpenSeekFrom;
 use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
+    utils,
 };
 use trussed_auth::AuthClient;
 
 use crate::piv_types::CardHolderUniqueIdentifier;
+use crate::reply::Reply;
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
 use crate::{
     container::{AsymmetricKeyReference, Container, ReadAccessRule, SecurityCondition},
@@ -617,6 +620,56 @@ fn load_if_exists(
     }
 }
 
+/// Returns false if the file does not exist
+fn load_if_exists_streaming<const R: usize>(
+    client: &mut impl trussed::Client,
+    location: Location,
+    path: &PathBuf,
+    mut buffer: Reply<'_, R>,
+) -> Result<bool, Status> {
+    let mut read_len = 0;
+    let file_len;
+    match try_syscall!(client.read_file_chunk(location, path.clone(), OpenSeekFrom::Start(0))) {
+        Ok(r) => {
+            read_len += r.data.len();
+            file_len = r.len;
+            buffer.append_len(file_len)?;
+            buffer.expand(&r.data)?;
+        }
+        Err(_) => match try_syscall!(client.entry_metadata(location, path.clone())) {
+            Ok(Metadata { metadata: None }) => return Ok(false),
+            Ok(Metadata {
+                metadata: Some(_metadata),
+            }) => {
+                error!("File {path} exists but couldn't be read: {_metadata:?}");
+                return Err(Status::UnspecifiedPersistentExecutionError);
+            }
+            Err(_err) => {
+                error!("File {path} couldn't be read: {_err:?}");
+                return Err(Status::UnspecifiedPersistentExecutionError);
+            }
+        },
+    }
+
+    while read_len < file_len {
+        match try_syscall!(client.read_file_chunk(
+            location,
+            path.clone(),
+            OpenSeekFrom::Start(read_len as u32)
+        )) {
+            Ok(r) => {
+                read_len += r.data.len();
+                buffer.expand(&r.data)?;
+            }
+            Err(_err) => {
+                error!("Failed to read chunk: {:?}", _err);
+            }
+        }
+    }
+
+    Ok(true)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ContainerStorage(pub Container);
 
@@ -703,13 +756,24 @@ impl ContainerStorage {
         }
     }
 
-    pub fn load(
+    // Write the length of the file and write
+    pub fn load<const R: usize>(
         self,
         client: &mut impl trussed::Client,
         storage: Location,
-    ) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
-        load_if_exists(client, storage, &self.path())
-            .map(|data| data.or_else(|| self.default().map(Bytes::from)))
+        mut reply: Reply<'_, R>,
+    ) -> Result<bool, Status> {
+        if load_if_exists_streaming(client, storage, &self.path(), reply.lend())? {
+            return Ok(true);
+        }
+
+        if let Some(data) = self.default() {
+            reply.append_len(data.len())?;
+            reply.expand(&data)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     pub fn save(
@@ -718,14 +782,9 @@ impl ContainerStorage {
         bytes: &[u8],
         storage: Location,
     ) -> Result<(), Status> {
-        let msg = Bytes::from(heapless::Vec::try_from(bytes).map_err(|_| {
-            error!("Buffer full");
-            Status::IncorrectDataParameter
-        })?);
-        try_syscall!(client.write_file(storage, self.path(), msg, None)).map_err(|_err| {
-            error!("Failed to store data: {_err:?}");
+        utils::write_all(client, storage, self.path(), bytes, None).map_err(|_err| {
+            error!("Failed to write data object: {:?}", _err);
             Status::UnspecifiedNonpersistentExecutionError
-        })?;
-        Ok(())
+        })
     }
 }

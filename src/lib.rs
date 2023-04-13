@@ -65,7 +65,7 @@ impl Default for Options {
 
 impl Options {
     pub fn storage(self, storage: Location) -> Self {
-        Self { storage }
+        Self { storage, ..self }
     }
     pub fn url(self, url: &'static [u8]) -> Self {
         Self { url, ..self }

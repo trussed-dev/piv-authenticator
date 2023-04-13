@@ -28,7 +28,7 @@ hex-literal = "0.3"
 interchange = "0.2.2"
 iso7816 = "0.1"
 serde = { version = "1", default-features = false, features = ["derive"] }
-trussed = { version = "0.1" }
+trussed = { version = "0.1", features = ["serde-extensions"] }
 untrusted = "0.9"
 vpicc = { version = "0.1.0", optional = true }
 log = "0.4"

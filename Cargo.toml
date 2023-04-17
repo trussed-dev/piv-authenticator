@@ -3,7 +3,7 @@
 
 [package]
 name = "piv-authenticator"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
 license = "LGPL-3.0-only"
@@ -35,7 +35,7 @@ vpicc = { version = "0.1.0", optional = true }
 log = "0.4"
 heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
-trussed-rsa-alloc = { git = "https://github.com/Nitrokey/trussed-rsa-backend.git", rev = "bc48a97cd5a900ff38395433788a6fbe4e712434", features = ["raw"] }
+trussed-rsa-alloc = { version = "0.1.0", features = ["raw"] }
 
 [dev-dependencies]
 littlefs2 = "0.3.2"
@@ -76,6 +76,7 @@ log-error = []
 [patch.crates-io]
 trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey.9" }
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth", tag = "v0.2.1"}
+trussed-rsa-alloc = { git = "https://github.com/Nitrokey/trussed-rsa-backend.git", tag = "v0.1.0"}
 littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-2" }
 
 [profile.dev.package.rsa]

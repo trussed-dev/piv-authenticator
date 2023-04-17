@@ -5,6 +5,10 @@ SPDX-License-Identifier: CC0-1.0
 
 # Changelog
 
+## [v0.1.1][] (2023-04-17)
+
+- Fix dependency on trussed-rsa-alloc to use the git tag in the `[patch.crates-io]` section to avoid duplicate downstream dependencies
+
 ## [v0.1.0][] (2023-04-13)
 
 This initial release contains support for the basic PIV card functionality.

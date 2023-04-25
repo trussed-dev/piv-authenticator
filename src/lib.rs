@@ -865,11 +865,10 @@ impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthent
                     trussed::types::KeySerialization::RsaParts
                 ))
                 .serialized_key;
-                let serialized: RsaPublicParts =
-                    trussed::postcard_deserialize(&tmp).map_err(|_err| {
-                        error!("Failed to parse RSA parts: {:?}", _err);
-                        Status::UnspecifiedNonpersistentExecutionError
-                    })?;
+                let serialized = RsaPublicParts::deserialize(&tmp).map_err(|_err| {
+                    error!("Failed to parse RSA parts: {:?}", _err);
+                    Status::UnspecifiedNonpersistentExecutionError
+                })?;
                 reply.expand(&[0x81])?;
                 reply.append_len(serialized.n.len())?;
                 reply.expand(serialized.n)?;

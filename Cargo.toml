@@ -36,6 +36,7 @@ log = "0.4"
 heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
 trussed-rsa-alloc = { version = "0.1.0", features = ["raw"] }
+trussed-staging = { version = "0.1.0", features = ["chunked", "encrypted-chunked"]}
 
 [dev-dependencies]
 littlefs2 = "0.3.2"
@@ -74,10 +75,10 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/Nitrokey/trussed", tag = "v0.1.0-nitrokey.9" }
-trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth", tag = "v0.2.1"}
+trussed = { git = "https://github.com/trussed-dev/trussed" , rev = "55ea391367fce4bf5093ff2d3c79041d7aef0485" }
+trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.2.2"}
 trussed-rsa-alloc = { git = "https://github.com/Nitrokey/trussed-rsa-backend.git", tag = "v0.1.0"}
-littlefs2 = { git = "https://github.com/Nitrokey/littlefs2", tag = "v0.3.2-nitrokey-2" }
+trussed-staging = { git = "https://github.com/Nitrokey/trussed-staging", tag = "v0.1.0" }
 
 [profile.dev.package.rsa]
 opt-level = 2

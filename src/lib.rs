@@ -25,6 +25,7 @@ pub mod state;
 mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
+use trussed_staging::streaming::ChunkedClient;
 
 #[cfg(feature = "virt")]
 pub mod virt;
@@ -100,7 +101,7 @@ impl<T> iso7816::App for Authenticator<T> {
 
 impl<T> Authenticator<T>
 where
-    T: client::Client + AuthClient + client::Ed255 + client::Tdes,
+    T: Client,
 {
     pub fn new(trussed: T, options: Options) -> Self {
         // seems like RefCell is not the right thing, we want something like `Rc` instead,
@@ -219,7 +220,7 @@ where
     }
 }
 
-impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthenticator<'a, T> {
+impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     pub fn yubico_set_administration_key<const R: usize>(
         &mut self,
         data: &[u8],
@@ -990,4 +991,14 @@ impl<'a, T: trussed::Client + AuthClient + trussed::client::Ed255> LoadedAuthent
         reply.expand(&[0xFE, 0x00])?;
         Ok(())
     }
+}
+
+/// Super trait with all trussed extensions required by opcard
+pub trait Client:
+    trussed::Client + AuthClient + ChunkedClient + trussed::client::Ed255 + client::Tdes
+{
+}
+impl<C: trussed::Client + AuthClient + ChunkedClient + trussed::client::Ed255 + client::Tdes> Client
+    for C
+{
 }

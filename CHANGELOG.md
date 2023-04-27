@@ -7,6 +7,14 @@ SPDX-License-Identifier: CC0-1.0
 
 ## Unreleased
 
+## [v0.2.0][] (2023-04-27)
+
+- Use upstream trussed and trussed-staging ([#24][])
+
+[#24]: https://github.com/Nitrokey/piv-authenticator/pull/24
+
+[v0.2.0]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.2.0
+
 ## [v0.1.2][] (2023-04-24)
 
 - Use `RsaPublicParts::deserialize` instead of `trussed::postcard_deserialize` for compatibility with recent Trussed changes.

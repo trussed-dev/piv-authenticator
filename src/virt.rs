@@ -10,16 +10,17 @@ pub mod dispatch {
         backend::{Backend as _, BackendId},
         error::Error,
         platform::Platform,
-        serde_extensions::{ExtensionDispatch, ExtensionId, ExtensionImpl as _},
+        serde_extensions::{ExtensionDispatch, ExtensionId, ExtensionImpl},
         service::ServiceResources,
         types::{Bytes, Context, Location},
     };
     use trussed_auth::{AuthBackend, AuthContext, AuthExtension, MAX_HW_KEY_LEN};
-
     use trussed_rsa_alloc::SoftwareRsa;
+    use trussed_staging::{streaming::ChunkedExtension, StagingBackend, StagingContext};
 
     /// Backends used by opcard
     pub const BACKENDS: &[BackendId<Backend>] = &[
+        BackendId::Custom(Backend::Staging),
         BackendId::Custom(Backend::Auth),
         BackendId::Custom(Backend::Rsa),
         BackendId::Core,
@@ -29,17 +30,20 @@ pub mod dispatch {
     pub enum Backend {
         Auth,
         Rsa,
+        Staging,
     }
 
     #[derive(Debug, Clone, Copy)]
     pub enum Extension {
         Auth,
+        Chunked,
     }
 
     impl From<Extension> for u8 {
         fn from(extension: Extension) -> Self {
             match extension {
                 Extension::Auth => 0,
+                Extension::Chunked => 1,
             }
         }
     }
@@ -50,6 +54,7 @@ pub mod dispatch {
         fn try_from(id: u8) -> Result<Self, Self::Error> {
             match id {
                 0 => Ok(Extension::Auth),
+                1 => Ok(Extension::Chunked),
                 _ => Err(Error::InternalError),
             }
         }
@@ -59,24 +64,28 @@ pub mod dispatch {
     #[derive(Debug)]
     pub struct Dispatch {
         auth: AuthBackend,
+        staging: StagingBackend,
     }
 
     /// Dispatch context for the backends required by opcard
-    #[derive(Default, Debug)]
+    #[derive(Default)]
     pub struct DispatchContext {
         auth: AuthContext,
+        staging: StagingContext,
     }
 
     impl Dispatch {
         pub fn new() -> Self {
             Self {
                 auth: AuthBackend::new(Location::Internal),
+                staging: StagingBackend::new(),
             }
         }
 
         pub fn with_hw_key(hw_key: Bytes<MAX_HW_KEY_LEN>) -> Self {
             Self {
                 auth: AuthBackend::with_hw_key(Location::Internal, hw_key),
+                staging: StagingBackend::new(),
             }
         }
     }
@@ -104,6 +113,12 @@ pub mod dispatch {
                     self.auth
                         .request(&mut ctx.core, &mut ctx.backends.auth, request, resources)
                 }
+                Backend::Staging => self.staging.request(
+                    &mut ctx.core,
+                    &mut ctx.backends.staging,
+                    request,
+                    resources,
+                ),
                 Backend::Rsa => SoftwareRsa.request(&mut ctx.core, &mut (), request, resources),
             }
         }
@@ -124,7 +139,20 @@ pub mod dispatch {
                         request,
                         resources,
                     ),
-                },
+                    Extension::Chunked => Err(Error::RequestNotAvailable),
+                }
+                Backend::Staging =>match extension {
+                    Extension::Chunked => {
+                        <StagingBackend as ExtensionImpl<ChunkedExtension>>::extension_request_serialized(
+                            &mut self.staging,
+                            &mut ctx.core,
+                            &mut ctx.backends.staging,
+                            request,
+                            resources
+                        )
+                    }
+                    Extension::Auth => Err(Error::RequestNotAvailable),
+                }
                 Backend::Rsa => Err(Error::RequestNotAvailable),
             }
         }
@@ -134,6 +162,11 @@ pub mod dispatch {
         type Id = Extension;
 
         const ID: Self::Id = Self::Id::Auth;
+    }
+    impl ExtensionId<ChunkedExtension> for Dispatch {
+        type Id = Extension;
+
+        const ID: Self::Id = Self::Id::Chunked;
     }
 }
 

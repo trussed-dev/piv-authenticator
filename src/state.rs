@@ -8,15 +8,13 @@ use flexiber::EncodableHeapless;
 use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
-use trussed::types::OpenSeekFrom;
 use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
-    utils,
 };
-use trussed_auth::AuthClient;
+use trussed_staging::streaming::utils;
 
 use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::reply::Reply;
@@ -192,7 +190,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn load<T: trussed::Client + AuthClient>(
+    pub fn load<T: crate::Client>(
         &mut self,
         client: &mut T,
         storage: Location,
@@ -206,7 +204,7 @@ impl State {
         })
     }
 
-    pub fn persistent<T: trussed::Client + AuthClient>(
+    pub fn persistent<T: crate::Client>(
         &mut self,
         client: &mut T,
         storage: Location,
@@ -334,41 +332,33 @@ impl Persistent {
     const DEFAULT_PIN: Pin = Pin(*b"123456\xff\xff");
     const DEFAULT_PUK: Puk = Puk(*b"12345678");
 
-    pub fn remaining_pin_retries<T: trussed::Client + AuthClient>(&self, client: &mut T) -> u8 {
+    pub fn remaining_pin_retries<T: crate::Client>(&self, client: &mut T) -> u8 {
         try_syscall!(client.pin_retries(PinType::UserPin))
             .map(|r| r.retries.unwrap_or_default())
             .unwrap_or(0)
     }
 
-    pub fn remaining_puk_retries<T: trussed::Client + AuthClient>(&self, client: &mut T) -> u8 {
+    pub fn remaining_puk_retries<T: crate::Client>(&self, client: &mut T) -> u8 {
         try_syscall!(client.pin_retries(PinType::Puk))
             .map(|r| r.retries.unwrap_or_default())
             .unwrap_or(0)
     }
 
-    pub fn verify_pin<T: trussed::Client + AuthClient>(
-        &mut self,
-        value: &Pin,
-        client: &mut T,
-    ) -> bool {
+    pub fn verify_pin<T: crate::Client>(&mut self, value: &Pin, client: &mut T) -> bool {
         let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
         try_syscall!(client.check_pin(PinType::UserPin, pin))
             .map(|r| r.success)
             .unwrap_or(false)
     }
 
-    pub fn verify_puk<T: trussed::Client + AuthClient>(
-        &mut self,
-        value: &Puk,
-        client: &mut T,
-    ) -> bool {
+    pub fn verify_puk<T: crate::Client>(&mut self, value: &Puk, client: &mut T) -> bool {
         let puk = Bytes::from_slice(&value.0).expect("Convertion of static array");
         try_syscall!(client.check_pin(PinType::Puk, puk))
             .map(|r| r.success)
             .unwrap_or(false)
     }
 
-    pub fn change_pin<T: trussed::Client + AuthClient>(
+    pub fn change_pin<T: crate::Client>(
         &mut self,
         old_value: &Pin,
         new_value: &Pin,
@@ -381,7 +371,7 @@ impl Persistent {
             .unwrap_or(false)
     }
 
-    pub fn change_puk<T: trussed::Client + AuthClient>(
+    pub fn change_puk<T: crate::Client>(
         &mut self,
         old_value: &Puk,
         new_value: &Puk,
@@ -394,7 +384,7 @@ impl Persistent {
             .unwrap_or(false)
     }
 
-    pub fn set_pin<T: trussed::Client + AuthClient>(
+    pub fn set_pin<T: crate::Client>(
         &mut self,
         new_pin: Pin,
         client: &mut T,
@@ -413,7 +403,7 @@ impl Persistent {
         .map(drop)
     }
 
-    pub fn set_puk<T: trussed::Client + AuthClient>(
+    pub fn set_puk<T: crate::Client>(
         &mut self,
         new_puk: Puk,
         client: &mut T,
@@ -426,14 +416,14 @@ impl Persistent {
             })
             .map(drop)
     }
-    pub fn reset_pin<T: trussed::Client + AuthClient>(
+    pub fn reset_pin<T: crate::Client>(
         &mut self,
         new_pin: Pin,
         client: &mut T,
     ) -> Result<(), Status> {
         self.set_pin(new_pin, client)
     }
-    pub fn reset_puk<T: trussed::Client + AuthClient>(
+    pub fn reset_puk<T: crate::Client>(
         &mut self,
         new_puk: Puk,
         client: &mut T,
@@ -441,7 +431,7 @@ impl Persistent {
         self.set_puk(new_puk, client)
     }
 
-    pub fn reset_administration_key(&mut self, client: &mut impl trussed::Client) {
+    pub fn reset_administration_key(&mut self, client: &mut impl crate::Client) {
         self.set_administration_key(
             YUBICO_DEFAULT_MANAGEMENT_KEY,
             YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
@@ -453,7 +443,7 @@ impl Persistent {
         &mut self,
         management_key: &[u8],
         alg: AdministrationAlgorithm,
-        client: &mut impl trussed::Client,
+        client: &mut impl crate::Client,
     ) {
         // let new_management_key = syscall!(self.trussed.unsafe_inject_tdes_key(
         let id = syscall!(client.unsafe_inject_key(
@@ -483,7 +473,7 @@ impl Persistent {
         &mut self,
         key: AsymmetricKeyReference,
         alg: AsymmetricAlgorithms,
-        client: &mut impl trussed::Client,
+        client: &mut impl crate::Client,
     ) -> KeyId {
         let id = syscall!(client.generate_key(
             alg.key_mechanism(),
@@ -498,10 +488,7 @@ impl Persistent {
         id
     }
 
-    pub fn initialize<T: trussed::Client + AuthClient>(
-        client: &mut T,
-        storage: Location,
-    ) -> Result<Self, Status> {
+    pub fn initialize<T: crate::Client>(client: &mut T, storage: Location) -> Result<Self, Status> {
         info!("initializing PIV state");
         let administration = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
@@ -566,7 +553,7 @@ impl Persistent {
         Ok(state)
     }
 
-    pub fn load_or_initialize<T: trussed::Client + AuthClient>(
+    pub fn load_or_initialize<T: crate::Client>(
         client: &mut T,
         storage: Location,
     ) -> Result<Self, Status> {
@@ -584,13 +571,13 @@ impl Persistent {
         Ok(parsed)
     }
 
-    pub fn save(&mut self, client: &mut impl trussed::Client) {
+    pub fn save(&mut self, client: &mut impl crate::Client) {
         let data: trussed::types::Message = trussed::cbor_serialize_bytes(&self).unwrap();
 
         syscall!(client.write_file(self.storage, PathBuf::from(Self::FILENAME), data, None,));
     }
 
-    pub fn timestamp(&mut self, client: &mut impl trussed::Client) -> u32 {
+    pub fn timestamp(&mut self, client: &mut impl crate::Client) -> u32 {
         self.timestamp += 1;
         self.save(client);
         self.timestamp
@@ -598,7 +585,7 @@ impl Persistent {
 }
 
 fn load_if_exists(
-    client: &mut impl trussed::Client,
+    client: &mut impl crate::Client,
     location: Location,
     path: &PathBuf,
 ) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
@@ -622,26 +609,30 @@ fn load_if_exists(
 
 /// Returns false if the file does not exist
 fn load_if_exists_streaming<const R: usize>(
-    client: &mut impl trussed::Client,
+    client: &mut impl crate::Client,
     location: Location,
     path: &PathBuf,
     mut buffer: Reply<'_, R>,
 ) -> Result<bool, Status> {
     let mut read_len = 0;
     let file_len;
-    match try_syscall!(client.read_file_chunk(location, path.clone(), OpenSeekFrom::Start(0))) {
+    match try_syscall!(client.start_chunked_read(location, path.clone())) {
         Ok(r) => {
             read_len += r.data.len();
             file_len = r.len;
             buffer.append_len(file_len)?;
             buffer.expand(&r.data)?;
+            if !r.data.is_full() {
+                debug_assert_eq!(read_len, file_len);
+                return Ok(true);
+            }
         }
-        Err(_) => match try_syscall!(client.entry_metadata(location, path.clone())) {
+        Err(_err) => match try_syscall!(client.entry_metadata(location, path.clone())) {
             Ok(Metadata { metadata: None }) => return Ok(false),
             Ok(Metadata {
                 metadata: Some(_metadata),
             }) => {
-                error!("File {path} exists but couldn't be read: {_metadata:?}");
+                error!("File {path} exists but couldn't be read: {_metadata:?}, {_err:?}");
                 return Err(Status::UnspecifiedPersistentExecutionError);
             }
             Err(_err) => {
@@ -651,15 +642,16 @@ fn load_if_exists_streaming<const R: usize>(
         },
     }
 
-    while read_len < file_len {
-        match try_syscall!(client.read_file_chunk(
-            location,
-            path.clone(),
-            OpenSeekFrom::Start(read_len as u32)
-        )) {
+    loop {
+        match try_syscall!(client.read_file_chunk()) {
             Ok(r) => {
+                debug_assert_eq!(r.len, file_len);
                 read_len += r.data.len();
                 buffer.expand(&r.data)?;
+                if !r.data.is_full() {
+                    debug_assert_eq!(read_len, file_len);
+                    break;
+                }
             }
             Err(_err) => {
                 error!("Failed to read chunk: {:?}", _err);
@@ -732,7 +724,7 @@ impl ContainerStorage {
 
     pub fn exists(
         self,
-        client: &mut impl trussed::Client,
+        client: &mut impl crate::Client,
         storage: Location,
     ) -> Result<bool, Status> {
         match try_syscall!(client.entry_metadata(storage, self.path())) {
@@ -759,7 +751,7 @@ impl ContainerStorage {
     // Write the length of the file and write
     pub fn load<const R: usize>(
         self,
-        client: &mut impl trussed::Client,
+        client: &mut impl crate::Client,
         storage: Location,
         mut reply: Reply<'_, R>,
     ) -> Result<bool, Status> {
@@ -778,11 +770,11 @@ impl ContainerStorage {
 
     pub fn save(
         self,
-        client: &mut impl trussed::Client,
+        client: &mut impl crate::Client,
         bytes: &[u8],
         storage: Location,
     ) -> Result<(), Status> {
-        utils::write_all(client, storage, self.path(), bytes, None).map_err(|_err| {
+        utils::write_all(client, storage, self.path(), bytes, None, None).map_err(|_err| {
             error!("Failed to write data object: {:?}", _err);
             Status::UnspecifiedNonpersistentExecutionError
         })

@@ -6,12 +6,12 @@ SPDX-License-Identifier: CC0-1.0
 PIV-Authenticator
 =================
 
-`piv-authenticator` is a Rust implematation of the [Personnal Identity Verification](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf) smartcard.
+`piv-authenticator` is a Rust implematation of the [Personal Identity Verification](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-73-4.pdf) smartcard.
 
 Supported features
 ------------------
 
-`piv-authenticator` is still under heavy development and currently doesn't support most of PIV's features.
+`piv-authenticator` is still under heavy development. 
 See the [tracking issue for command support](https://github.com/Nitrokey/piv-authenticator/issues/1) for more information.
 
 License

@@ -193,10 +193,10 @@ impl State {
     pub fn load<T: crate::Client>(
         &mut self,
         client: &mut T,
-        storage: Location,
+        options: &crate::Options,
     ) -> Result<LoadedState<'_>, Status> {
         if self.persistent.is_none() {
-            self.persistent = Some(Persistent::load_or_initialize(client, storage)?);
+            self.persistent = Some(Persistent::load_or_initialize(client, options)?);
         }
         Ok(LoadedState {
             volatile: &mut self.volatile,
@@ -207,9 +207,9 @@ impl State {
     pub fn persistent<T: crate::Client>(
         &mut self,
         client: &mut T,
-        storage: Location,
+        options: &crate::Options,
     ) -> Result<&mut Persistent, Status> {
-        Ok(self.load(client, storage)?.persistent)
+        Ok(self.load(client, options)?.persistent)
     }
 
     pub fn new() -> Self {
@@ -488,13 +488,16 @@ impl Persistent {
         id
     }
 
-    pub fn initialize<T: crate::Client>(client: &mut T, storage: Location) -> Result<Self, Status> {
+    pub fn initialize<T: crate::Client>(
+        client: &mut T,
+        options: &crate::Options,
+    ) -> Result<Self, Status> {
         info!("initializing PIV state");
         let administration = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
                 YUBICO_DEFAULT_MANAGEMENT_KEY_ALG.mechanism(),
                 YUBICO_DEFAULT_MANAGEMENT_KEY,
-                storage,
+                options.storage,
                 KeySerialization::Raw
             ))
             .key,
@@ -504,20 +507,23 @@ impl Persistent {
         let authentication = KeyWithAlg {
             id: syscall!(client.generate_key(
                 Mechanism::P256,
-                StorageAttributes::new().set_persistence(storage)
+                StorageAttributes::new().set_persistence(options.storage)
             ))
             .key,
             alg: AsymmetricAlgorithms::P256,
         };
 
-        let mut guid: [u8; 16] = syscall!(client.random_bytes(16))
-            .bytes
-            .as_ref()
-            .try_into()
-            .unwrap();
+        let guid = options.uuid.unwrap_or_else(|| {
+            let mut guid: [u8; 16] = syscall!(client.random_bytes(16))
+                .bytes
+                .as_ref()
+                .try_into()
+                .unwrap();
 
-        guid[6] = (guid[6] & 0xf) | 0x40;
-        guid[8] = (guid[8] & 0x3f) | 0x80;
+            guid[6] = (guid[6] & 0xf) | 0x40;
+            guid[8] = (guid[8] & 0x3f) | 0x80;
+            guid
+        });
 
         let guid_file: Vec<u8, 1024> = CardHolderUniqueIdentifier::default()
             .with_guid(guid)
@@ -527,7 +533,7 @@ impl Persistent {
             .save(
                 client,
                 &guid_file[2..], // Remove the unnecessary 53 tag
-                storage,
+                options.storage,
             )
             .ok();
 
@@ -555,19 +561,19 @@ impl Persistent {
 
     pub fn load_or_initialize<T: crate::Client>(
         client: &mut T,
-        storage: Location,
+        options: &crate::Options,
     ) -> Result<Self, Status> {
         // todo: can't seem to combine load + initialize without code repetition
-        let data = load_if_exists(client, storage, &PathBuf::from(Self::FILENAME))?;
+        let data = load_if_exists(client, options.storage, &PathBuf::from(Self::FILENAME))?;
         let Some(bytes) = data else {
-            return Self::initialize(client, storage);
+            return Self::initialize(client, options);
         };
 
         let mut parsed: Self = trussed::cbor_deserialize(&bytes).map_err(|_err| {
             error!("{_err:?}");
             Status::UnspecifiedPersistentExecutionError
         })?;
-        parsed.storage = storage;
+        parsed.storage = options.storage;
         Ok(parsed)
     }
 

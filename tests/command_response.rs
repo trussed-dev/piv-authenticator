@@ -1,6 +1,6 @@
 // Copyright (C) 2022 Nicolas Stalder AND Nitrokey GmbH
 // SPDX-License-Identifier: LGPL-3.0-only
-#![cfg(feature = "vpicc")]
+#![cfg(feature = "virt")]
 
 mod setup;
 
@@ -37,6 +37,13 @@ enum Status {
     InstructionNotSupportedOrInvalid,
     ClassNotSupported,
     UnspecifiedCheckingError,
+}
+
+impl From<iso7816::Status> for Status {
+    fn from(value: iso7816::Status) -> Self {
+        let tmp: u16 = value.into();
+        tmp.try_into().unwrap()
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Deserialize)]
@@ -243,6 +250,10 @@ struct ManagementKey {
     key: String,
 }
 
+fn default_app_pin() -> String {
+    "313233343536FFFF".into()
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 enum IoCmd {
@@ -267,11 +278,15 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
-    VerifyDefaultApplicationPin {
+    VerifyApplicationPin {
+        #[serde(default = "default_app_pin")]
+        pin: String,
         #[serde(default)]
         expected_status: Status,
     },
-    VerifyDefaultGlobalPin {
+    VerifyGlobalPin {
+        #[serde(default = "default_app_pin")]
+        pin: String,
         #[serde(default)]
         expected_status: Status,
     },
@@ -288,6 +303,10 @@ enum IoCmd {
         expected_status_response: Status,
     },
     Select,
+    Reset {
+        #[serde(default)]
+        expected_status: Status,
+    },
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
@@ -311,12 +330,14 @@ impl IoCmd {
                 output,
                 expected_status,
             } => Self::run_put_data(input, output, *expected_status, card),
-            Self::VerifyDefaultApplicationPin { expected_status } => {
-                Self::run_verify_default_application_pin(*expected_status, card)
-            }
-            Self::VerifyDefaultGlobalPin { expected_status } => {
-                Self::run_verify_default_global_pin(*expected_status, card)
-            }
+            Self::VerifyApplicationPin {
+                pin,
+                expected_status,
+            } => Self::run_verify_application_pin(pin, *expected_status, card),
+            Self::VerifyGlobalPin {
+                pin,
+                expected_status,
+            } => Self::run_verify_global_pin(pin, *expected_status, card),
             Self::AuthenticateManagement {
                 key,
                 expected_status_challenge,
@@ -333,6 +354,7 @@ impl IoCmd {
                 expected_status,
             } => Self::run_set_administration_key(key.algorithm, &key.key, *expected_status, card),
             Self::Select => Self::run_select(card),
+            Self::Reset { expected_status } => Self::run_reset(*expected_status, card),
         }
     }
 
@@ -369,7 +391,7 @@ impl IoCmd {
         let status: Status = card
             .respond(&cmd, &mut rep)
             .err()
-            .map(|s| TryFrom::<u16>::try_from(s.into()).unwrap())
+            .map(Into::into)
             .unwrap_or_default();
 
         println!("Output: {:?}\nStatus: {status:?}", hex::encode(&rep));
@@ -456,18 +478,18 @@ impl IoCmd {
         Self::run_bytes(&command, &MATCH_ANY, expected_status_response, card);
     }
 
-    fn run_verify_default_global_pin(expected_status: Status, card: &mut setup::Piv) {
+    fn run_verify_application_pin(pin: &str, expected_status: Status, card: &mut setup::Piv) {
         Self::run_bytes(
-            &hex!("00 20 00 00 08 313233343536FFFF"),
+            &build_command(0x00, 0x20, 0x00, 0x80, &parse_hex(pin), 0),
             &MATCH_EMPTY,
             expected_status,
             card,
         );
     }
 
-    fn run_verify_default_application_pin(expected_status: Status, card: &mut setup::Piv) {
+    fn run_verify_global_pin(pin: &str, expected_status: Status, card: &mut setup::Piv) {
         Self::run_bytes(
-            &hex!("00 20 00 80 08 313233343536FFFF"),
+            &build_command(0x00, 0x20, 0x00, 0x00, &parse_hex(pin), 0),
             &MATCH_EMPTY,
             expected_status,
             card,
@@ -504,6 +526,9 @@ impl IoCmd {
             Status::Success,
             card,
         );
+    }
+    fn run_reset(expected_status: Status, card: &mut setup::Piv) {
+        Self::run_bytes(&hex!("00 FB 00 00"), &MATCH_EMPTY, expected_status, card);
     }
 }
 

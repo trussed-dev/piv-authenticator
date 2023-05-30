@@ -202,7 +202,7 @@ where
 
             YubicoPivExtension::Reset => {
                 let this = self.load()?;
-                if this.state.persistent.remaining_pin_retries(this.trussed) == 0 {
+                if this.state.persistent.remaining_pin_retries(this.trussed) != 0 {
                     return Err(Status::ConditionsOfUseNotSatisfied);
                 }
 

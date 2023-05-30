@@ -52,6 +52,7 @@ pub struct Options {
     storage: Location,
     label: &'static [u8],
     url: &'static [u8],
+    uuid: Option<[u8; 16]>,
 }
 
 impl Default for Options {
@@ -60,6 +61,7 @@ impl Default for Options {
             storage: Location::External,
             label: NITROKEY_APPLICATION_LABEL,
             url: NITROKEY_APPLICATION_URL,
+            uuid: None,
         }
     }
 }
@@ -117,7 +119,7 @@ where
 
     fn load(&mut self) -> core::result::Result<LoadedAuthenticator<'_, T>, Status> {
         Ok(LoadedAuthenticator {
-            state: self.state.load(&mut self.trussed, self.options.storage)?,
+            state: self.state.load(&mut self.trussed, &self.options)?,
             trussed: &mut self.trussed,
             options: &mut self.options,
         })

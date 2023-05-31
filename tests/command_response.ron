@@ -5,8 +5,9 @@
     IoTest(
         name: "Verify",
         cmd_resp: [
-            VerifyDefaultApplicationPin(),
-            VerifyDefaultGlobalPin(expected_status: FunctionNotSupported)
+            VerifyApplicationPin(),
+            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(2)),
+            VerifyGlobalPin(expected_status: FunctionNotSupported)
         ]
     ),
     IoTest(
@@ -126,5 +127,17 @@
                 output: Data("7e 10 000102030405060708090A0B0C0D0E0F")
             ),
         ]
-    )
+    ),
+    IoTest(
+        name: "RESET FAILED",
+        cmd_resp: [
+            Reset(
+                expected_status: ConditionsOfUseNotSatisfied,
+            ),
+            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(2)),
+            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(1)),
+            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(0)),
+            Reset(),
+        ]
+    ),
 ]

@@ -202,12 +202,17 @@ where
 
             YubicoPivExtension::Reset => {
                 let this = self.load()?;
+                if this.state.persistent.remaining_pin_retries(this.trussed) != 0 {
+                    return Err(Status::ConditionsOfUseNotSatisfied);
+                }
 
                 // TODO: find out what all needs resetting :)
                 for location in [Location::Volatile, Location::External, Location::Internal] {
                     try_syscall!(this.trussed.delete_all(location)).ok();
                     try_syscall!(this.trussed.remove_dir_all(location, PathBuf::new())).ok();
                 }
+                try_syscall!(this.trussed.delete_all_pins()).ok();
+                self.state.persistent = None;
             }
 
             YubicoPivExtension::SetManagementKey(touch_policy) => {

@@ -5,7 +5,15 @@ SPDX-License-Identifier: CC0-1.0
 
 # Changelog
 
-## Unreleased
+## [v0.3.0][] (2023-05-31)
+
+- Fix reset not checking that the key is locked ([#29][])
+- Make GUID configurable ([#30][])
+
+[#30]: https://github.com/Nitrokey/piv-authenticator/pull/30
+[#29]: https://github.com/Nitrokey/piv-authenticator/pull/29
+
+[v0.3.0]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.0
 
 ## [v0.2.0][] (2023-04-27)
 

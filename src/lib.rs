@@ -57,6 +57,12 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Options {
+    pub const fn new() -> Self {
         Self {
             storage: Location::External,
             label: NITROKEY_APPLICATION_LABEL,
@@ -64,17 +70,18 @@ impl Default for Options {
             uuid: None,
         }
     }
-}
 
-impl Options {
-    pub fn storage(self, storage: Location) -> Self {
+    pub const fn storage(self, storage: Location) -> Self {
         Self { storage, ..self }
     }
-    pub fn url(self, url: &'static [u8]) -> Self {
+    pub const fn url(self, url: &'static [u8]) -> Self {
         Self { url, ..self }
     }
-    pub fn label(self, label: &'static [u8]) -> Self {
+    pub const fn label(self, label: &'static [u8]) -> Self {
         Self { label, ..self }
+    }
+    pub const fn uuid(self, uuid: Option<[u8; 16]>) -> Self {
+        Self { uuid, ..self }
     }
 }
 

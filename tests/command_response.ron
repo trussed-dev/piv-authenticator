@@ -140,4 +140,50 @@
             Reset(),
         ]
     ),
+    IoTest(
+        name: "UUID",
+        uuid_config: None,
+        cmd_resp: [
+            GetData(
+                input: "5C 03 5FC102",
+                output: Len(61),
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            PutData(
+                input: "5C 03 5FC102 53 3b 3019d4e739d821086c1084210d8360d8210842108421804210c3f3341000112233445566778899aabbccddeeff350839393939313233313e00fe00",
+            ),
+            GetData(
+                input: "5C 03 5FC102",
+                output: Data("53 3b 3019d4e739d821086c1084210d8360d8210842108421804210c3f3341000112233445566778899aabbccddeeff350839393939313233313e00fe00"),
+            ),
+        ]
+    ),
+    IoTest(
+        name: "With UUID",
+        uuid_config: WithUuid("00112233445566778899AABBCCDDEEFF"),
+        cmd_resp: [
+            GetData(
+                input: "5C 03 5FC102",
+                output: Data("53 3b 3019d4e739d821086c1084210d8360d8210842108421804210c3f3341000112233445566778899aabbccddeeff350839393939313233313e00fe00"),
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            PutData(
+                input: "5C 03 5FC102 53 3b 3019d4e739d821086c1084210d8360d8210842108421804210c3f33410B0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB30839393939313233313e00fe00",
+            ),
+            GetData(
+                input: "5C 03 5FC102",
+                output: Data("53 3b 3019d4e739d821086c1084210d8360d8210842108421804210c3f33410B0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB30839393939313233313e00fe00"),
+            ),
+        ]
+    )
 ]

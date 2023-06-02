@@ -10,7 +10,10 @@ use std::sync::Mutex;
 
 static VSC_MUTEX: Mutex<()> = Mutex::new(());
 
-pub fn with_vsc<F: FnOnce() -> R, R>(f: F) -> R {
+pub const WITH_UUID: Options = Options::new().uuid(Some([0; 16]));
+pub const WITHOUT_UUID: Options = Options::new();
+
+pub fn with_vsc<F: FnOnce() -> R, R>(options: Options, f: F) -> R {
     let _lock = VSC_MUTEX.lock().unwrap();
 
     let mut vpicc = vpicc::connect().expect("failed to connect to vpcd");
@@ -18,7 +21,7 @@ pub fn with_vsc<F: FnOnce() -> R, R>(f: F) -> R {
     let (tx, rx) = mpsc::channel();
     let handle = spawn(move |stopped| {
         with_ram_client("opcard", |client| {
-            let card = Authenticator::new(client, Options::default());
+            let card = Authenticator::new(client, options);
             let mut vpicc_card = VpiccCard::new(card);
             let mut result = Ok(());
             while !stopped.get() && result.is_ok() {

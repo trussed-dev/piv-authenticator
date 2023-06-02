@@ -19,9 +19,11 @@ use trussed::virt::Ram;
 
 pub type Piv = piv_authenticator::Authenticator<VirtClient<Ram>>;
 
-pub fn piv<R>(test: impl FnOnce(&mut Piv) -> R) -> R {
+pub const WITHOUT_UUID: Options = Options::new();
+
+pub fn piv<R>(options: Options, test: impl FnOnce(&mut Piv) -> R) -> R {
     with_ram_client("test", |client| {
-        let mut piv_app = Authenticator::new(client, Options::default());
+        let mut piv_app = Authenticator::new(client, options);
         test(&mut piv_app)
     })
 }

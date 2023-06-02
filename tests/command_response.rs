@@ -191,6 +191,8 @@ impl TryFrom<u16> for Status {
 struct IoTest {
     name: String,
     cmd_resp: Vec<IoCmd>,
+    #[serde(default)]
+    uuid_config: UuidConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -394,7 +396,11 @@ impl IoCmd {
             .map(Into::into)
             .unwrap_or_default();
 
-        println!("Output: {:?}\nStatus: {status:?}", hex::encode(&rep));
+        println!(
+            "Output({}): {:?}\nStatus: {status:?}",
+            rep.len(),
+            hex::encode(&rep)
+        );
 
         if !output.validate(&rep) {
             panic!("Bad output. Expected {output:02x?}");
@@ -532,6 +538,19 @@ impl IoCmd {
     }
 }
 
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+enum UuidConfig {
+    None,
+    WithUuid(String),
+    WithBoth(String),
+}
+
+impl Default for UuidConfig {
+    fn default() -> Self {
+        Self::WithBoth("00".repeat(16))
+    }
+}
+
 #[test_log::test]
 fn command_response() {
     let data = std::fs::read_to_string("tests/command_response.ron").unwrap();
@@ -539,10 +558,26 @@ fn command_response() {
     for t in tests {
         println!("\n\n===========================================================",);
         println!("Running {}", t.name);
-        setup::piv(|card| {
-            for io in t.cmd_resp {
-                io.run(card);
+        if matches!(t.uuid_config, UuidConfig::None | UuidConfig::WithBoth(_)) {
+            println!("Running {} without uuid", t.name);
+            setup::piv(setup::WITHOUT_UUID, |card| {
+                for io in &t.cmd_resp {
+                    io.run(card);
+                }
+            });
+        }
+        match t.uuid_config {
+            UuidConfig::WithUuid(uuid) | UuidConfig::WithBoth(uuid) => {
+                println!("Running {} with uuid {uuid:?}", t.name);
+                let uuid = (&*parse_hex(&uuid)).try_into().unwrap();
+
+                setup::piv(piv_authenticator::Options::new().uuid(Some(uuid)), |card| {
+                    for io in &t.cmd_resp {
+                        io.run(card);
+                    }
+                });
             }
-        });
+            _ => {}
+        }
     }
 }

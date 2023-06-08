@@ -685,7 +685,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             alg.sign_mechanism(),
             id,
             message,
-            trussed::types::SignatureSerialization::Raw,
+            alg.sign_serialization(),
         ))
         .signature;
         reply.expand(&[0x7C])?;

@@ -511,9 +511,8 @@ impl IoCmd {
 
                 // URL = b\"https://github.com/Nitrokey/piv-authenticator\"
                 5f50 2d 68747470733a2f2f6769746875622e636f6d2f4e6974726f6b65792f7069762d61757468656e74696361746f72
-            
                 // Cryptographic Algorithm Identifier Template
-                ac 15 
+                ac 15
                     80 01 03 // TDES - ECB
                     80 01 0c // AES256 - ECB
                     80 01 11 // P-256
@@ -521,9 +520,9 @@ impl IoCmd {
                     80 01 e3 // X25519
                     80 01 07 // RSA 2048
                     06 01 00
-                // Coexistent Tag Allocation Authority Template 
-                79 07 
-                    4f 05 a000000308    
+                // Coexistent Tag Allocation Authority Template
+                79 07
+                    4f 05 a000000308
         "
         )));
         Self::run_bytes(

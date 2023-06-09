@@ -46,7 +46,7 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm =
     AdministrationAlgorithm::Tdes;
 
 pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
-    " 
+    "
     4f 0b // PIV AID
        a000000308000010000100
     5f2f 02 // PIN usage Policy

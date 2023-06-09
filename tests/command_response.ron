@@ -80,8 +80,8 @@
                 )
             ),
             IoData(
-                input: "00 47 009A 05 
-                                AC 03 
+                input: "00 47 009A 05
+                                AC 03
                                      80 01 11",
                 output: Len(70),
             )

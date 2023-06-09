@@ -57,6 +57,7 @@ expectrl = "0.6.0"
 trussed-usbip = { git = "https://github.com/trussed-dev/pc-usbip-runner", default-features = false, features = ["ccid"], rev = "f3a680ca4c9a1411838ae0774f1713f79d4c2979"}
 usbd-ccid = { version = "0.2.0", features = ["highspeed-usb"]}
 rand = "0.8.5"
+asn1 = "0.15.2"
 
 [features]
 default = []

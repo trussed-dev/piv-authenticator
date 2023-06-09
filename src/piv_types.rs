@@ -6,7 +6,7 @@ use core::convert::{TryFrom, TryInto};
 use flexiber::Encodable;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
-use trussed::types::Mechanism;
+use trussed::types::{Mechanism, SignatureSerialization};
 
 #[macro_export]
 macro_rules! enum_u8 {
@@ -168,6 +168,13 @@ impl AsymmetricAlgorithms {
             Self::Rsa2048 => Mechanism::Rsa2048Raw,
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256Prehashed,
+        }
+    }
+
+    pub fn sign_serialization(self) -> SignatureSerialization {
+        match self {
+            Self::Rsa2048 | Self::Rsa4096 => SignatureSerialization::Raw,
+            Self::P256 => SignatureSerialization::Asn1Der,
         }
     }
 

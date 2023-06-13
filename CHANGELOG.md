@@ -5,11 +5,20 @@ SPDX-License-Identifier: CC0-1.0
 
 # Changelog
 
+## [v0.3.2][] (2023-06-13)
+
+- Fix P-256 signature ([#33][])
+
+[#33]: https://github.com/Nitrokey/piv-authenticator/pull/33
+
+[v0.3.2]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.2
+
 ## [v0.3.1][] (2023-06-02)
 
 - Add setter to the options builder for the UUID ([#32][])
 
 [#32]: https://github.com/Nitrokey/piv-authenticator/pull/32
+[v0.3.1]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.1
 
 ## [v0.3.0][] (2023-05-31)
 

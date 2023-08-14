@@ -12,7 +12,9 @@ Supported features
 ------------------
 
 Nearly all functionality specified by the standard are implemented.
-Non-standard management operations are partially implemented.
+
+Non-standard management operations are partially implemented. Basic functionality such as factory reset and configuration of the management key is implemented.
+
 See the [tracking issue for command support](https://github.com/Nitrokey/piv-authenticator/issues/1) for more information.
 
 License

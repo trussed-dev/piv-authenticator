@@ -11,7 +11,8 @@ PIV-Authenticator
 Supported features
 ------------------
 
-`piv-authenticator` is still under heavy development.
+Nearly all functionality specified by the standard are implemented.
+Non-standard management operations are partially implemented.
 See the [tracking issue for command support](https://github.com/Nitrokey/piv-authenticator/issues/1) for more information.
 
 License

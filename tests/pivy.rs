@@ -89,7 +89,7 @@ fn ecdh() {
 #[test_log::test]
 fn sign() {
     let test_rsa = || {
-        let mut p = spawn(&format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456")).unwrap();
+        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456").unwrap();
         p.expect(Regex("ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}")).unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
@@ -108,7 +108,7 @@ fn sign() {
     };
 
     let test_p256 = || {
-        let mut p = spawn(&format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456")).unwrap();
+        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456").unwrap();
         p.expect(Regex("ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}")).unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
@@ -128,11 +128,11 @@ fn sign() {
         stdout.read_to_end(&mut out).unwrap();
         // Check that the signature is an asn.1 sequence
         let res: asn1::ParseResult<_> = asn1::parse(&out, |d| {
-            return d.read_element::<asn1::Sequence>()?.parse(|d| {
+            d.read_element::<asn1::Sequence>()?.parse(|d| {
                 d.read_element::<asn1::BigUint>()?;
                 d.read_element::<asn1::BigUint>()?;
-                return Ok(());
-            });
+                Ok(())
+            })
         });
         res.unwrap();
 

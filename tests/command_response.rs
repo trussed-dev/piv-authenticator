@@ -103,6 +103,7 @@ fn serialize_len(len: usize) -> heapless::Vec<u8, 3> {
         let arr = len.to_be_bytes();
         buf.extend_from_slice(&[0x82, arr[0], arr[1]]).ok();
     } else {
+        panic!("Length is too long to be serialized");
     }
     buf
 }

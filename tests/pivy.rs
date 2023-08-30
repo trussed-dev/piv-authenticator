@@ -1,5 +1,5 @@
 // Copyright (C) 2022  Nitrokey GmbH
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 #![cfg(all(feature = "vpicc", feature = "pivy-tests"))]
 

@@ -6,7 +6,7 @@ name = "piv-authenticator"
 version = "0.3.2"
 authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
-license = "LGPL-3.0-only"
+license = "Apache-2.0 OR MIT"
 repository = "https://github.com/nitrokey/piv-authenticator"
 documentation = "https://docs.rs/piv-authenticator"
 

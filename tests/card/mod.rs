@@ -1,5 +1,5 @@
 // Copyright (C) 2022  Nitrokey GmbH
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use piv_authenticator::{virt::with_ram_client, vpicc::VpiccCard, Authenticator, Options};
 

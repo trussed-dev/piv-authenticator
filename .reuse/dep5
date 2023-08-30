@@ -4,4 +4,4 @@ Source: https://github.com/Nitrokey/piv-authenticator
 
 Files: tests/default_admin_key
 Copyright:  2022  Nitrokey GmbH
-License: LGPL-3.0-only
+License: Apache-2.0 OR MIT

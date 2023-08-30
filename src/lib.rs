@@ -667,7 +667,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             warn!("Attempt to sign with an incorrect key");
             return Err(Status::IncorrectP1OrP2Parameter);
         };
-        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_ref) else {
+        let Some(KeyWithAlg { alg, id }) =
+            self.state.persistent.keys.asymetric_for_reference(key_ref)
+        else {
             warn!("Attempt to use unset key");
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
@@ -713,7 +715,12 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             );
             Status::IncorrectP1OrP2Parameter
         })?;
-        let Some(KeyWithAlg { alg, id }) = self.state.persistent.keys.asymetric_for_reference(key_reference) else {
+        let Some(KeyWithAlg { alg, id }) = self
+            .state
+            .persistent
+            .keys
+            .asymetric_for_reference(key_reference)
+        else {
             warn!("Attempt to use unset key");
             return Err(Status::ConditionsOfUseNotSatisfied);
         };

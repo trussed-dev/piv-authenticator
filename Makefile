@@ -4,7 +4,7 @@
 .NOTPARALLEL:
 
 export RUST_LOG ?= info,cargo_tarpaulin=off
-TEST_FEATURES ?=vpicc,pivy-tests,opensc-tests
+TEST_FEATURES ?=vpicc,pivy-tests,opensc-tests,rsa
 
 .PHONY: build-cortex-m4
 build-cortex-m4:

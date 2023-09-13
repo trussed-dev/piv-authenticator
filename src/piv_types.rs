@@ -123,7 +123,9 @@ enum_u8! {
 crate::container::enum_subset! {
     #[derive(Debug,Deserialize,Serialize)]
     pub enum AsymmetricAlgorithms: Algorithms {
+        #[cfg(feature = "rsa")]
         Rsa2048,
+        #[cfg(feature = "rsa")]
         Rsa4096,
         P256,
 
@@ -148,7 +150,9 @@ crate::container::enum_subset! {
 impl AsymmetricAlgorithms {
     pub fn key_mechanism(self) -> Mechanism {
         match self {
+            #[cfg(feature = "rsa")]
             Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            #[cfg(feature = "rsa")]
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256,
         }
@@ -159,13 +163,16 @@ impl AsymmetricAlgorithms {
         match self {
             P256 => Some(Mechanism::P256),
             /* P384 | P521 | X25519 | X448 */
+            #[allow(unreachable_patterns)]
             _ => None,
         }
     }
 
     pub fn sign_mechanism(self) -> Mechanism {
         match self {
+            #[cfg(feature = "rsa")]
             Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            #[cfg(feature = "rsa")]
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256Prehashed,
         }
@@ -173,14 +180,20 @@ impl AsymmetricAlgorithms {
 
     pub fn sign_serialization(self) -> SignatureSerialization {
         match self {
+            #[cfg(feature = "rsa")]
             Self::Rsa2048 | Self::Rsa4096 => SignatureSerialization::Raw,
             Self::P256 => SignatureSerialization::Asn1Der,
         }
     }
 
     pub fn is_rsa(self) -> bool {
-        use AsymmetricAlgorithms::*;
-        matches!(self, Rsa2048 | Rsa4096)
+        #[cfg(feature = "rsa")]
+        return matches!(
+            self,
+            AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096
+        );
+        #[cfg(not(feature = "rsa"))]
+        return false;
     }
 }
 

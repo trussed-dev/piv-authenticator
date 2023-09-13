@@ -15,6 +15,7 @@ pub mod dispatch {
         types::{Bytes, Context, Location},
     };
     use trussed_auth::{AuthBackend, AuthContext, AuthExtension, MAX_HW_KEY_LEN};
+    #[cfg(feature = "rsa")]
     use trussed_rsa_alloc::SoftwareRsa;
     use trussed_staging::{streaming::ChunkedExtension, StagingBackend, StagingContext};
 
@@ -22,6 +23,7 @@ pub mod dispatch {
     pub const BACKENDS: &[BackendId<Backend>] = &[
         BackendId::Custom(Backend::Staging),
         BackendId::Custom(Backend::Auth),
+        #[cfg(feature = "rsa")]
         BackendId::Custom(Backend::Rsa),
         BackendId::Core,
     ];
@@ -29,6 +31,7 @@ pub mod dispatch {
     #[derive(Debug, Clone, Copy)]
     pub enum Backend {
         Auth,
+        #[cfg(feature = "rsa")]
         Rsa,
         Staging,
     }
@@ -119,6 +122,7 @@ pub mod dispatch {
                     request,
                     resources,
                 ),
+                #[cfg(feature = "rsa")]
                 Backend::Rsa => SoftwareRsa.request(&mut ctx.core, &mut (), request, resources),
             }
         }
@@ -153,6 +157,7 @@ pub mod dispatch {
                     }
                     Extension::Auth => Err(Error::RequestNotAvailable),
                 }
+                #[cfg(feature = "rsa")]
                 Backend::Rsa => Err(Error::RequestNotAvailable),
             }
         }

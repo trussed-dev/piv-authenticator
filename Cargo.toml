@@ -79,8 +79,8 @@ log-error = []
 [patch.crates-io]
 trussed = { git = "https://github.com/trussed-dev/trussed" , rev = "55ea391367fce4bf5093ff2d3c79041d7aef0485" }
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.2.2"}
-trussed-rsa-alloc = { git = "https://github.com/Nitrokey/trussed-rsa-backend.git", tag = "v0.1.0"}
-trussed-staging = { git = "https://github.com/Nitrokey/trussed-staging", tag = "v0.1.0" }
+trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.1.0"}
+trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging", tag = "v0.1.0" }
 
 [profile.dev.package.rsa]
 opt-level = 2

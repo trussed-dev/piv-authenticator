@@ -43,17 +43,20 @@ fn generate() {
     with_vsc(WITH_UUID, test);
     with_vsc(WITHOUT_UUID, test);
 
-    let test = || {
-        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456").unwrap();
-        p.expect(Regex(
+    #[cfg(feature = "rsa")]
+    {
+        let test = || {
+            let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456").unwrap();
+            p.expect(Regex(
             "ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}",
         ))
         .unwrap();
-        p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
-    };
-    with_vsc(WITH_UUID, test);
-    with_vsc(WITHOUT_UUID, test);
+            p.expect(Eof).unwrap();
+            assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        };
+        with_vsc(WITH_UUID, test);
+        with_vsc(WITHOUT_UUID, test);
+    }
 }
 
 #[test_log::test]
@@ -88,6 +91,7 @@ fn ecdh() {
 
 #[test_log::test]
 fn sign() {
+    #[cfg(feature = "rsa")]
     let test_rsa = || {
         let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456").unwrap();
         p.expect(Regex("ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}")).unwrap();
@@ -139,7 +143,13 @@ fn sign() {
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
 
-    let test = || (test_rsa(), test_p256());
+    let test = || {
+        (
+            test_p256(),
+            #[cfg(feature = "rsa")]
+            test_rsa(),
+        )
+    };
 
     with_vsc(WITH_UUID, test);
     with_vsc(WITHOUT_UUID, test);

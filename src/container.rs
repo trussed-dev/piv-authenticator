@@ -10,7 +10,7 @@ macro_rules! enum_subset {
 
         $(#[$outer:meta])*
         $vis:vis enum $name:ident: $sup:ident {
-            $($var:ident),+
+            $($(#[cfg($inner:meta)])? $var:ident),+
             $(,)*
         }
     ) => {
@@ -19,6 +19,7 @@ macro_rules! enum_subset {
         #[derive(Clone, Copy)]
         $vis enum $name {
             $(
+                $(#[cfg($inner)])?
                 $var,
             )*
         }
@@ -29,6 +30,7 @@ macro_rules! enum_subset {
             fn try_from(val: $sup) -> ::core::result::Result<Self, Self::Error> {
                 match val {
                     $(
+                        $(#[cfg($inner)])?
                         $sup::$var => Ok($name::$var),
                     )*
                     _ => Err(::iso7816::Status::KeyReferenceNotFound)
@@ -41,6 +43,7 @@ macro_rules! enum_subset {
             fn from(v: $name) -> $sup {
                 match v {
                     $(
+                        $(#[cfg($inner)])?
                         $name::$var => $sup::$var,
                     )*
                 }
@@ -51,8 +54,9 @@ macro_rules! enum_subset {
             fn eq(&self, other: &T) -> bool {
                 match (self,(*other).into()) {
                     $(
-                        | ($name::$var, $sup::$var)
-                    )* => true,
+                        $(#[cfg($inner)])?
+                        ($name::$var, $sup::$var) => true,
+                    )*
                     _ => false
                 }
             }
@@ -66,6 +70,7 @@ macro_rules! enum_subset {
                 let v: $sup = tag.try_into()?;
                 match v {
                     $(
+                        $(#[cfg($inner)])?
                         $sup::$var => Ok($name::$var),
                     )*
                     _ => Err(::iso7816::Status::KeyReferenceNotFound)

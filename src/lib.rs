@@ -877,6 +877,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 reply.expand(&serialized_key)?;
                 reply.prepend_len(offset)?;
             }
+            #[cfg(feature = "rsa")]
             AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
                 use trussed_rsa_alloc::RsaPublicParts;
                 reply.expand(&[0x7F, 0x49])?;

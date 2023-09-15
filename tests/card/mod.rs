@@ -1,6 +1,3 @@
-// Copyright (C) 2022  Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 use piv_authenticator::{virt::with_ram_client, vpicc::VpiccCard, Authenticator, Options};
 
 use std::{sync::mpsc, thread::sleep, time::Duration};

@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 pub use untrusted::{Input, Reader};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

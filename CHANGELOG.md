@@ -1,8 +1,3 @@
-<!--
-Copyright (C) 2022 Nitrokey GmbH
-SPDX-License-Identifier: CC0-1.0
--->
-
 # Changelog
 
 ## [v0.3.2][] (2023-06-13)

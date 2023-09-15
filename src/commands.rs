@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 //! Parsed PIV commands.
 //!
 //! The types here should enforce all restrictions in the spec (such as padded_piv_pin.len() == 8),

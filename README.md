@@ -1,8 +1,3 @@
-<!--
-Copyright (C) 2022 Nitrokey GmbH
-SPDX-License-Identifier: CC0-1.0
--->
-
 PIV-Authenticator
 =================
 
@@ -20,17 +15,13 @@ See the [tracking issue for command support](https://github.com/Nitrokey/piv-aut
 License
 -------
 
-This project is licensed under [Apache-2.0][Apache-2.0] OR [MIT][MIT]  For more information, see the license header in each file.
+This project is licensed under [Apache-2.0][Apache-2.0] OR [MIT][MIT].
 Configuration files and examples are licensed under the [CC0 1.0 license][CC0-1.0]. 
 You can find a copy of the license texts in the [`LICENSES`](./LICENSES) directory.
 
 [CC0-1.0]: https://creativecommons.org/publicdomain/zero/1.0/
 [Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0.html
 [MIT]: https://en.wikipedia.org/wiki/MIT_License
-
-This project complies with [version 3.0 of the REUSE specification][reuse].
-
-[reuse]: https://reuse.software/practices/3.0/
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in `piv-authenticator` by you, shall be licensed as [Apache-2.0][Apache-2.0] OR [MIT][MIT], without any additional terms or conditions.
 

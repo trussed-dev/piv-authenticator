@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 #[cfg(not(feature = "delog"))]

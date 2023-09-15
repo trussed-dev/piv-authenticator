@@ -1,6 +1,3 @@
-// Copyright (C) 2022  Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 #![cfg(all(feature = "vpicc", feature = "pivy-tests"))]
 
 mod card;

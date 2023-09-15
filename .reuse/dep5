@@ -1,7 +1,0 @@
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: piv-authenticator
-Source: https://github.com/Nitrokey/piv-authenticator
-
-Files: tests/default_admin_key
-Copyright:  2022  Nitrokey GmbH
-License: Apache-2.0 OR MIT

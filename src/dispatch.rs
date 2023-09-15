@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nicolas Stalder AND  Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 use crate::{reply::Reply, Authenticator, /*constants::PIV_AID,*/ Result};
 
 use apdu_dispatch::{app::App, command, response, Command};

@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 use iso7816::{command::FromSliceError, Command, Status};
 use trussed::virt::Ram;
 

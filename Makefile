@@ -1,6 +1,3 @@
-# Copyright (C) 2022 Nitrokey GmbH
-# SPDX-License-Identifier: CC0-1.0
-
 .NOTPARALLEL:
 
 export RUST_LOG ?= info,cargo_tarpaulin=off
@@ -24,7 +21,6 @@ lint:
 	cargo check --all-features --all-targets
 	cargo clippy --all-targets --all-features -- -Dwarnings
 	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
-	reuse lint
 	
 .PHONY: tarpaulin
 tarpaulin:

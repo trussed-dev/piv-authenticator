@@ -1,5 +1,2 @@
-# Copyright (C) 2022 Nicolas Stalder
-# SPDX-License-Identifier: Apache-2.0 OR MIT
-
 [net]
 git-fetch-with-cli = true

@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nitrokey GmbH
-// SPDX-License-Identifier: CC0-1.0
-
 use trussed::virt::{self, Ram, UserInterface};
 use trussed::{ClientImplementation, Platform};
 use trussed_usbip::ClientBuilder;

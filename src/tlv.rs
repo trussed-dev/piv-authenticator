@@ -1,6 +1,3 @@
-// Copyright (C) 2022 Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 //! Utilities for dealing with TLV (Tag-Length-Value) encoded data
 
 #[allow(unused)]

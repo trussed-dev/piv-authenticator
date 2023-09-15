@@ -1,6 +1,3 @@
-# Copyright (C) 2022 Nitrokey GmbH
-# SPDX-License-Identifier: CC0-1.0
-
 -include config.mk
 
 TAG := registry.git.nitrokey.com/nitrokey/piv-authenticator/piv-authenticator-build

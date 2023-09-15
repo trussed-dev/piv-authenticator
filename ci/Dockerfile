@@ -1,6 +1,3 @@
-# Copyright (C) 2022 Nitrokey GmbH
-# SPDX-License-Identifier: CC0-1.0
-
 FROM docker.io/rust:latest
 
 RUN apt update && apt install --yes  libpcsclite-dev \

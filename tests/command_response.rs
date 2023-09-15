@@ -1,5 +1,3 @@
-// Copyright (C) 2022 Nicolas Stalder AND Nitrokey GmbH
-// SPDX-License-Identifier: Apache-2.0 OR MIT
 #![cfg(feature = "virt")]
 
 mod setup;

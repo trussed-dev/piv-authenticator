@@ -255,6 +255,10 @@ fn default_app_pin() -> String {
     "313233343536FFFF".into()
 }
 
+fn default_puk() -> String {
+    "3132333435363738".into()
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 enum IoCmd {
@@ -303,6 +307,20 @@ enum IoCmd {
         #[serde(default)]
         expected_status_response: Status,
     },
+    ChangePin {
+        #[serde(default = "default_app_pin")]
+        old: String,
+        new: String,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    ChangePuk {
+        #[serde(default = "default_puk")]
+        old: String,
+        new: String,
+        #[serde(default)]
+        expected_status: Status,
+    },
     Select,
     Reset {
         #[serde(default)]
@@ -315,6 +333,7 @@ const MATCH_ANY: OutputMatcher = OutputMatcher::All(Cow::Borrowed(&[]), ());
 
 impl IoCmd {
     fn run(&self, card: &mut setup::Piv) {
+        println!("Running {self:?}");
         match self {
             Self::IoData {
                 input,
@@ -354,6 +373,16 @@ impl IoCmd {
                 key,
                 expected_status,
             } => Self::run_set_administration_key(key.algorithm, &key.key, *expected_status, card),
+            Self::ChangePin {
+                old,
+                new,
+                expected_status,
+            } => Self::run_change_pin(old, new, *expected_status, card),
+            Self::ChangePuk {
+                old,
+                new,
+                expected_status,
+            } => Self::run_change_puk(old, new, *expected_status, card),
             Self::Select => Self::run_select(card),
             Self::Reset { expected_status } => Self::run_reset(*expected_status, card),
         }
@@ -405,7 +434,7 @@ impl IoCmd {
             panic!("Bad output. Expected {output:02x?}");
         }
         if status != expected_status {
-            panic!("Bad status. Expected {expected_status:?}");
+            panic!("Bad status. Expected {expected_status:?}, got {status:?}");
         }
         rep
     }
@@ -533,6 +562,25 @@ impl IoCmd {
     }
     fn run_reset(expected_status: Status, card: &mut setup::Piv) {
         Self::run_bytes(&hex!("00 FB 00 00"), &MATCH_EMPTY, expected_status, card);
+    }
+
+    fn run_change_pin(old: &str, new: &str, status: Status, card: &mut setup::Piv) {
+        let command = parse_hex(&format!("{old}{new}"));
+        Self::run_bytes(
+            &build_command(0, 0x24, 0x00, 0x80, &command, 0x00),
+            &MATCH_EMPTY,
+            status,
+            card,
+        );
+    }
+    fn run_change_puk(old: &str, new: &str, status: Status, card: &mut setup::Piv) {
+        let command = parse_hex(&format!("{old}{new}"));
+        Self::run_bytes(
+            &build_command(0, 0x24, 0x00, 0x81, &command, 0x00),
+            &MATCH_EMPTY,
+            status,
+            card,
+        );
     }
 }
 

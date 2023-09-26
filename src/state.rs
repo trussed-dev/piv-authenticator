@@ -376,7 +376,7 @@ impl Persistent {
     ) -> bool {
         let old_puk = Bytes::from_slice(&old_value.0).expect("Convertion of static array");
         let new_puk = Bytes::from_slice(&new_value.0).expect("Convertion of static array");
-        try_syscall!(client.change_pin(PinType::UserPin, old_puk, new_puk))
+        try_syscall!(client.change_pin(PinType::Puk, old_puk, new_puk))
             .map(|r| r.success)
             .unwrap_or(false)
     }

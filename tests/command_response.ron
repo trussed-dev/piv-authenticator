@@ -182,5 +182,22 @@
                 output: Data("53 3b 3019d4e739d821086c1084210d8360d8210842108421804210c3f33410B0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB30839393939313233313e00fe00"),
             ),
         ]
-    )
+    ),
+    IoTest(
+        name: "Pin and Puk",
+        uuid_config: WithBoth("00112233445566778899AABBCCDDEEFF"),
+        cmd_resp: [
+            ChangePin(
+                new: "01020304FFFFFFFF",
+            ),
+            ChangePuk(
+                new: "0102030405060708",
+            ),
+            VerifyApplicationPin(pin: "0102030405060708", expected_status: RemainingRetries(2)),
+            ChangePuk(
+                old: "0102030405060708",
+                new: "AABBCCDDEEFF0011",
+            ),
+        ]
+    ),
 ]

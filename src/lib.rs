@@ -161,7 +161,7 @@ where
         info!("parsed: {:02x?}", &parsed_command);
         let reply = Reply(reply);
 
-        match parsed_command {
+        let rep = match parsed_command {
             Command::Verify(verify) => self.load()?.verify(verify),
             Command::ChangeReference(change_reference) => {
                 self.load()?.change_reference(change_reference)
@@ -181,7 +181,9 @@ where
                 self.yubico_piv_extension(command.data(), yk_command, reply)
             }
             Command::ResetRetryCounter(reset) => self.load()?.reset_retry_counter(reset),
-        }
+        };
+        info!("Reply: {rep:?}");
+        rep
     }
 
     pub fn yubico_piv_extension<const R: usize>(

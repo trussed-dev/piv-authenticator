@@ -1,6 +1,6 @@
 [package]
 name = "piv-authenticator"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"
@@ -50,7 +50,8 @@ stoppable_thread = "0.2.1"
 expectrl = "0.6.0"
 
 # Examples
-trussed-usbip = { git = "https://github.com/trussed-dev/pc-usbip-runner", default-features = false, features = ["ccid"], rev = "f3a680ca4c9a1411838ae0774f1713f79d4c2979"}
+# usbip
+trussed-usbip = { version = "0.0.1", default-features = false, features = ["ccid"] }
 usbd-ccid = { version = "0.2.0", features = ["highspeed-usb"]}
 rand = "0.8.5"
 asn1 = "0.15.2"
@@ -74,11 +75,13 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/trussed-dev/trussed" , rev = "55ea391367fce4bf5093ff2d3c79041d7aef0485" }
+trussed = { git = "https://github.com/nitrokey/trussed" , tag = "v0.1.0-nitrokey.11" }
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.2.2"}
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.1.0"}
 trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging", tag = "v0.1.0" }
-apdu-dispatch = { git = "https://github.com/trussed-dev/apdu-dispatch.git", rev = "915fc237103fcecc29d0f0b73391f19abf6576de" }
+apdu-dispatch = { git = "https://github.com/Nitrokey/apdu-dispatch", tag = "v0.1.2-nitrokey.2" }
+trussed-usbip = { git = "https://github.com/Nitrokey/pc-usbip-runner.git", tag = "v0.0.1-nitrokey.1" }
+usbd-ccid = { git = "https://github.com/Nitrokey/usbd-ccid", tag = "v0.2.0-nitrokey.1" }
 
 [profile.dev.package.rsa]
 opt-level = 2

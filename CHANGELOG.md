@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## [v0.3.3][] (2023-12-08)
 
 - Reject NFC requests ([#39][])
+- Put RSA feature behind a feature flag
 
 [#39]: https://github.com/Nitrokey/piv-authenticator/pull/39
 

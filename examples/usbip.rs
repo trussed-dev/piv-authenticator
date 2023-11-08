@@ -19,7 +19,7 @@ struct PivApp {
     piv: piv::Authenticator<VirtClient>,
 }
 
-impl trussed_usbip::Apps<VirtClient, Dispatch> for PivApp {
+impl trussed_usbip::Apps<'static, VirtClient, Dispatch> for PivApp {
     type Data = ();
     fn new<B: ClientBuilder<VirtClient, Dispatch>>(builder: &B, _data: ()) -> Self {
         PivApp {

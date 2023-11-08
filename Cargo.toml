@@ -78,6 +78,7 @@ trussed = { git = "https://github.com/trussed-dev/trussed" , rev = "55ea391367fc
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.2.2"}
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.1.0"}
 trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging", tag = "v0.1.0" }
+apdu-dispatch = { git = "https://github.com/trussed-dev/apdu-dispatch.git", rev = "915fc237103fcecc29d0f0b73391f19abf6576de" }
 
 [profile.dev.package.rsa]
 opt-level = 2

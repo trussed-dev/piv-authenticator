@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Reject NFC requests ([#39][])
+
+[#39]: https://github.com/Nitrokey/piv-authenticator/pull/39
+
 ## [v0.3.2][] (2023-06-13)
 
 - Fix P-256 signature ([#33][])

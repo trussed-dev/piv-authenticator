@@ -1,11 +1,21 @@
 # Changelog
 
+## [v0.3.4][] (2024-01-02)
+
+- Fix error when changing the PUK ([#40][])
+
+[#40]: https://github.com/Nitrokey/piv-authenticator/pull/40
+
+[v0.3.4]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.4
+
 ## [v0.3.3][] (2023-12-08)
 
 - Reject NFC requests ([#39][])
 - Put RSA feature behind a feature flag
 
 [#39]: https://github.com/Nitrokey/piv-authenticator/pull/39
+
+[v0.3.3]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.3
 
 ## [v0.3.2][] (2023-06-13)
 

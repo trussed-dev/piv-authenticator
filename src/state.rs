@@ -715,11 +715,7 @@ impl ContainerStorage {
     fn default(self) -> Option<Vec<u8, MAX_MESSAGE_LENGTH>> {
         match self.0 {
             Container::CardHolderUniqueIdentifier => panic!("CHUID should alway be set"),
-            Container::CardCapabilityContainer => Some(
-                crate::piv_types::CardCapabilityContainer::default()
-                    .to_heapless_vec()
-                    .unwrap(),
-            ),
+            Container::CardCapabilityContainer => Some(Vec::from_slice(&CARD_CAP).unwrap()),
             Container::DiscoveryObject => Some(Vec::from_slice(&DISCOVERY_OBJECT).unwrap()),
             _ => None,
         }

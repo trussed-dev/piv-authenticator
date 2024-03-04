@@ -50,6 +50,24 @@ pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
          4000"
 );
 
+pub const CARD_CAP: [u8; 27] = hex!(
+    "
+    F0 00 // card identifier
+    F1 00 // capability container version
+    F2 00 // capability container grammar
+    F3 00 // application card url
+    F4 00 // pkcs15
+    F5 01 10 // registereddata model number
+    F6 00 // access control rule table
+    F7 00 // card apdus
+    FA 00 // redirection tag
+    FB 00 // capability tuples
+    FC 00 // status tuples
+    FD 00 // next ccc
+    FE 00 // Error detection code
+"
+);
+
 use crate::Container;
 pub const RETIRED_CERTS: [Container; 20] = [
     Container::RetiredCert01,

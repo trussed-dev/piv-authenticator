@@ -547,8 +547,7 @@ impl Persistent {
         let mut state = Self {
             keys,
             timestamp: 0,
-            // In case of forgotten to rebind, ensure the bug is found
-            storage: Location::Volatile,
+            storage: options.storage,
         };
         state.save(client);
         state.reset_pin(Self::DEFAULT_PIN, client)?;

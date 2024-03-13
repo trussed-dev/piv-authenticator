@@ -11,7 +11,7 @@ use trussed::{
     syscall, try_syscall,
     types::{KeyId, KeySerialization, Location, Mechanism, PathBuf, StorageAttributes},
 };
-use trussed_staging::streaming::utils;
+use trussed_chunked::utils;
 
 use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::reply::Reply;

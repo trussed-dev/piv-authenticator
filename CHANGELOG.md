@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Use `trussed-chunked` instead of `trussed-staging`, see
+  [trussed-staging#19][].
+
+[trussed-staging#19]: https://github.com/trussed-dev/trussed-staging/pull/19
+
 ## [v0.3.4][] (2024-01-02)
 
 - Fix error when changing the PUK ([#40][])

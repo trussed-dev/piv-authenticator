@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+-
+
+## [v0.4.0][] (2024-03-15)
+
+[v0.4.0]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.4.0
+
 - Use `trussed-chunked` instead of `trussed-staging`, see
   [trussed-staging#19][].
 

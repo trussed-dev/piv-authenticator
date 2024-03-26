@@ -33,7 +33,7 @@ heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
 trussed-rsa-alloc = { version = "0.1.0", features = ["raw"], optional = true }
 trussed-chunked = "0.1.0"
-trussed-staging = { version = "0.3.0", features = ["chunked"], default-features = false }
+trussed-staging = { version = "0.3.0", features = ["chunked"], default-features = false, optional = true }
 
 [dev-dependencies]
 littlefs2 = "0.3.2"
@@ -62,7 +62,7 @@ default = []
 strict-pin = []
 std = []
 vpicc = ["std", "dep:vpicc", "virt"]
-virt = ["std", "trussed/virt"]
+virt = ["std", "trussed/virt", "dep:trussed-staging"]
 pivy-tests = []
 opensc-tests = []
 alloc = []
@@ -76,7 +76,7 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/nitrokey/trussed" , tag = "v0.1.0-nitrokey.18" }
+trussed = { git = "https://github.com/Nitrokey/trussed" , tag = "v0.1.0-nitrokey.18" }
 littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27e49ca321089d01d8c9b169c4aeb58ceeeca" }
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.3.0"}
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", rev = "9732a9a3e98af72112286afdc9b7174c66c2869a" }

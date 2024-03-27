@@ -12,9 +12,10 @@ pub mod dispatch {
         types::{Bytes, Context, Location},
     };
     use trussed_auth::{AuthBackend, AuthContext, AuthExtension, MAX_HW_KEY_LEN};
+    use trussed_chunked::ChunkedExtension;
     #[cfg(feature = "rsa")]
     use trussed_rsa_alloc::SoftwareRsa;
-    use trussed_staging::{streaming::ChunkedExtension, StagingBackend, StagingContext};
+    use trussed_staging::{StagingBackend, StagingContext};
 
     /// Backends used by opcard
     pub const BACKENDS: &[BackendId<Backend>] = &[

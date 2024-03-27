@@ -22,7 +22,7 @@ pub mod state;
 mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
-use trussed_staging::streaming::ChunkedClient;
+use trussed_chunked::ChunkedClient;
 
 #[cfg(feature = "virt")]
 pub mod virt;

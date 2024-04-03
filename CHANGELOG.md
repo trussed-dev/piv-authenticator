@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.3.5][] (2024-04-03)
+
+- Fix default card capabilities value ([#46][])
+- Fix storage location for just-initialized PIV ([#47][])
+- Update trussed-auth, trussed-staging and make trussed-staging optional ([#48][])
+- Allow generating retired keys ([#44][])
+
+[#44]: https://github.com/Nitrokey/piv-authenticator/pull/44
+[#46]: https://github.com/Nitrokey/piv-authenticator/pull/46
+[#47]: https://github.com/Nitrokey/piv-authenticator/pull/47
+[#48]: https://github.com/Nitrokey/piv-authenticator/pull/48
+
+[v0.3.5]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.5
+
 ## [v0.3.4][] (2024-01-02)
 
 - Fix error when changing the PUK ([#40][])

@@ -191,16 +191,7 @@ enum_subset! {
     }
 }
 
-enum_subset! {
-    #[derive(Debug)]
-    pub enum GenerateKeyReference: AsymmetricKeyReference {
-        // SecureMessaging,
-        PivAuthentication,
-        DigitalSignature,
-        KeyManagement,
-        CardAuthentication,
-    }
-}
+pub type GenerateKeyReference = AsymmetricKeyReference;
 
 enum_subset! {
     #[derive(Debug)]

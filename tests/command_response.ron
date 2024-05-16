@@ -89,7 +89,7 @@
         cmd_resp: [
             GetData(
                 input: "5C 01 7E",
-                output: Data("7e 12 4f 0b a000000308000010000100 5f2f 02 4000")
+                output: Data("7e 12 4f 0b a000000308000010000100 5f2f 02 4010")
             ),
             GetData(
                 input: "5C 03 5FC102",
@@ -133,7 +133,7 @@
             ),
             VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(2)),
             VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(1)),
-            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(0)),
+            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: OperationBlocked),
             Reset(),
         ]
     ),

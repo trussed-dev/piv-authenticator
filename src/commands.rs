@@ -228,8 +228,8 @@ impl TryFrom<&[u8]> for ResetRetryCounter {
             return Err(Status::IncorrectDataParameter);
         }
         Ok(Self {
-            pin: data[..8].try_into().unwrap(),
-            puk: data[8..].try_into().unwrap(),
+            puk: data[..8].try_into().unwrap(),
+            pin: data[8..].try_into().unwrap(),
         })
     }
 }

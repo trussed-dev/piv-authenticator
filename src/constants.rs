@@ -47,7 +47,7 @@ pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
     4f 0b // PIV AID
        a000000308000010000100
     5f2f 02 // PIN usage Policy
-         4000"
+         4010"
 );
 
 pub const CARD_CAP: [u8; 27] = hex!(

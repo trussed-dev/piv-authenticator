@@ -302,7 +302,11 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 // should we logout here?
                 self.state.volatile.app_security_status.pin_verified = false;
                 let remaining = self.state.persistent.remaining_pin_retries(self.trussed);
-                Err(Status::RemainingRetries(remaining))
+                if remaining == 0 {
+                    Err(Status::OperationBlocked)
+                } else {
+                    Err(Status::RemainingRetries(remaining))
+                }
             }
         } else {
             Err(Status::FunctionNotSupported)

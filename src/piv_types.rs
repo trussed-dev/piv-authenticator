@@ -63,7 +63,28 @@ pub struct Pin(pub [u8; 8]);
 impl TryFrom<&[u8]> for Pin {
     type Error = ();
     fn try_from(padded_pin: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(padded_pin.try_into().map_err(|_| ())?))
+        let arr = padded_pin.try_into().map_err(|_| ())?;
+
+        for (idx, b) in padded_pin.iter().enumerate() {
+            if !b.is_ascii_digit() {
+                // Value is not a digit, check that we have only padding remaining and that min length is good
+
+                // Check min length
+                if idx < 5 {
+                    return Err(());
+                }
+
+                // Check that only padding is left
+                for rem in &padded_pin[idx..] {
+                    if *rem != 0xFF {
+                        return Err(());
+                    }
+                }
+                break;
+            }
+        }
+
+        Ok(Self(arr))
     }
 }
 

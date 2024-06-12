@@ -453,6 +453,20 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             response: tlv::get_do(&[0x82], input),
             exponentiation: tlv::get_do(&[0x85], input),
         };
+
+        error!(
+            "
+            witness: {}
+            challenge: {}
+            response: {}
+            exponentiation: {}
+        ",
+            &parsed.witness.is_some(),
+            &parsed.challenge.is_some(),
+            &parsed.response.is_some(),
+            &parsed.exponentiation.is_some(),
+        );
+
         match parsed {
             Auth {
                 witness: None,
@@ -662,7 +676,8 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         message: &[u8],
         mut reply: Reply<'_, R>,
     ) -> Result {
-        info!("Request for sign");
+        error!("Request for sign, data length: {}, data:", message.len());
+        // error!("{}", delog::hexstr!(message));
 
         let Ok(key_ref) = auth.key_reference.try_into() else {
             warn!("Attempt to sign with an incorrect key");
@@ -698,6 +713,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             reply.append_len(response.len())?;
             reply.expand(&response)?;
         }
+        error!("Signed data len: {}, Data:", response.len());
+        // error!("{}", delog::hexstr!(&response));
+
         reply.prepend_len(offset)?;
         Ok(())
     }
@@ -937,11 +955,14 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 reply.prepend_len(offset)?;
             }
             _ => {
-                if !ContainerStorage(container).load(
+                error!("Getting {container:?}");
+                let res = ContainerStorage(container).load(
                     self.trussed,
                     self.options.storage,
                     reply.lend(),
-                )? {
+                );
+
+                if !res? {
                     return Err(Status::NotFound);
                 }
             }

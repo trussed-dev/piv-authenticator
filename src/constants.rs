@@ -68,6 +68,17 @@ pub const CARD_CAP: [u8; 27] = hex!(
 "
 );
 
+pub const PRINTED_INFORMATION: [u8; 63] = hex!(
+    "
+    01 0E 4E6974726F6B6579203320504956
+    02 00
+    04 09 323033344A616E3031
+    05 0E 53657269616C204E756D62657220
+    06 0E 4E6974726F6B6579203320504956
+    FE 00
+"
+);
+
 use crate::Container;
 pub const RETIRED_CERTS: [Container; 20] = [
     Container::RetiredCert01,

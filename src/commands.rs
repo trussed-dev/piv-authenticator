@@ -197,6 +197,11 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
         } = arguments;
 
         use ChangeReferenceKeyReference::*;
+
+        if data.len() != 16 {
+            return Err(Status::IncorrectDataParameter);
+        }
+
         Ok(match (key_reference, data) {
             (GlobalPin, _) => return Err(Status::FunctionNotSupported),
             (ApplicationPin, data) => ChangeReference::ChangePin {

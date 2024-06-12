@@ -22,7 +22,7 @@ delog = { version = "0.1.5", optional = true }
 flexiber = { version = "0.1", features = ["derive", "heapless"] }
 heapless = "0.7"
 hex-literal = "0.3"
-iso7816 = "0.1"
+iso7816 = "0.1.2"
 serde = { version = "1", default-features = false, features = ["derive"] }
 trussed = { version = "0.1", features = ["serde-extensions"] }
 trussed-auth = { version = "0.3" }
@@ -50,6 +50,7 @@ des = "0.8"
 aes = "0.8.2"
 stoppable_thread = "0.2.1"
 expectrl = "0.6.0"
+iso7816 = { version = "0.1.2", features = ["std"] }
 
 # Examples
 # usbip

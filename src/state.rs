@@ -474,6 +474,20 @@ impl Persistent {
         id
     }
 
+    pub fn replace_asymmetric_key(
+        &mut self,
+        key: AsymmetricKeyReference,
+        alg: AsymmetricAlgorithms,
+        id: KeyId,
+        client: &mut impl crate::Client,
+    ) {
+        let old = self.set_asymmetric_key(key, id, alg);
+        self.save(client);
+        if let Some(old) = old {
+            syscall!(client.delete(old.id));
+        }
+    }
+
     pub fn initialize<T: crate::Client>(
         client: &mut T,
         options: &crate::Options,

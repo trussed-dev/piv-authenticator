@@ -114,37 +114,8 @@ fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
 }
 
 fn build_command(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8], le: u16) -> Vec<u8> {
-    let mut res = vec![cla, ins, p1, p2];
-    let lc = data.len();
-    let extended = if lc == 0 {
-        false
-    } else if let Ok(len) = lc.try_into() {
-        res.push(len);
-        false
-    } else {
-        let len: u16 = lc.try_into().unwrap();
-        res.push(0);
-        res.extend_from_slice(&len.to_be_bytes());
-        true
-    };
-
-    res.extend_from_slice(data);
-
-    if le == 0 {
-        return res;
-    }
-
-    if let Ok(len) = (le - 1).try_into() {
-        let _: u8 = len;
-        res.push(len.wrapping_add(1));
-    } else if extended {
-        res.extend_from_slice(&le.to_be_bytes());
-    } else {
-        res.push(0);
-        res.extend_from_slice(&le.to_be_bytes());
-    }
-
-    res
+    iso7816::command::CommandBuilder::new(cla.try_into().unwrap(), ins.into(), p1, p2, data, le)
+        .serialize_to_vec()
 }
 
 impl TryFrom<u16> for Status {
@@ -321,6 +292,22 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    // Only works for 0x9A
+    ImportRsaKey {
+        p: String,
+        q: String,
+        e: String,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    Sign {
+        algo: u8,
+        key_reference: u8,
+        data: String,
+        output: OutputMatcher,
+        #[serde(default)]
+        expected_status: Status,
+    },
     Select,
     Reset {
         #[serde(default)]
@@ -383,9 +370,65 @@ impl IoCmd {
                 new,
                 expected_status,
             } => Self::run_change_puk(old, new, *expected_status, card),
+            Self::ImportRsaKey {
+                p,
+                q,
+                e,
+                expected_status,
+            } => Self::run_import_rsa_key(p, q, e, *expected_status, card),
+            Self::Sign {
+                algo,
+                key_reference,
+                data,
+                output,
+                expected_status,
+            } => Self::run_sign(*algo, *key_reference, data, output, *expected_status, card),
             Self::Select => Self::run_select(card),
             Self::Reset { expected_status } => Self::run_reset(*expected_status, card),
         }
+    }
+
+    fn run_sign(
+        algo: u8,
+        key_ref: u8,
+        data: &str,
+        output: &OutputMatcher,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        let data = parse_hex(data);
+        let data_intermediary: Vec<u8> = [tlv(&[0x81], &data), tlv(&[0x82], &[])]
+            .into_iter()
+            .flatten()
+            .collect();
+        let data = tlv(&[0x7C], &data_intermediary);
+        Self::run_bytes(
+            &build_command(0x00, 0x87, algo, key_ref, &data, 0xFF),
+            output,
+            expected_status,
+            card,
+        );
+    }
+    fn run_import_rsa_key(
+        p: &str,
+        q: &str,
+        e: &str,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        let p = parse_hex(p);
+        let q = parse_hex(q);
+        let e = parse_hex(e);
+        let data: Vec<u8> = [tlv(&[0x01], &p), tlv(&[0x02], &q), tlv(&[0x03], &e)]
+            .into_iter()
+            .flatten()
+            .collect();
+        Self::run_bytes(
+            &build_command(0x00, 0xFE, 0x07, 0x9A, &data, 0),
+            &MATCH_EMPTY,
+            expected_status,
+            card,
+        );
     }
 
     fn run_set_administration_key(
@@ -412,7 +455,7 @@ impl IoCmd {
         expected_status: Status,
         card: &mut setup::Piv,
     ) -> heapless::Vec<u8, 1024> {
-        println!("Command: {input:x?}");
+        println!("Command: {input:02x?}");
         let mut rep: heapless::Vec<u8, 1024> = heapless::Vec::new();
         let cmd: iso7816::Command<{ setup::COMMAND_SIZE }> = iso7816::Command::try_from(input)
             .unwrap_or_else(|err| {

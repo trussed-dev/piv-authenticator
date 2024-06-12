@@ -353,8 +353,11 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
-                let algorithm = p1.try_into()?;
-                let key_reference = AuthenticateKeyReference::try_from(p2)?;
+                let algorithm = p1
+                    .try_into()
+                    .map_err(|_| Status::IncorrectP1OrP2Parameter)?;
+                let key_reference = AuthenticateKeyReference::try_from(p2)
+                    .map_err(|_| Status::IncorrectP1OrP2Parameter)?;
                 Self::GeneralAuthenticate(GeneralAuthenticate {
                     algorithm,
                     key_reference,

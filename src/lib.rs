@@ -699,6 +699,10 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::SecurityStatusNotSatisfied);
         }
 
+        if alg.sign_len() != message.len() {
+            return Err(Status::IncorrectDataParameter);
+        }
+
         let response = syscall!(self.trussed.sign(
             alg.sign_mechanism(),
             id,

@@ -187,7 +187,17 @@
         name: "Change reference with too short PIN",
         cmd_resp: [
             ChangePin(
-                new: "11223344556677",
+                new: "31323334FFFFFFFF",
+                expected_status: IncorrectDataParameter,
+            ),
+        ],
+    ),
+    IoTest(
+        name: "Change reference with too short PIN",
+        cmd_resp: [
+            ChangePin(
+                new: "3232323232323232",
+                old: "3333333333FFFFFF",
                 expected_status: IncorrectDataParameter,
             ),
         ],

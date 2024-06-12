@@ -716,6 +716,7 @@ impl ContainerStorage {
             Container::CardHolderUniqueIdentifier => panic!("CHUID should alway be set"),
             Container::CardCapabilityContainer => Some(Vec::from_slice(&CARD_CAP).unwrap()),
             Container::DiscoveryObject => Some(Vec::from_slice(&DISCOVERY_OBJECT).unwrap()),
+            Container::PrintedInformation => Some(Vec::from_slice(&PRINTED_INFORMATION).unwrap()),
             _ => None,
         }
     }

@@ -4,7 +4,7 @@
         cmd_resp: [
             VerifyApplicationPin(),
             VerifyApplicationPin(pin: "3131313131313131", expected_status: RemainingRetries(2)),
-            VerifyGlobalPin(expected_status: FunctionNotSupported)
+            VerifyGlobalPin(expected_status: KeyReferenceNotFound),
         ]
     ),
     IoTest(

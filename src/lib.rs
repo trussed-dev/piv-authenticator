@@ -590,7 +590,8 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if response.ct_eq(&plaintext_challenge).into() {
+        let is_eq: bool = response.ct_eq(&plaintext_challenge).into();
+        if is_eq {
             warn!("Bad auth challenge");
             return Err(Status::IncorrectDataParameter);
         }
@@ -861,28 +862,8 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         //     PINPolicyAlways: 0x03,
         // }
 
-        // TODO: iterate on this, don't expect tags..
-        let input = derp::Input::from(data);
-        // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
-        let mechanism_data = input.read_all(Status::IncorrectDataParameter, |input| {
-            derp::nested(
-                input,
-                Status::IncorrectDataParameter,
-                Status::IncorrectDataParameter,
-                0xac,
-                |input| {
-                    derp::expect_tag_and_get_value(input, 0x80)
-                        .map(|input| input.as_slice_less_safe())
-                        .map_err(|_e| {
-                            warn!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
-                            Status::IncorrectDataParameter
-                        })
-                },
-            )
-        })?;
-
-        let [mechanism] = mechanism_data else {
-            warn!("Mechanism of len not 1: {mechanism_data:02x?}");
+        let Some([mechanism]) = tlv::get_do(&[0xAC, 0x80], data) else {
+            warn!("Generate assymetric key pair without mechanism");
             return Err(Status::IncorrectDataParameter);
         };
 

@@ -261,18 +261,12 @@ pub struct Volatile {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SecurityStatus {
-    JustVerified,
-    Verified,
-    NotVerified,
-}
-
 impl Volatile {
-    pub fn security_valid(&self, condition: SecurityCondition) -> bool {
+    pub fn security_valid(&self, condition: SecurityCondition, just_verified: bool) -> bool {
         use SecurityCondition::*;
         match condition {
             Pin => self.app_security_status.pin_verified,
+            PinAlways => just_verified,
             Always => true,
         }
     }
@@ -302,15 +296,10 @@ impl Volatile {
     }
 }
 
-impl Default for SecurityStatus {
-    fn default() -> Self {
-        Self::NotVerified
-    }
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AppSecurityStatus {
     pub pin_verified: bool,
+    pub pin_just_verified: bool,
     pub puk_verified: bool,
     pub administrator_verified: bool,
 }

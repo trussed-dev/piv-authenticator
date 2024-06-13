@@ -82,6 +82,8 @@ pub(crate) use enum_subset;
 /// Security condition for the use of a given key.
 pub enum SecurityCondition {
     Pin,
+    /// Pin must be checked **just before**
+    PinAlways,
     Always,
 }
 
@@ -134,6 +136,7 @@ impl KeyReference {
             Self::SecureMessaging
             | Self::PivCardApplicationAdministration
             | Self::KeyManagement => SecurityCondition::Always,
+            Self::DigitalSignature => SecurityCondition::PinAlways,
             _ => SecurityCondition::Pin,
         }
     }

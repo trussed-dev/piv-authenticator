@@ -44,6 +44,8 @@ pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
+use crate::container::SecurityCondition;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     storage: Location,
@@ -147,7 +149,7 @@ where
         application_property_template
             .encode_to_heapless_vec(*reply)
             .unwrap();
-        info!("returning: {:02X?}", reply);
+        info!("returning {} bytes", reply.len());
         Ok(())
     }
 
@@ -156,7 +158,10 @@ where
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
     ) -> Result {
-        info!("PIV responding to {:02x?}", command);
+        let just_verified = self.state.volatile.app_security_status.pin_just_verified;
+        self.state.volatile.app_security_status.pin_just_verified = false;
+
+        // info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
         info!("parsed: {:02x?}", &parsed_command);
         let reply = Reply(reply);
@@ -169,10 +174,12 @@ where
             Command::GetData(container) => self.load()?.get_data(container, reply),
             Command::PutData(put_data) => self.load()?.put_data(put_data),
             Command::Select(_aid) => self.select(reply),
-            Command::GeneralAuthenticate(authenticate) => {
-                self.load()?
-                    .general_authenticate(authenticate, command.data(), reply)
-            }
+            Command::GeneralAuthenticate(authenticate) => self.load()?.general_authenticate(
+                authenticate,
+                command.data(),
+                just_verified,
+                reply,
+            ),
             Command::GenerateAsymmetric(reference) => {
                 self.load()?
                     .generate_asymmetric_keypair(reference, command.data(), reply)
@@ -295,12 +302,16 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
-            if self.state.persistent.verify_pin(&pin, self.trussed) {
+            let tmp = self.state.persistent.verify_pin(&pin, self.trussed);
+            debug!("Verify result: {tmp:?}");
+            if tmp {
                 self.state.volatile.app_security_status.pin_verified = true;
+                self.state.volatile.app_security_status.pin_just_verified = true;
                 Ok(())
             } else {
                 // should we logout here?
                 self.state.volatile.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_just_verified = false;
                 let remaining = self.state.persistent.remaining_pin_retries(self.trussed);
                 if remaining == 0 {
                     Err(Status::OperationBlocked)
@@ -320,6 +331,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
 
             Verify::Logout(_) => {
                 self.state.volatile.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_just_verified = false;
                 Ok(())
             }
 
@@ -354,6 +366,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::VerificationFailed);
         }
         self.state.volatile.app_security_status.pin_verified = true;
+        self.state.volatile.app_security_status.pin_just_verified = true;
         Ok(())
     }
 
@@ -401,6 +414,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
+        just_verified: bool,
         mut reply: Reply<'_, R>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
@@ -425,7 +439,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         if !self
             .state
             .volatile
-            .security_valid(auth.key_reference.use_security_condition())
+            .security_valid(auth.key_reference.use_security_condition(), just_verified)
         {
             warn!(
                 "Security condition not satisfied for key {:?}",
@@ -455,12 +469,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         };
 
         error!(
-            "
-            witness: {}
-            challenge: {}
-            response: {}
-            exponentiation: {}
-        ",
+            "witness: {}, challenge: {}, response: {}, exponentiation: {}",
             &parsed.witness.is_some(),
             &parsed.challenge.is_some(),
             &parsed.response.is_some(),
@@ -473,7 +482,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 challenge: Some(c),
                 response: Some([]),
                 exponentiation: None,
-            } => self.sign(auth, c, reply.lend())?,
+            } => self.sign(auth, c, just_verified, reply.lend())?,
             Auth {
                 witness: None,
                 challenge: None,
@@ -674,6 +683,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         &mut self,
         auth: GeneralAuthenticate,
         message: &[u8],
+        just_verified: bool,
         mut reply: Reply<'_, R>,
     ) -> Result {
         error!("Request for sign, data length: {}, data:", message.len());
@@ -694,9 +704,20 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             warn!("Bad algorithm: {:?}", auth.algorithm);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
-        if !self.state.volatile.app_security_status.pin_verified {
-            warn!("Authenticate challenge without pin validated");
-            return Err(Status::SecurityStatusNotSatisfied);
+        match key_ref.use_security_condition() {
+            SecurityCondition::Pin => {
+                if !self.state.volatile.app_security_status.pin_verified {
+                    warn!("Authenticate challenge without pin validated");
+                    return Err(Status::SecurityStatusNotSatisfied);
+                }
+            }
+            SecurityCondition::PinAlways => {
+                if !just_verified {
+                    warn!("AUTHENTICATE CHALLENGE WITHOUT PIN VALIDATED");
+                    return Err(Status::SecurityStatusNotSatisfied);
+                }
+            }
+            SecurityCondition::Always => {}
         }
 
         if alg.sign_len() != message.len() {

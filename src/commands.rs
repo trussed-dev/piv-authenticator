@@ -161,7 +161,7 @@ impl TryFrom<VerifyArguments<'_>> for Verify {
             data,
         } = arguments;
         if key_reference != VerifyKeyReference::ApplicationPin {
-            return Err(Status::FunctionNotSupported);
+            return Err(Status::KeyReferenceNotFound);
         }
         Ok(match (logout.0, data.len()) {
             (false, 0) => Verify::Status(key_reference),
@@ -368,9 +368,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
                 Self::PutData(PutData::try_from(data.as_slice())?)
             }
 
-            (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {
-                Self::GenerateAsymmetric(GenerateKeyReference::try_from(p2)?)
-            }
+            (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => Self::GenerateAsymmetric(
+                GenerateKeyReference::try_from(p2).map_err(|_| Status::IncorrectP1OrP2Parameter)?,
+            ),
             // (0x00, 0x01, 0x10, 0x00)
             (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {
                 Self::YkExtension(YubicoPivExtension::GetSerial)

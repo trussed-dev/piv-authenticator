@@ -134,6 +134,7 @@ impl KeyReference {
     pub fn use_security_condition(self) -> SecurityCondition {
         match self {
             Self::SecureMessaging
+            | Self::CardAuthentication
             | Self::PivCardApplicationAdministration
             | Self::KeyManagement => SecurityCondition::Always,
             Self::DigitalSignature => SecurityCondition::PinAlways,

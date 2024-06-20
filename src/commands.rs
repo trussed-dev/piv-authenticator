@@ -11,6 +11,7 @@ use iso7816::{Instruction, Status};
 use crate::container::{Container, KeyReference};
 
 use crate::state::TouchPolicy;
+use crate::AsymmetricAlgorithms;
 pub use crate::{
     container::{
         self as containers, AsymmetricKeyReference, AttestKeyReference, AuthenticateKeyReference,
@@ -23,7 +24,7 @@ pub use crate::{
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum YubicoPivExtension {
     SetManagementKey(TouchPolicy),
-    ImportAsymmetricKey,
+    ImportAsymmetricKey(AsymmetricAlgorithms, AsymmetricKeyReference),
     GetVersion,
     Reset,
     SetPinRetries,
@@ -381,9 +382,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             (0x00, Instruction::Unknown(0xff), 0xFF, 0xFF) => {
                 Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Always))
             }
-            (0x00, Instruction::Unknown(0xfe), 0x00, 0x00) => {
-                Self::YkExtension(YubicoPivExtension::ImportAsymmetricKey)
-            }
+            (0x00, Instruction::Unknown(0xfe), p1, p2) => Self::YkExtension(
+                YubicoPivExtension::ImportAsymmetricKey(p1.try_into()?, p2.try_into()?),
+            ),
             (0x00, Instruction::Unknown(0xfd), 0x00, 0x00) => {
                 Self::YkExtension(YubicoPivExtension::GetVersion)
             }

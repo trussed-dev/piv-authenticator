@@ -8,6 +8,7 @@ extern crate log;
 delog::generate_macros!();
 
 pub mod commands;
+use commands::containers::AsymmetricKeyReference;
 pub use commands::{Command, YubicoPivExtension};
 use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
@@ -45,6 +46,7 @@ use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
 use crate::container::SecurityCondition;
+use crate::tlv::get_do;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
@@ -232,6 +234,9 @@ where
             }
 
             YubicoPivExtension::GetMetadata(_reference) => { /* TODO */ }
+            YubicoPivExtension::ImportAsymmetricKey(algo, key) => {
+                self.load()?.import_asymmetric_key(algo, key, data, reply)?;
+            }
             _ => return Err(Status::FunctionNotSupported),
         }
         Ok(())
@@ -1040,6 +1045,49 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         reply.expand(&[num_keys.saturating_sub(num_certs)])?;
         reply.expand(&[0xFE, 0x00])?;
         Ok(())
+    }
+
+    fn import_asymmetric_key<const R: usize>(
+        &mut self,
+        algo: AsymmetricAlgorithms,
+        key: AsymmetricKeyReference,
+        data: &[u8],
+        mut _reply: Reply<'_, R>,
+    ) -> Result {
+        if !self
+            .state
+            .volatile
+            .app_security_status
+            .administrator_verified
+        {
+            return Err(Status::SecurityStatusNotSatisfied);
+        }
+
+        match (algo, key) {
+            // TODO: document Here we do not exactly follow the Yubico extensions to fit better with our RSA backend requirements
+            #[cfg(feature = "rsa")]
+            (AsymmetricAlgorithms::Rsa2048, AsymmetricKeyReference::PivAuthentication) => {
+                use trussed_rsa_alloc::RsaImportFormat;
+                let p = get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
+                let q = get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
+                let e = get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
+                let id = syscall!(self.trussed.unsafe_inject_key(
+                    trussed::types::Mechanism::Rsa2048Raw,
+                    &RsaImportFormat { e, p, q }.serialize().map_err(|_err| {
+                        error!("Failed rsa import serialization: {_err:?}");
+                        Status::UnspecifiedNonpersistentExecutionError
+                    })?,
+                    self.options.storage,
+                    KeySerialization::RsaParts
+                ))
+                .key;
+                self.state
+                    .persistent
+                    .replace_asymmetric_key(key, algo, id, self.trussed);
+                Ok(())
+            }
+            _ => Err(Status::FunctionNotSupported),
+        }
     }
 }
 

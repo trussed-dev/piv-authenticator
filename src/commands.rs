@@ -161,7 +161,7 @@ impl TryFrom<VerifyArguments<'_>> for Verify {
             data,
         } = arguments;
         if key_reference != VerifyKeyReference::ApplicationPin {
-            return Err(Status::FunctionNotSupported);
+            return Err(Status::KeyReferenceNotFound);
         }
         Ok(match (logout.0, data.len()) {
             (false, 0) => Verify::Status(key_reference),
@@ -197,6 +197,11 @@ impl TryFrom<ChangeReferenceArguments<'_>> for ChangeReference {
         } = arguments;
 
         use ChangeReferenceKeyReference::*;
+
+        if data.len() != 16 {
+            return Err(Status::IncorrectDataParameter);
+        }
+
         Ok(match (key_reference, data) {
             (GlobalPin, _) => return Err(Status::FunctionNotSupported),
             (ApplicationPin, data) => ChangeReference::ChangePin {
@@ -228,8 +233,8 @@ impl TryFrom<&[u8]> for ResetRetryCounter {
             return Err(Status::IncorrectDataParameter);
         }
         Ok(Self {
-            pin: data[..8].try_into().unwrap(),
-            puk: data[8..].try_into().unwrap(),
+            puk: data[..8].try_into().unwrap(),
+            pin: data[8..].try_into().unwrap(),
         })
     }
 }
@@ -348,8 +353,11 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
-                let algorithm = p1.try_into()?;
-                let key_reference = AuthenticateKeyReference::try_from(p2)?;
+                let algorithm = p1
+                    .try_into()
+                    .map_err(|_| Status::IncorrectP1OrP2Parameter)?;
+                let key_reference = AuthenticateKeyReference::try_from(p2)
+                    .map_err(|_| Status::IncorrectP1OrP2Parameter)?;
                 Self::GeneralAuthenticate(GeneralAuthenticate {
                     algorithm,
                     key_reference,
@@ -360,9 +368,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
                 Self::PutData(PutData::try_from(data.as_slice())?)
             }
 
-            (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => {
-                Self::GenerateAsymmetric(GenerateKeyReference::try_from(p2)?)
-            }
+            (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => Self::GenerateAsymmetric(
+                GenerateKeyReference::try_from(p2).map_err(|_| Status::IncorrectP1OrP2Parameter)?,
+            ),
             // (0x00, 0x01, 0x10, 0x00)
             (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {
                 Self::YkExtension(YubicoPivExtension::GetSerial)

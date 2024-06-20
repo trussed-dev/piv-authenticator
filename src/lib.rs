@@ -44,6 +44,8 @@ pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
+use crate::container::SecurityCondition;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     storage: Location,
@@ -147,7 +149,7 @@ where
         application_property_template
             .encode_to_heapless_vec(*reply)
             .unwrap();
-        info!("returning: {:02X?}", reply);
+        info!("returning {} bytes", reply.len());
         Ok(())
     }
 
@@ -156,7 +158,10 @@ where
         command: &iso7816::Command<C>,
         reply: &mut Data<R>,
     ) -> Result {
-        info!("PIV responding to {:02x?}", command);
+        let just_verified = self.state.volatile.app_security_status.pin_just_verified;
+        self.state.volatile.app_security_status.pin_just_verified = false;
+
+        // info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
         info!("parsed: {:02x?}", &parsed_command);
         let reply = Reply(reply);
@@ -169,10 +174,12 @@ where
             Command::GetData(container) => self.load()?.get_data(container, reply),
             Command::PutData(put_data) => self.load()?.put_data(put_data),
             Command::Select(_aid) => self.select(reply),
-            Command::GeneralAuthenticate(authenticate) => {
-                self.load()?
-                    .general_authenticate(authenticate, command.data(), reply)
-            }
+            Command::GeneralAuthenticate(authenticate) => self.load()?.general_authenticate(
+                authenticate,
+                command.data(),
+                just_verified,
+                reply,
+            ),
             Command::GenerateAsymmetric(reference) => {
                 self.load()?
                     .generate_asymmetric_keypair(reference, command.data(), reply)
@@ -295,14 +302,22 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
-            if self.state.persistent.verify_pin(&pin, self.trussed) {
+            let tmp = self.state.persistent.verify_pin(&pin, self.trussed);
+            debug!("Verify result: {tmp:?}");
+            if tmp {
                 self.state.volatile.app_security_status.pin_verified = true;
+                self.state.volatile.app_security_status.pin_just_verified = true;
                 Ok(())
             } else {
                 // should we logout here?
                 self.state.volatile.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_just_verified = false;
                 let remaining = self.state.persistent.remaining_pin_retries(self.trussed);
-                Err(Status::RemainingRetries(remaining))
+                if remaining == 0 {
+                    Err(Status::OperationBlocked)
+                } else {
+                    Err(Status::RemainingRetries(remaining))
+                }
             }
         } else {
             Err(Status::FunctionNotSupported)
@@ -316,6 +331,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
 
             Verify::Logout(_) => {
                 self.state.volatile.app_security_status.pin_verified = false;
+                self.state.volatile.app_security_status.pin_just_verified = false;
                 Ok(())
             }
 
@@ -350,6 +366,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::VerificationFailed);
         }
         self.state.volatile.app_security_status.pin_verified = true;
+        self.state.volatile.app_security_status.pin_just_verified = true;
         Ok(())
     }
 
@@ -397,6 +414,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
+        just_verified: bool,
         mut reply: Reply<'_, R>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
@@ -421,7 +439,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         if !self
             .state
             .volatile
-            .security_valid(auth.key_reference.use_security_condition())
+            .security_valid(auth.key_reference.use_security_condition(), just_verified)
         {
             warn!(
                 "Security condition not satisfied for key {:?}",
@@ -449,13 +467,22 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             response: tlv::get_do(&[0x82], input),
             exponentiation: tlv::get_do(&[0x85], input),
         };
+
+        error!(
+            "witness: {}, challenge: {}, response: {}, exponentiation: {}",
+            &parsed.witness.is_some(),
+            &parsed.challenge.is_some(),
+            &parsed.response.is_some(),
+            &parsed.exponentiation.is_some(),
+        );
+
         match parsed {
             Auth {
                 witness: None,
                 challenge: Some(c),
                 response: Some([]),
                 exponentiation: None,
-            } => self.sign(auth, c, reply.lend())?,
+            } => self.sign(auth, c, just_verified, reply.lend())?,
             Auth {
                 witness: None,
                 challenge: None,
@@ -563,7 +590,8 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if response.ct_eq(&plaintext_challenge).into() {
+        let is_eq: bool = response.ct_eq(&plaintext_challenge).into();
+        if is_eq {
             warn!("Bad auth challenge");
             return Err(Status::IncorrectDataParameter);
         }
@@ -656,9 +684,11 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         &mut self,
         auth: GeneralAuthenticate,
         message: &[u8],
+        just_verified: bool,
         mut reply: Reply<'_, R>,
     ) -> Result {
-        info!("Request for sign");
+        error!("Request for sign, data length: {}, data:", message.len());
+        // error!("{}", delog::hexstr!(message));
 
         let Ok(key_ref) = auth.key_reference.try_into() else {
             warn!("Attempt to sign with an incorrect key");
@@ -675,9 +705,24 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             warn!("Bad algorithm: {:?}", auth.algorithm);
             return Err(Status::IncorrectP1OrP2Parameter);
         }
-        if !self.state.volatile.app_security_status.pin_verified {
-            warn!("Authenticate challenge without pin validated");
-            return Err(Status::SecurityStatusNotSatisfied);
+        match key_ref.use_security_condition() {
+            SecurityCondition::Pin => {
+                if !self.state.volatile.app_security_status.pin_verified {
+                    warn!("Authenticate challenge without pin validated");
+                    return Err(Status::SecurityStatusNotSatisfied);
+                }
+            }
+            SecurityCondition::PinAlways => {
+                if !just_verified {
+                    warn!("AUTHENTICATE CHALLENGE WITHOUT PIN VALIDATED");
+                    return Err(Status::SecurityStatusNotSatisfied);
+                }
+            }
+            SecurityCondition::Always => {}
+        }
+
+        if alg.sign_len() != message.len() {
+            return Err(Status::IncorrectDataParameter);
         }
 
         let response = syscall!(self.trussed.sign(
@@ -694,6 +739,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             reply.append_len(response.len())?;
             reply.expand(&response)?;
         }
+        error!("Signed data len: {}, Data:", response.len());
+        // error!("{}", delog::hexstr!(&response));
+
         reply.prepend_len(offset)?;
         Ok(())
     }
@@ -814,28 +862,8 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         //     PINPolicyAlways: 0x03,
         // }
 
-        // TODO: iterate on this, don't expect tags..
-        let input = derp::Input::from(data);
-        // let (mechanism, parameter) = input.read_all(derp::Error::Read, |input| {
-        let mechanism_data = input.read_all(Status::IncorrectDataParameter, |input| {
-            derp::nested(
-                input,
-                Status::IncorrectDataParameter,
-                Status::IncorrectDataParameter,
-                0xac,
-                |input| {
-                    derp::expect_tag_and_get_value(input, 0x80)
-                        .map(|input| input.as_slice_less_safe())
-                        .map_err(|_e| {
-                            warn!("error parsing GenerateAsymmetricKeypair: {:?}", &_e);
-                            Status::IncorrectDataParameter
-                        })
-                },
-            )
-        })?;
-
-        let [mechanism] = mechanism_data else {
-            warn!("Mechanism of len not 1: {mechanism_data:02x?}");
+        let Some([mechanism]) = tlv::get_do(&[0xAC, 0x80], data) else {
+            warn!("Generate assymetric key pair without mechanism");
             return Err(Status::IncorrectDataParameter);
         };
 
@@ -845,7 +873,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         })?;
 
         let secret_key = self.state.persistent.generate_asymmetric_key(
-            reference.into(),
+            reference,
             parsed_mechanism,
             self.trussed,
         );
@@ -933,11 +961,14 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 reply.prepend_len(offset)?;
             }
             _ => {
-                if !ContainerStorage(container).load(
+                error!("Getting {container:?}");
+                let res = ContainerStorage(container).load(
                     self.trussed,
                     self.options.storage,
                     reply.lend(),
-                )? {
+                );
+
+                if !res? {
                     return Err(Status::NotFound);
                 }
             }

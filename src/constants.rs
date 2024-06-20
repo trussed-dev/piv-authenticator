@@ -47,7 +47,7 @@ pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
     4f 0b // PIV AID
        a000000308000010000100
     5f2f 02 // PIN usage Policy
-         4000"
+         4010"
 );
 
 pub const CARD_CAP: [u8; 27] = hex!(
@@ -65,6 +65,17 @@ pub const CARD_CAP: [u8; 27] = hex!(
     FC 00 // status tuples
     FD 00 // next ccc
     FE 00 // Error detection code
+"
+);
+
+pub const PRINTED_INFORMATION: [u8; 63] = hex!(
+    "
+    01 0E 4E6974726F6B6579203320504956
+    02 00
+    04 09 323033344A616E3031
+    05 0E 53657269616C204E756D62657220
+    06 0E 4E6974726F6B6579203320504956
+    FE 00
 "
 );
 

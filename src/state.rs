@@ -121,26 +121,26 @@ impl Keys {
             AsymmetricKeyReference::DigitalSignature => self.signature,
             AsymmetricKeyReference::KeyManagement => self.key_management,
             AsymmetricKeyReference::CardAuthentication => self.card_authentication,
-            AsymmetricKeyReference::Retired01 => self.retired_keys[1],
-            AsymmetricKeyReference::Retired02 => self.retired_keys[2],
-            AsymmetricKeyReference::Retired03 => self.retired_keys[3],
-            AsymmetricKeyReference::Retired04 => self.retired_keys[4],
-            AsymmetricKeyReference::Retired05 => self.retired_keys[5],
-            AsymmetricKeyReference::Retired06 => self.retired_keys[6],
-            AsymmetricKeyReference::Retired07 => self.retired_keys[7],
-            AsymmetricKeyReference::Retired08 => self.retired_keys[8],
-            AsymmetricKeyReference::Retired09 => self.retired_keys[9],
-            AsymmetricKeyReference::Retired10 => self.retired_keys[10],
-            AsymmetricKeyReference::Retired11 => self.retired_keys[11],
-            AsymmetricKeyReference::Retired12 => self.retired_keys[12],
-            AsymmetricKeyReference::Retired13 => self.retired_keys[13],
-            AsymmetricKeyReference::Retired14 => self.retired_keys[14],
-            AsymmetricKeyReference::Retired15 => self.retired_keys[15],
-            AsymmetricKeyReference::Retired16 => self.retired_keys[16],
-            AsymmetricKeyReference::Retired17 => self.retired_keys[17],
-            AsymmetricKeyReference::Retired18 => self.retired_keys[18],
-            AsymmetricKeyReference::Retired19 => self.retired_keys[19],
-            AsymmetricKeyReference::Retired20 => self.retired_keys[20],
+            AsymmetricKeyReference::Retired01 => self.retired_keys[0],
+            AsymmetricKeyReference::Retired02 => self.retired_keys[1],
+            AsymmetricKeyReference::Retired03 => self.retired_keys[2],
+            AsymmetricKeyReference::Retired04 => self.retired_keys[3],
+            AsymmetricKeyReference::Retired05 => self.retired_keys[4],
+            AsymmetricKeyReference::Retired06 => self.retired_keys[5],
+            AsymmetricKeyReference::Retired07 => self.retired_keys[6],
+            AsymmetricKeyReference::Retired08 => self.retired_keys[7],
+            AsymmetricKeyReference::Retired09 => self.retired_keys[8],
+            AsymmetricKeyReference::Retired10 => self.retired_keys[9],
+            AsymmetricKeyReference::Retired11 => self.retired_keys[10],
+            AsymmetricKeyReference::Retired12 => self.retired_keys[11],
+            AsymmetricKeyReference::Retired13 => self.retired_keys[12],
+            AsymmetricKeyReference::Retired14 => self.retired_keys[13],
+            AsymmetricKeyReference::Retired15 => self.retired_keys[14],
+            AsymmetricKeyReference::Retired16 => self.retired_keys[15],
+            AsymmetricKeyReference::Retired17 => self.retired_keys[16],
+            AsymmetricKeyReference::Retired18 => self.retired_keys[17],
+            AsymmetricKeyReference::Retired19 => self.retired_keys[18],
+            AsymmetricKeyReference::Retired20 => self.retired_keys[19],
         }
     }
 
@@ -156,26 +156,26 @@ impl Keys {
             AsymmetricKeyReference::DigitalSignature => self.signature.replace(new),
             AsymmetricKeyReference::KeyManagement => self.key_management.replace(new),
             AsymmetricKeyReference::CardAuthentication => self.card_authentication.replace(new),
-            AsymmetricKeyReference::Retired01 => self.retired_keys[1].replace(new),
-            AsymmetricKeyReference::Retired02 => self.retired_keys[2].replace(new),
-            AsymmetricKeyReference::Retired03 => self.retired_keys[3].replace(new),
-            AsymmetricKeyReference::Retired04 => self.retired_keys[4].replace(new),
-            AsymmetricKeyReference::Retired05 => self.retired_keys[5].replace(new),
-            AsymmetricKeyReference::Retired06 => self.retired_keys[6].replace(new),
-            AsymmetricKeyReference::Retired07 => self.retired_keys[7].replace(new),
-            AsymmetricKeyReference::Retired08 => self.retired_keys[8].replace(new),
-            AsymmetricKeyReference::Retired09 => self.retired_keys[9].replace(new),
-            AsymmetricKeyReference::Retired10 => self.retired_keys[10].replace(new),
-            AsymmetricKeyReference::Retired11 => self.retired_keys[11].replace(new),
-            AsymmetricKeyReference::Retired12 => self.retired_keys[12].replace(new),
-            AsymmetricKeyReference::Retired13 => self.retired_keys[13].replace(new),
-            AsymmetricKeyReference::Retired14 => self.retired_keys[14].replace(new),
-            AsymmetricKeyReference::Retired15 => self.retired_keys[15].replace(new),
-            AsymmetricKeyReference::Retired16 => self.retired_keys[16].replace(new),
-            AsymmetricKeyReference::Retired17 => self.retired_keys[17].replace(new),
-            AsymmetricKeyReference::Retired18 => self.retired_keys[18].replace(new),
-            AsymmetricKeyReference::Retired19 => self.retired_keys[19].replace(new),
-            AsymmetricKeyReference::Retired20 => self.retired_keys[20].replace(new),
+            AsymmetricKeyReference::Retired01 => self.retired_keys[0].replace(new),
+            AsymmetricKeyReference::Retired02 => self.retired_keys[1].replace(new),
+            AsymmetricKeyReference::Retired03 => self.retired_keys[2].replace(new),
+            AsymmetricKeyReference::Retired04 => self.retired_keys[3].replace(new),
+            AsymmetricKeyReference::Retired05 => self.retired_keys[4].replace(new),
+            AsymmetricKeyReference::Retired06 => self.retired_keys[5].replace(new),
+            AsymmetricKeyReference::Retired07 => self.retired_keys[6].replace(new),
+            AsymmetricKeyReference::Retired08 => self.retired_keys[7].replace(new),
+            AsymmetricKeyReference::Retired09 => self.retired_keys[8].replace(new),
+            AsymmetricKeyReference::Retired10 => self.retired_keys[9].replace(new),
+            AsymmetricKeyReference::Retired11 => self.retired_keys[10].replace(new),
+            AsymmetricKeyReference::Retired12 => self.retired_keys[11].replace(new),
+            AsymmetricKeyReference::Retired13 => self.retired_keys[12].replace(new),
+            AsymmetricKeyReference::Retired14 => self.retired_keys[13].replace(new),
+            AsymmetricKeyReference::Retired15 => self.retired_keys[14].replace(new),
+            AsymmetricKeyReference::Retired16 => self.retired_keys[15].replace(new),
+            AsymmetricKeyReference::Retired17 => self.retired_keys[16].replace(new),
+            AsymmetricKeyReference::Retired18 => self.retired_keys[17].replace(new),
+            AsymmetricKeyReference::Retired19 => self.retired_keys[18].replace(new),
+            AsymmetricKeyReference::Retired20 => self.retired_keys[19].replace(new),
         }
     }
 }
@@ -261,18 +261,12 @@ pub struct Volatile {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SecurityStatus {
-    JustVerified,
-    Verified,
-    NotVerified,
-}
-
 impl Volatile {
-    pub fn security_valid(&self, condition: SecurityCondition) -> bool {
+    pub fn security_valid(&self, condition: SecurityCondition, just_verified: bool) -> bool {
         use SecurityCondition::*;
         match condition {
             Pin => self.app_security_status.pin_verified,
+            PinAlways => just_verified,
             Always => true,
         }
     }
@@ -302,15 +296,10 @@ impl Volatile {
     }
 }
 
-impl Default for SecurityStatus {
-    fn default() -> Self {
-        Self::NotVerified
-    }
-}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AppSecurityStatus {
     pub pin_verified: bool,
+    pub pin_just_verified: bool,
     pub puk_verified: bool,
     pub administrator_verified: bool,
 }
@@ -716,6 +705,7 @@ impl ContainerStorage {
             Container::CardHolderUniqueIdentifier => panic!("CHUID should alway be set"),
             Container::CardCapabilityContainer => Some(Vec::from_slice(&CARD_CAP).unwrap()),
             Container::DiscoveryObject => Some(Vec::from_slice(&DISCOVERY_OBJECT).unwrap()),
+            Container::PrintedInformation => Some(Vec::from_slice(&PRINTED_INFORMATION).unwrap()),
             _ => None,
         }
     }

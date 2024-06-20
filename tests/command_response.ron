@@ -3,8 +3,8 @@
         name: "Verify",
         cmd_resp: [
             VerifyApplicationPin(),
-            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(2)),
-            VerifyGlobalPin(expected_status: FunctionNotSupported)
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: RemainingRetries(2)),
+            VerifyGlobalPin(expected_status: KeyReferenceNotFound),
         ]
     ),
     IoTest(
@@ -89,7 +89,7 @@
         cmd_resp: [
             GetData(
                 input: "5C 01 7E",
-                output: Data("7e 12 4f 0b a000000308000010000100 5f2f 02 4000")
+                output: Data("7e 12 4f 0b a000000308000010000100 5f2f 02 4010")
             ),
             GetData(
                 input: "5C 03 5FC102",
@@ -131,9 +131,9 @@
             Reset(
                 expected_status: ConditionsOfUseNotSatisfied,
             ),
-            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(2)),
-            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(1)),
-            VerifyApplicationPin(pin: "FFEEDDCCBBAA9988", expected_status: RemainingRetries(0)),
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: RemainingRetries(2)),
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: RemainingRetries(1)),
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: OperationBlocked),
             Reset(),
         ]
     ),
@@ -184,16 +184,35 @@
         ]
     ),
     IoTest(
+        name: "Change reference with too short PIN",
+        cmd_resp: [
+            ChangePin(
+                new: "31323334FFFFFFFF",
+                expected_status: IncorrectDataParameter,
+            ),
+        ],
+    ),
+    IoTest(
+        name: "Change reference with too short PIN",
+        cmd_resp: [
+            ChangePin(
+                new: "3232323232323232",
+                old: "3333333333FFFFFF",
+                expected_status: IncorrectDataParameter,
+            ),
+        ],
+    ),
+    IoTest(
         name: "Pin and Puk",
         uuid_config: WithBoth("00112233445566778899AABBCCDDEEFF"),
         cmd_resp: [
             ChangePin(
-                new: "01020304FFFFFFFF",
+                new: "313131313131FFFF",
             ),
             ChangePuk(
                 new: "0102030405060708",
             ),
-            VerifyApplicationPin(pin: "0102030405060708", expected_status: RemainingRetries(2)),
+            VerifyApplicationPin(pin: "313233343536FFFF", expected_status: RemainingRetries(2)),
             ChangePuk(
                 old: "0102030405060708",
                 new: "AABBCCDDEEFF0011",

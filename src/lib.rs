@@ -873,7 +873,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         })?;
 
         let secret_key = self.state.persistent.generate_asymmetric_key(
-            reference.into(),
+            reference,
             parsed_mechanism,
             self.trussed,
         );

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fix spec compliance issues ([#52][])
+- Fix retired key 20 usage causing the device to panic ([#52][])
+
+[#52]: https://github.com/Nitrokey/piv-authenticator/pull/52
+
 ## [v0.3.5][] (2024-04-03)
 
 - Fix default card capabilities value ([#46][])

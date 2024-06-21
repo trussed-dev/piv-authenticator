@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.3.7][] (2024-04-21)
+
+- Bump rsa backend version ([#53][])
+
+[#53]: https://github.com/Nitrokey/piv-authenticator/pull/53
+
+[v0.3.7]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.7
+
 ## [v0.3.6][] (2024-04-20)
 
 - RSA key import ([#51][])

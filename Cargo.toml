@@ -23,6 +23,7 @@ flexiber = { version = "0.1", features = ["derive", "heapless"] }
 heapless = "0.7"
 hex-literal = "0.3"
 iso7816 = "0.1.2"
+littlefs2 = "0.4"
 serde = { version = "1", default-features = false, features = ["derive"] }
 trussed = { version = "0.1", features = ["serde-extensions"] }
 trussed-auth = { version = "0.3" }
@@ -77,12 +78,12 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/Nitrokey/trussed" , tag = "v0.1.0-nitrokey.18" }
-littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27e49ca321089d01d8c9b169c4aeb58ceeeca" }
-trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.3.0"}
+trussed = { git = "https://github.com/trussed-dev/trussed.git", branch = "littlefs2" }
+littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", branch = "core" }
+trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", branch = "littlefs2"}
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.2.1" }
 trussed-chunked = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "chunked-v0.1.0" }
-trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.3.0" }
+trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", branch = "littlefs2" }
 apdu-dispatch = { git = "https://github.com/Nitrokey/apdu-dispatch", tag = "v0.1.2-nitrokey.2" }
 trussed-usbip = { git = "https://github.com/Nitrokey/pc-usbip-runner.git", tag = "v0.0.1-nitrokey.1" }
 usbd-ccid = { git = "https://github.com/Nitrokey/usbd-ccid", tag = "v0.2.0-nitrokey.1" }

@@ -5,6 +5,7 @@ use flexiber::EncodableHeapless;
 use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
+use littlefs2::{path, path::Path};
 use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
@@ -314,7 +315,7 @@ impl Persistent {
     pub const PIN_RETRIES_DEFAULT: u8 = 3;
     // hmm...!
     pub const PUK_RETRIES_DEFAULT: u8 = 5;
-    const FILENAME: &'static [u8] = b"persistent-state.cbor";
+    const FILENAME: &'static Path = path!("persistent-state.cbor");
     const DEFAULT_PIN: Pin = Pin(*b"123456\xff\xff");
     const DEFAULT_PUK: Puk = Puk(*b"12345678");
 
@@ -563,7 +564,7 @@ impl Persistent {
         options: &crate::Options,
     ) -> Result<Self, Status> {
         // todo: can't seem to combine load + initialize without code repetition
-        let data = load_if_exists(client, options.storage, &PathBuf::from(Self::FILENAME))?;
+        let data = load_if_exists(client, options.storage, Self::FILENAME)?;
         let Some(bytes) = data else {
             return Self::initialize(client, options);
         };
@@ -592,11 +593,11 @@ impl Persistent {
 fn load_if_exists(
     client: &mut impl crate::Client,
     location: Location,
-    path: &PathBuf,
+    path: &Path,
 ) -> Result<Option<Bytes<MAX_MESSAGE_LENGTH>>, Status> {
-    match try_syscall!(client.read_file(location, path.clone())) {
+    match try_syscall!(client.read_file(location, path.into())) {
         Ok(r) => Ok(Some(r.data)),
-        Err(_) => match try_syscall!(client.entry_metadata(location, path.clone())) {
+        Err(_) => match try_syscall!(client.entry_metadata(location, path.into())) {
             Ok(Metadata { metadata: None }) => Ok(None),
             Ok(Metadata {
                 metadata: Some(_metadata),
@@ -616,12 +617,12 @@ fn load_if_exists(
 fn load_if_exists_streaming<const R: usize>(
     client: &mut impl crate::Client,
     location: Location,
-    path: &PathBuf,
+    path: &Path,
     mut buffer: Reply<'_, R>,
 ) -> Result<bool, Status> {
     let mut read_len = 0;
     let file_len;
-    match try_syscall!(client.start_chunked_read(location, path.clone())) {
+    match try_syscall!(client.start_chunked_read(location, path.into())) {
         Ok(r) => {
             read_len += r.data.len();
             file_len = r.len;
@@ -632,7 +633,7 @@ fn load_if_exists_streaming<const R: usize>(
                 return Ok(true);
             }
         }
-        Err(_err) => match try_syscall!(client.entry_metadata(location, path.clone())) {
+        Err(_err) => match try_syscall!(client.entry_metadata(location, path.into())) {
             Ok(Metadata { metadata: None }) => return Ok(false),
             Ok(Metadata {
                 metadata: Some(_metadata),
@@ -671,47 +672,47 @@ fn load_if_exists_streaming<const R: usize>(
 pub struct ContainerStorage(pub Container);
 
 impl ContainerStorage {
-    fn path(self) -> PathBuf {
-        PathBuf::from(match self.0 {
-            Container::CardCapabilityContainer => "CardCapabilityContainer",
-            Container::CardHolderUniqueIdentifier => "CardHolderUniqueIdentifier",
-            Container::X509CertificateFor9A => "X509CertificateFor9A",
-            Container::CardholderFingerprints => "CardholderFingerprints",
-            Container::SecurityObject => "SecurityObject",
-            Container::CardholderFacialImage => "CardholderFacialImage",
-            Container::X509CertificateFor9E => "X509CertificateFor9E",
-            Container::X509CertificateFor9C => "X509CertificateFor9C",
-            Container::X509CertificateFor9D => "X509CertificateFor9D",
-            Container::PrintedInformation => "PrintedInformation",
-            Container::DiscoveryObject => "DiscoveryObject",
-            Container::KeyHistoryObject => "KeyHistoryObject",
-            Container::RetiredCert01 => "RetiredCert01",
-            Container::RetiredCert02 => "RetiredCert02",
-            Container::RetiredCert03 => "RetiredCert03",
-            Container::RetiredCert04 => "RetiredCert04",
-            Container::RetiredCert05 => "RetiredCert05",
-            Container::RetiredCert06 => "RetiredCert06",
-            Container::RetiredCert07 => "RetiredCert07",
-            Container::RetiredCert08 => "RetiredCert08",
-            Container::RetiredCert09 => "RetiredCert09",
-            Container::RetiredCert10 => "RetiredCert10",
-            Container::RetiredCert11 => "RetiredCert11",
-            Container::RetiredCert12 => "RetiredCert12",
-            Container::RetiredCert13 => "RetiredCert13",
-            Container::RetiredCert14 => "RetiredCert14",
-            Container::RetiredCert15 => "RetiredCert15",
-            Container::RetiredCert16 => "RetiredCert16",
-            Container::RetiredCert17 => "RetiredCert17",
-            Container::RetiredCert18 => "RetiredCert18",
-            Container::RetiredCert19 => "RetiredCert19",
-            Container::RetiredCert20 => "RetiredCert20",
-            Container::CardholderIrisImages => "CardholderIrisImages",
+    fn path(self) -> &'static Path {
+        match self.0 {
+            Container::CardCapabilityContainer => path!("CardCapabilityContainer"),
+            Container::CardHolderUniqueIdentifier => path!("CardHolderUniqueIdentifier"),
+            Container::X509CertificateFor9A => path!("X509CertificateFor9A"),
+            Container::CardholderFingerprints => path!("CardholderFingerprints"),
+            Container::SecurityObject => path!("SecurityObject"),
+            Container::CardholderFacialImage => path!("CardholderFacialImage"),
+            Container::X509CertificateFor9E => path!("X509CertificateFor9E"),
+            Container::X509CertificateFor9C => path!("X509CertificateFor9C"),
+            Container::X509CertificateFor9D => path!("X509CertificateFor9D"),
+            Container::PrintedInformation => path!("PrintedInformation"),
+            Container::DiscoveryObject => path!("DiscoveryObject"),
+            Container::KeyHistoryObject => path!("KeyHistoryObject"),
+            Container::RetiredCert01 => path!("RetiredCert01"),
+            Container::RetiredCert02 => path!("RetiredCert02"),
+            Container::RetiredCert03 => path!("RetiredCert03"),
+            Container::RetiredCert04 => path!("RetiredCert04"),
+            Container::RetiredCert05 => path!("RetiredCert05"),
+            Container::RetiredCert06 => path!("RetiredCert06"),
+            Container::RetiredCert07 => path!("RetiredCert07"),
+            Container::RetiredCert08 => path!("RetiredCert08"),
+            Container::RetiredCert09 => path!("RetiredCert09"),
+            Container::RetiredCert10 => path!("RetiredCert10"),
+            Container::RetiredCert11 => path!("RetiredCert11"),
+            Container::RetiredCert12 => path!("RetiredCert12"),
+            Container::RetiredCert13 => path!("RetiredCert13"),
+            Container::RetiredCert14 => path!("RetiredCert14"),
+            Container::RetiredCert15 => path!("RetiredCert15"),
+            Container::RetiredCert16 => path!("RetiredCert16"),
+            Container::RetiredCert17 => path!("RetiredCert17"),
+            Container::RetiredCert18 => path!("RetiredCert18"),
+            Container::RetiredCert19 => path!("RetiredCert19"),
+            Container::RetiredCert20 => path!("RetiredCert20"),
+            Container::CardholderIrisImages => path!("CardholderIrisImages"),
             Container::BiometricInformationTemplatesGroupTemplate => {
-                "BiometricInformationTemplatesGroupTemplate"
+                path!("BiometricInformationTemplatesGroupTemplate")
             }
-            Container::SecureMessagingCertificateSigner => "SecureMessagingCertificateSigner",
-            Container::PairingCodeReferenceDataContainer => "PairingCodeReferenceDataContainer",
-        })
+            Container::SecureMessagingCertificateSigner => path!("SecureMessagingCertificateSigner"),
+            Container::PairingCodeReferenceDataContainer => path!("PairingCodeReferenceDataContainer"),
+        }
     }
 
     fn default(self) -> Option<Vec<u8, MAX_MESSAGE_LENGTH>> {
@@ -729,7 +730,7 @@ impl ContainerStorage {
         client: &mut impl crate::Client,
         storage: Location,
     ) -> Result<bool, Status> {
-        match try_syscall!(client.entry_metadata(storage, self.path())) {
+        match try_syscall!(client.entry_metadata(storage, self.path().into())) {
             Ok(Metadata { metadata: None }) => Ok(false),
             Ok(Metadata {
                 metadata: Some(metadata),
@@ -757,7 +758,7 @@ impl ContainerStorage {
         storage: Location,
         mut reply: Reply<'_, R>,
     ) -> Result<bool, Status> {
-        if load_if_exists_streaming(client, storage, &self.path(), reply.lend())? {
+        if load_if_exists_streaming(client, storage, self.path(), reply.lend())? {
             return Ok(true);
         }
 
@@ -776,7 +777,7 @@ impl ContainerStorage {
         bytes: &[u8],
         storage: Location,
     ) -> Result<(), Status> {
-        utils::write_all(client, storage, self.path(), bytes, None, None).map_err(|_err| {
+        utils::write_all(client, storage, self.path().into(), bytes, None, None).map_err(|_err| {
             error!("Failed to write data object: {:?}", _err);
             Status::UnspecifiedNonpersistentExecutionError
         })

@@ -33,10 +33,12 @@ heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
 trussed-rsa-alloc = { version = "0.2.1", features = ["raw"], optional = true }
 trussed-chunked = "0.1.0"
-trussed-staging = { version = "0.3.0", features = ["chunked"], default-features = false, optional = true }
+trussed-hpke = "0.1.0"
+trussed-wrap-key-to-file = "0.1.0"
+trussed-staging = { version = "0.3.0", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
+littlefs2 = "0.4.0"
 
 [dev-dependencies]
-littlefs2 = "0.3.2"
 rand_core = { version = "0.6", features = ["getrandom"] }
 trussed = { version = "0.1.0", features = ["virt"] }
 env_logger = "0.9"
@@ -78,11 +80,13 @@ log-error = []
 
 [patch.crates-io]
 trussed = { git = "https://github.com/Nitrokey/trussed" , tag = "v0.1.0-nitrokey.18" }
-littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27e49ca321089d01d8c9b169c4aeb58ceeeca" }
+littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "498fee7f7b908cb14e6ac18dca8442e19c89c0a9" }
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.3.0"}
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.2.1" }
 trussed-chunked = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "chunked-v0.1.0" }
-trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.3.0" }
+trussed-staging = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "40ac4268c0ebbe20b0ef71553a345dd0905326de" }
+trussed-hpke = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "40ac4268c0ebbe20b0ef71553a345dd0905326de" }
+trussed-wrap-key-to-file = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "40ac4268c0ebbe20b0ef71553a345dd0905326de" }
 apdu-dispatch = { git = "https://github.com/Nitrokey/apdu-dispatch", tag = "v0.1.2-nitrokey.2" }
 trussed-usbip = { git = "https://github.com/Nitrokey/pc-usbip-runner.git", tag = "v0.0.1-nitrokey.1" }
 usbd-ccid = { git = "https://github.com/Nitrokey/usbd-ccid", tag = "v0.2.0-nitrokey.1" }

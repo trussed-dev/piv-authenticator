@@ -24,6 +24,8 @@ mod tlv;
 
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 use trussed_chunked::ChunkedClient;
+use trussed_hpke::HpkeClient;
+use trussed_wrap_key_to_file::WrapKeyToFileClient;
 
 #[cfg(feature = "virt")]
 pub mod virt;
@@ -307,15 +309,13 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
-            let tmp = self.state.persistent.verify_pin(&pin, self.trussed);
-            debug!("Verify result: {tmp:?}");
-            if tmp {
-                self.state.volatile.app_security_status.pin_verified = true;
-                self.state.volatile.app_security_status.pin_just_verified = true;
+            self.state
+                .volatile
+                .verify_pin(&pin, self.trussed, &self.options);
+            if self.state.volatile.pin_verified() {
                 Ok(())
             } else {
                 // should we logout here?
-                self.state.volatile.app_security_status.pin_verified = false;
                 self.state.volatile.app_security_status.pin_just_verified = false;
                 let remaining = self.state.persistent.remaining_pin_retries(self.trussed);
                 if remaining == 0 {
@@ -335,8 +335,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             Verify::Login(login) => self.login(login),
 
             Verify::Logout(_) => {
-                self.state.volatile.app_security_status.pin_verified = false;
-                self.state.volatile.app_security_status.pin_just_verified = false;
+                self.state.volatile.clear_pin_verified(self.trussed);
                 Ok(())
             }
 
@@ -344,7 +343,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 if key_reference != commands::VerifyKeyReference::ApplicationPin {
                     return Err(Status::FunctionNotSupported);
                 }
-                if self.state.volatile.app_security_status.pin_verified {
+                if self.state.volatile.pin_verified() {
                     Ok(())
                 } else {
                     let retries = self.state.persistent.remaining_pin_retries(self.trussed);
@@ -370,8 +369,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         {
             return Err(Status::VerificationFailed);
         }
-        self.state.volatile.app_security_status.pin_verified = true;
-        self.state.volatile.app_security_status.pin_just_verified = true;
+        self.state
+            .volatile
+            .verify_pin(&new_pin, self.trussed, &self.options);
         Ok(())
     }
 
@@ -383,7 +383,6 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         {
             return Err(Status::VerificationFailed);
         }
-        self.state.volatile.app_security_status.puk_verified = true;
         Ok(())
     }
 
@@ -712,14 +711,14 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         }
         match key_ref.use_security_condition() {
             SecurityCondition::Pin => {
-                if !self.state.volatile.app_security_status.pin_verified {
+                if !self.state.volatile.pin_verified() {
                     warn!("Authenticate challenge without pin validated");
                     return Err(Status::SecurityStatusNotSatisfied);
                 }
             }
             SecurityCondition::PinAlways => {
                 if !just_verified {
-                    warn!("AUTHENTICATE CHALLENGE WITHOUT PIN VALIDATED");
+                    warn!("authenticate challenge without pin validated");
                     return Err(Status::SecurityStatusNotSatisfied);
                 }
             }
@@ -1093,10 +1092,23 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
 
 /// Super trait with all trussed extensions required by opcard
 pub trait Client:
-    trussed::Client + AuthClient + ChunkedClient + trussed::client::Ed255 + client::Tdes
+    trussed::Client
+    + AuthClient
+    + ChunkedClient
+    + trussed::client::Ed255
+    + client::Tdes
+    + WrapKeyToFileClient
+    + HpkeClient
 {
 }
-impl<C: trussed::Client + AuthClient + ChunkedClient + trussed::client::Ed255 + client::Tdes> Client
-    for C
+impl<
+        C: trussed::Client
+            + AuthClient
+            + ChunkedClient
+            + trussed::client::Ed255
+            + client::Tdes
+            + WrapKeyToFileClient
+            + HpkeClient,
+    > Client for C
 {
 }

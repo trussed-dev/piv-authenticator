@@ -13,9 +13,11 @@ pub mod dispatch {
     };
     use trussed_auth::{AuthBackend, AuthContext, AuthExtension, MAX_HW_KEY_LEN};
     use trussed_chunked::ChunkedExtension;
+    use trussed_hpke::HpkeExtension;
     #[cfg(feature = "rsa")]
     use trussed_rsa_alloc::SoftwareRsa;
     use trussed_staging::{StagingBackend, StagingContext};
+    use trussed_wrap_key_to_file::WrapKeyToFileExtension;
 
     /// Backends used by opcard
     pub const BACKENDS: &[BackendId<Backend>] = &[
@@ -38,6 +40,8 @@ pub mod dispatch {
     pub enum Extension {
         Auth,
         Chunked,
+        Hpke,
+        WrapKeyToFile,
     }
 
     impl From<Extension> for u8 {
@@ -45,6 +49,8 @@ pub mod dispatch {
             match extension {
                 Extension::Auth => 0,
                 Extension::Chunked => 1,
+                Extension::Hpke => 2,
+                Extension::WrapKeyToFile => 3,
             }
         }
     }
@@ -56,6 +62,8 @@ pub mod dispatch {
             match id {
                 0 => Ok(Extension::Auth),
                 1 => Ok(Extension::Chunked),
+                2 => Ok(Extension::Hpke),
+                3 => Ok(Extension::WrapKeyToFile),
                 _ => Err(Error::InternalError),
             }
         }
@@ -141,11 +149,29 @@ pub mod dispatch {
                         request,
                         resources,
                     ),
-                    Extension::Chunked => Err(Error::RequestNotAvailable),
+                    Extension::Chunked|Extension::Hpke|Extension::WrapKeyToFile => Err(Error::RequestNotAvailable),
                 }
                 Backend::Staging =>match extension {
                     Extension::Chunked => {
                         <StagingBackend as ExtensionImpl<ChunkedExtension>>::extension_request_serialized(
+                            &mut self.staging,
+                            &mut ctx.core,
+                            &mut ctx.backends.staging,
+                            request,
+                            resources
+                        )
+                    }
+                    Extension::Hpke => {
+                        <StagingBackend as ExtensionImpl<HpkeExtension>>::extension_request_serialized(
+                            &mut self.staging,
+                            &mut ctx.core,
+                            &mut ctx.backends.staging,
+                            request,
+                            resources
+                        )
+                    }
+                    Extension::WrapKeyToFile => {
+                        <StagingBackend as ExtensionImpl<WrapKeyToFileExtension>>::extension_request_serialized(
                             &mut self.staging,
                             &mut ctx.core,
                             &mut ctx.backends.staging,
@@ -170,6 +196,16 @@ pub mod dispatch {
         type Id = Extension;
 
         const ID: Self::Id = Self::Id::Chunked;
+    }
+    impl ExtensionId<HpkeExtension> for Dispatch {
+        type Id = Extension;
+
+        const ID: Self::Id = Self::Id::Hpke;
+    }
+    impl ExtensionId<WrapKeyToFileExtension> for Dispatch {
+        type Id = Extension;
+
+        const ID: Self::Id = Self::Id::WrapKeyToFile;
     }
 }
 

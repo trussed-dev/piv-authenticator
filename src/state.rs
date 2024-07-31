@@ -5,6 +5,7 @@ use flexiber::EncodableHeapless;
 use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
+use littlefs2::{path, path::Path};
 use trussed::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
@@ -22,6 +23,13 @@ use crate::{
 };
 
 use crate::{Pin, Puk};
+
+/// User pin key wrapped by the resetting code key
+const PUK_USER_KEY_BACKUP: &Path = path!("puk-user-pin-key.bin");
+/// User asymmetric key private part, wrapped by the PIN key
+const USER_PRIVATE_KEY: &Path = path!("user-private-key.bin");
+/// User asymmetric key publick part
+const USER_PUBLIC_KEY: &Path = path!("user-public-key.bin");
 
 pub enum PinPolicy {
     Never,
@@ -262,10 +270,47 @@ pub struct Volatile {
 pub struct GlobalSecurityStatus {}
 
 impl Volatile {
+    pub fn verify_pin<T: crate::Client>(
+        &mut self,
+        value: &Pin,
+        client: &mut T,
+        options: &crate::Options,
+    ) -> Option<KeyId> {
+        self.clear_pin_verified(client);
+        let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
+        let pin_key = syscall!(client.get_pin_key(PinType::UserPin, pin)).result?;
+        let key = syscall!(client.unwrap_key_from_file(
+            Mechanism::Chacha8Poly1305,
+            pin_key,
+            PathBuf::from(USER_PRIVATE_KEY),
+            options.storage,
+            Location::Volatile,
+            USER_PRIVATE_KEY.as_str().as_bytes()
+        ))
+        .key
+        .expect("Failed to unwrap private key");
+        syscall!(client.delete(pin_key));
+        self.app_security_status.pin_verified = Some(key);
+        self.app_security_status.pin_just_verified = true;
+        Some(key)
+    }
+
+    pub fn pin_verified(&self) -> bool {
+        self.app_security_status.pin_verified.is_some()
+    }
+
+    pub fn clear_pin_verified(&mut self, client: &mut impl crate::Client) {
+        if let Some(key) = self.app_security_status.pin_verified {
+            syscall!(client.delete(key));
+        }
+        self.app_security_status.pin_verified = None;
+        self.app_security_status.pin_just_verified = false;
+    }
+
     pub fn security_valid(&self, condition: SecurityCondition, just_verified: bool) -> bool {
         use SecurityCondition::*;
         match condition {
-            Pin => self.app_security_status.pin_verified,
+            Pin => self.app_security_status.pin_verified.is_some(),
             PinAlways => just_verified,
             Always => true,
         }
@@ -274,7 +319,7 @@ impl Volatile {
     pub fn read_valid(&self, condition: ReadAccessRule) -> bool {
         use ReadAccessRule::*;
         match condition {
-            Pin | PinOrOcc => self.app_security_status.pin_verified,
+            Pin | PinOrOcc => self.app_security_status.pin_verified.is_some(),
             Always => true,
         }
     }
@@ -298,9 +343,9 @@ impl Volatile {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AppSecurityStatus {
-    pub pin_verified: bool,
+    /// Contains the decrypted asymetric key
+    pin_verified: Option<KeyId>,
     pub pin_just_verified: bool,
-    pub puk_verified: bool,
     pub administrator_verified: bool,
 }
 
@@ -328,13 +373,6 @@ impl Persistent {
         try_syscall!(client.pin_retries(PinType::Puk))
             .map(|r| r.retries.unwrap_or_default())
             .unwrap_or(0)
-    }
-
-    pub fn verify_pin<T: crate::Client>(&mut self, value: &Pin, client: &mut T) -> bool {
-        let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
-        try_syscall!(client.check_pin(PinType::UserPin, pin))
-            .map(|r| r.success)
-            .unwrap_or(false)
     }
 
     pub fn verify_puk<T: crate::Client>(&mut self, value: &Puk, client: &mut T) -> bool {
@@ -488,10 +526,111 @@ impl Persistent {
         }
     }
 
+    fn ensure_pins_not_init<T: crate::Client>(client: &mut T) -> Result<(), Status> {
+        // If PINs are already there when initializing, it likely means that the state was corrupted rather than absent.
+        // In that case, we wait for the user to explicitely factory-reset the device to avoid risking loosing data.
+        // See https://github.com/Nitrokey/opcard-rs/issues/165
+        if syscall!(client.has_pin(PinType::UserPin)).has_pin
+            || syscall!(client.has_pin(PinType::Puk)).has_pin
+        {
+            debug!("Init pins after pins are already there");
+            return Err(Status::UnspecifiedNonpersistentExecutionError);
+        }
+        Ok(())
+    }
+
+    fn init_pins<T: crate::Client>(client: &mut T, options: &crate::Options) -> Result<(), Status> {
+        let default_pin =
+            Bytes::from_slice(&Self::DEFAULT_PIN.0).expect("Convertion of static array");
+        try_syscall!(client.set_pin(
+            PinType::UserPin,
+            default_pin.clone(),
+            Some(Self::PIN_RETRIES_DEFAULT),
+            true
+        ))
+        .map_err(|_err| {
+            error!("Failed to set pin");
+            Status::UnspecifiedPersistentExecutionError
+        })?;
+        let default_puk =
+            Bytes::from_slice(&Self::DEFAULT_PUK.0).expect("Convertion of static array");
+        try_syscall!(client.set_pin(
+            PinType::Puk,
+            default_puk.clone(),
+            Some(Self::PIN_RETRIES_DEFAULT),
+            true
+        ))
+        .map_err(|_err| {
+            error!("Failed to set puk");
+            Status::UnspecifiedPersistentExecutionError
+        })?;
+
+        let user_key = syscall!(client.get_pin_key(PinType::UserPin, default_pin))
+            .result
+            .expect("PIN was just set");
+        let puk_key = syscall!(client.get_pin_key(PinType::Puk, default_puk))
+            .result
+            .expect("PUK was just set");
+
+        let path = PathBuf::from(PUK_USER_KEY_BACKUP);
+        syscall!(client.wrap_key_to_file(
+            Mechanism::Chacha8Poly1305,
+            puk_key,
+            user_key,
+            path,
+            Location::External,
+            PUK_USER_KEY_BACKUP.as_str().as_bytes()
+        ));
+
+        syscall!(client.delete(puk_key));
+
+        let user_asymetric_key = syscall!(client.generate_key(
+            Mechanism::X255,
+            StorageAttributes::new().set_persistence(Location::Volatile)
+        ))
+        .key;
+
+        syscall!(client.wrap_key_to_file(
+            Mechanism::Chacha8Poly1305,
+            user_key,
+            user_asymetric_key,
+            PathBuf::from(USER_PRIVATE_KEY),
+            options.storage,
+            USER_PRIVATE_KEY.as_str().as_bytes()
+        ));
+
+        let user_asymetric_public_key = syscall!(client.derive_key(
+            Mechanism::X255,
+            user_asymetric_key,
+            None,
+            StorageAttributes::new().set_persistence(options.storage)
+        ))
+        .key;
+        let key = syscall!(client.serialize_key(
+            Mechanism::X255,
+            user_asymetric_public_key,
+            KeySerialization::Raw
+        ))
+        .serialized_key;
+        syscall!(client.write_file(
+            options.storage,
+            PathBuf::from(USER_PUBLIC_KEY),
+            Bytes::from_slice(&*key).unwrap(),
+            None
+        ));
+
+        syscall!(client.delete(user_key));
+        syscall!(client.clear(user_asymetric_key));
+
+        Ok(())
+    }
+
     pub fn initialize<T: crate::Client>(
         client: &mut T,
         options: &crate::Options,
     ) -> Result<Self, Status> {
+        Self::ensure_pins_not_init(client)?;
+
         info!("initializing PIV state");
         let administration = KeyWithAlg {
             id: syscall!(client.unsafe_inject_key(
@@ -553,8 +692,7 @@ impl Persistent {
             storage: options.storage,
         };
         state.save(client);
-        state.reset_pin(Self::DEFAULT_PIN, client)?;
-        state.reset_puk(Self::DEFAULT_PUK, client)?;
+        Self::init_pins(client, options)?;
         Ok(state)
     }
 

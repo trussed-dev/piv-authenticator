@@ -942,14 +942,10 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         container: Container,
         mut reply: Reply<'_, R>,
     ) -> Result {
-        if !self
-            .state
-            .volatile
-            .read_valid(container.contact_access_rule())
-        {
-            warn!("Unauthorized attempt to access: {:?}", container);
-            return Err(Status::SecurityStatusNotSatisfied);
-        }
+        let read_valid =
+            self.state
+                .volatile
+                .read_valid_key(container, self.trussed, &self.options)?;
 
         use state::ContainerStorage;
         let tag = match container {
@@ -970,6 +966,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                     self.trussed,
                     self.options.storage,
                     reply.lend(),
+                    read_valid,
                 );
 
                 if !res? {

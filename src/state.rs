@@ -31,6 +31,9 @@ const USER_PRIVATE_KEY: &Path = path!("user-private-key.bin");
 /// User asymmetric key publick part
 const USER_PUBLIC_KEY: &Path = path!("user-public-key.bin");
 
+/// Info parameter for the container storage
+const HPKE_SEALKEY_CONTAINER_INFO: &[u8] = b"Container Storage";
+
 pub enum PinPolicy {
     Never,
     Once,
@@ -269,6 +272,18 @@ pub struct Volatile {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {}
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ReadValid {
+    /// Container can be read in plain text
+    Plain,
+    /// Container is stored encrypted but is also not found
+    EncryptedNotFound,
+    /// Container can be read with read_encrypted_chunk using the key
+    ///
+    /// The key is stored in volatile storage and must be deleted after use
+    Encrypted(KeyId),
+}
+
 impl Volatile {
     pub fn verify_pin<T: crate::Client>(
         &mut self,
@@ -316,14 +331,42 @@ impl Volatile {
         }
     }
 
-    pub fn read_valid(&self, condition: ReadAccessRule) -> bool {
-        use ReadAccessRule::*;
-        match condition {
-            Pin | PinOrOcc => self.app_security_status.pin_verified.is_some(),
-            Always => true,
-        }
-    }
+    pub fn read_valid_key(
+        &mut self,
+        container: Container,
+        client: &mut impl crate::Client,
+        options: &crate::Options,
+    ) -> Result<ReadValid, Status> {
+        let pin_key = match (
+            container.contact_access_rule(),
+            self.app_security_status.pin_verified,
+        ) {
+            (ReadAccessRule::Pin | ReadAccessRule::PinOrOcc, None) => {
+                warn!("Unauthorized attempt to access: {:?}", container);
+                return Err(Status::SecurityStatusNotSatisfied);
+            }
+            (ReadAccessRule::Always, _) => {
+                return Ok(ReadValid::Plain);
+            }
+            (ReadAccessRule::Pin | ReadAccessRule::PinOrOcc, Some(key)) => key,
+        };
+        // Here we have the pin key, and we are in the complex case
 
+        let data_encryption_sealed_key_path = ContainerStorage(container).path_key();
+
+        let Ok(unsealed_key) = try_syscall!(client.hpke_open_key_from_file(
+            pin_key,
+            data_encryption_sealed_key_path,
+            options.storage,
+            Location::Volatile,
+            Bytes::from_slice(ContainerStorage(container).path_key_str().as_bytes()).unwrap(),
+            Bytes::from_slice(HPKE_SEALKEY_CONTAINER_INFO).unwrap(),
+        )) else {
+            return Ok(ReadValid::EncryptedNotFound);
+        };
+
+        Ok(ReadValid::Encrypted(unsealed_key.key))
+    }
     pub fn take_single_challenge(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
             Some(CommandCache::SingleAuthChallenge(b)) => return Some(b),
@@ -756,43 +799,47 @@ fn load_if_exists_streaming<const R: usize>(
     location: Location,
     path: &PathBuf,
     mut buffer: Reply<'_, R>,
+    encryption: Option<KeyId>,
 ) -> Result<bool, Status> {
-    let mut read_len = 0;
-    let file_len;
-    match try_syscall!(client.start_chunked_read(location, path.clone())) {
-        Ok(r) => {
-            read_len += r.data.len();
-            file_len = r.len;
-            buffer.append_len(file_len)?;
-            buffer.expand(&r.data)?;
-            if !r.data.is_full() {
-                debug_assert_eq!(read_len, file_len);
-                return Ok(true);
-            }
+    let offset = buffer.len();
+    match encryption {
+        Some(key) => {
+            try_syscall!(client.start_encrypted_chunked_read(location, path.clone(), key,))
+                .map_err(|_err| {
+                    error!("Encrypted {path} couldn't be read: {_err:?}");
+                    Status::UnspecifiedPersistentExecutionError
+                })?;
         }
-        Err(_err) => match try_syscall!(client.entry_metadata(location, path.clone())) {
-            Ok(Metadata { metadata: None }) => return Ok(false),
-            Ok(Metadata {
-                metadata: Some(_metadata),
-            }) => {
-                error!("File {path} exists but couldn't be read: {_metadata:?}, {_err:?}");
-                return Err(Status::UnspecifiedPersistentExecutionError);
+        None => match try_syscall!(client.start_chunked_read(location, path.clone())) {
+            Ok(r) => {
+                buffer.expand(&r.data)?;
+                if !r.data.is_full() {
+                    buffer.prepend_len(offset)?;
+                    return Ok(true);
+                }
             }
-            Err(_err) => {
-                error!("File {path} couldn't be read: {_err:?}");
-                return Err(Status::UnspecifiedPersistentExecutionError);
-            }
+            Err(_err) => match try_syscall!(client.entry_metadata(location, path.clone())) {
+                Ok(Metadata { metadata: None }) => return Ok(false),
+                Ok(Metadata {
+                    metadata: Some(_metadata),
+                }) => {
+                    error!("File {path} exists but couldn't be read: {_metadata:?}");
+                    return Err(Status::UnspecifiedPersistentExecutionError);
+                }
+                Err(_err) => {
+                    error!("File {path} couldn't be read: {_err:?}");
+                    return Err(Status::UnspecifiedPersistentExecutionError);
+                }
+            },
         },
     }
 
     loop {
         match try_syscall!(client.read_file_chunk()) {
             Ok(r) => {
-                debug_assert_eq!(r.len, file_len);
-                read_len += r.data.len();
                 buffer.expand(&r.data)?;
                 if !r.data.is_full() {
-                    debug_assert_eq!(read_len, file_len);
+                    buffer.prepend_len(offset)?;
                     break;
                 }
             }
@@ -809,47 +856,55 @@ fn load_if_exists_streaming<const R: usize>(
 pub struct ContainerStorage(pub Container);
 
 impl ContainerStorage {
-    fn path(self) -> PathBuf {
-        PathBuf::from(match self.0 {
-            Container::CardCapabilityContainer => "CardCapabilityContainer",
-            Container::CardHolderUniqueIdentifier => "CardHolderUniqueIdentifier",
-            Container::X509CertificateFor9A => "X509CertificateFor9A",
-            Container::CardholderFingerprints => "CardholderFingerprints",
-            Container::SecurityObject => "SecurityObject",
-            Container::CardholderFacialImage => "CardholderFacialImage",
-            Container::X509CertificateFor9E => "X509CertificateFor9E",
-            Container::X509CertificateFor9C => "X509CertificateFor9C",
-            Container::X509CertificateFor9D => "X509CertificateFor9D",
-            Container::PrintedInformation => "PrintedInformation",
-            Container::DiscoveryObject => "DiscoveryObject",
-            Container::KeyHistoryObject => "KeyHistoryObject",
-            Container::RetiredCert01 => "RetiredCert01",
-            Container::RetiredCert02 => "RetiredCert02",
-            Container::RetiredCert03 => "RetiredCert03",
-            Container::RetiredCert04 => "RetiredCert04",
-            Container::RetiredCert05 => "RetiredCert05",
-            Container::RetiredCert06 => "RetiredCert06",
-            Container::RetiredCert07 => "RetiredCert07",
-            Container::RetiredCert08 => "RetiredCert08",
-            Container::RetiredCert09 => "RetiredCert09",
-            Container::RetiredCert10 => "RetiredCert10",
-            Container::RetiredCert11 => "RetiredCert11",
-            Container::RetiredCert12 => "RetiredCert12",
-            Container::RetiredCert13 => "RetiredCert13",
-            Container::RetiredCert14 => "RetiredCert14",
-            Container::RetiredCert15 => "RetiredCert15",
-            Container::RetiredCert16 => "RetiredCert16",
-            Container::RetiredCert17 => "RetiredCert17",
-            Container::RetiredCert18 => "RetiredCert18",
-            Container::RetiredCert19 => "RetiredCert19",
-            Container::RetiredCert20 => "RetiredCert20",
-            Container::CardholderIrisImages => "CardholderIrisImages",
+    fn path_key_str(self) -> &'static str {
+        match self.0 {
+            Container::CardCapabilityContainer => "CardCapabilityContainer.key",
+            Container::CardHolderUniqueIdentifier => "CardHolderUniqueIdentifier.key",
+            Container::X509CertificateFor9A => "X509CertificateFor9A.key",
+            Container::CardholderFingerprints => "CardholderFingerprints.key",
+            Container::SecurityObject => "SecurityObject.key",
+            Container::CardholderFacialImage => "CardholderFacialImage.key",
+            Container::X509CertificateFor9E => "X509CertificateFor9E.key",
+            Container::X509CertificateFor9C => "X509CertificateFor9C.key",
+            Container::X509CertificateFor9D => "X509CertificateFor9D.key",
+            Container::PrintedInformation => "PrintedInformation.key",
+            Container::DiscoveryObject => "DiscoveryObject.key",
+            Container::KeyHistoryObject => "KeyHistoryObject.key",
+            Container::RetiredCert01 => "RetiredCert01.key",
+            Container::RetiredCert02 => "RetiredCert02.key",
+            Container::RetiredCert03 => "RetiredCert03.key",
+            Container::RetiredCert04 => "RetiredCert04.key",
+            Container::RetiredCert05 => "RetiredCert05.key",
+            Container::RetiredCert06 => "RetiredCert06.key",
+            Container::RetiredCert07 => "RetiredCert07.key",
+            Container::RetiredCert08 => "RetiredCert08.key",
+            Container::RetiredCert09 => "RetiredCert09.key",
+            Container::RetiredCert10 => "RetiredCert10.key",
+            Container::RetiredCert11 => "RetiredCert11.key",
+            Container::RetiredCert12 => "RetiredCert12.key",
+            Container::RetiredCert13 => "RetiredCert13.key",
+            Container::RetiredCert14 => "RetiredCert14.key",
+            Container::RetiredCert15 => "RetiredCert15.key",
+            Container::RetiredCert16 => "RetiredCert16.key",
+            Container::RetiredCert17 => "RetiredCert17.key",
+            Container::RetiredCert18 => "RetiredCert18.key",
+            Container::RetiredCert19 => "RetiredCert19.key",
+            Container::RetiredCert20 => "RetiredCert20.key",
+            Container::CardholderIrisImages => "CardholderIrisImages.key",
             Container::BiometricInformationTemplatesGroupTemplate => {
-                "BiometricInformationTemplatesGroupTemplate"
+                "BiometricInformationTemplatesGroupTemplate.key"
             }
-            Container::SecureMessagingCertificateSigner => "SecureMessagingCertificateSigner",
-            Container::PairingCodeReferenceDataContainer => "PairingCodeReferenceDataContainer",
-        })
+            Container::SecureMessagingCertificateSigner => "SecureMessagingCertificateSigner.key",
+            Container::PairingCodeReferenceDataContainer => "PairingCodeReferenceDataContainer.key",
+        }
+    }
+
+    fn path_key(self) -> PathBuf {
+        PathBuf::from(self.path_key_str())
+    }
+
+    fn path(self) -> PathBuf {
+        PathBuf::from(self.path_key_str().strip_suffix(".key").unwrap())
     }
 
     fn default(self) -> Option<Vec<u8, MAX_MESSAGE_LENGTH>> {
@@ -894,8 +949,23 @@ impl ContainerStorage {
         client: &mut impl crate::Client,
         storage: Location,
         mut reply: Reply<'_, R>,
+        read_valid: ReadValid,
     ) -> Result<bool, Status> {
-        if load_if_exists_streaming(client, storage, &self.path(), reply.lend())? {
+        let encryption = match read_valid {
+            ReadValid::Plain => None,
+            ReadValid::Encrypted(key) => Some(key),
+            ReadValid::EncryptedNotFound => {
+                if let Some(data) = self.default() {
+                    reply.append_len(data.len())?;
+                    reply.expand(&data)?;
+                    return Ok(true);
+                } else {
+                    return Ok(false);
+                }
+            }
+        };
+
+        if load_if_exists_streaming(client, storage, &self.path(), reply.lend(), encryption)? {
             return Ok(true);
         }
 
@@ -914,9 +984,63 @@ impl ContainerStorage {
         bytes: &[u8],
         storage: Location,
     ) -> Result<(), Status> {
-        utils::write_all(client, storage, self.path(), bytes, None, None).map_err(|_err| {
+        match self.0.contact_access_rule() {
+            ReadAccessRule::Always => {
+                utils::write_all(client, storage, self.path(), bytes, None, None).map_err(|_err| {
+                    error!("Failed to write data object: {:?}", _err);
+                    Status::UnspecifiedNonpersistentExecutionError
+                })
+            }
+            ReadAccessRule::PinOrOcc | ReadAccessRule::Pin => {
+                self.save_encrypted(client, bytes, storage)
+            }
+        }
+    }
+
+    fn save_encrypted(
+        self,
+        client: &mut impl crate::Client,
+        bytes: &[u8],
+        storage: Location,
+    ) -> Result<(), Status> {
+        let user_public_key_data =
+            syscall!(client.read_file(storage, PathBuf::from(USER_PUBLIC_KEY))).data;
+        let user_public_key = syscall!(client.deserialize_key(
+            Mechanism::X255,
+            &user_public_key_data,
+            KeySerialization::Raw,
+            StorageAttributes::new().set_persistence(Location::Volatile)
+        ))
+        .key;
+        let key_to_seal = syscall!(client.generate_secret_key(32, Location::Volatile)).key;
+        syscall!(client.hpke_seal_key_to_file(
+            self.path_key(),
+            storage,
+            user_public_key,
+            key_to_seal,
+            Bytes::from_slice(self.path_key_str().as_bytes()).unwrap(),
+            Bytes::from_slice(HPKE_SEALKEY_CONTAINER_INFO).unwrap(),
+        ));
+        syscall!(client.delete(user_public_key));
+
+        utils::write_all(
+            client,
+            storage,
+            self.path(),
+            bytes,
+            None,
+            Some(utils::EncryptionData {
+                key: key_to_seal,
+                // Nonce can be none since the key is only used to encrypt once
+                nonce: None,
+            }),
+        )
+        .map_err(|_err| {
             error!("Failed to write data object: {:?}", _err);
             Status::UnspecifiedNonpersistentExecutionError
-        })
+        })?;
+
+        syscall!(client.delete(key_to_seal));
+        Ok(())
     }
 }

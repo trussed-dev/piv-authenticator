@@ -48,7 +48,6 @@ use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
 use crate::container::SecurityCondition;
-use crate::tlv::get_do;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
@@ -311,7 +310,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         if let commands::VerifyLogin::PivPin(pin) = login {
             self.state
                 .volatile
-                .verify_pin(&pin, self.trussed, &self.options);
+                .verify_pin(&pin, self.trussed, self.options);
             if self.state.volatile.pin_verified() {
                 Ok(())
             } else {
@@ -371,7 +370,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         }
         self.state
             .volatile
-            .verify_pin(&new_pin, self.trussed, &self.options);
+            .verify_pin(&new_pin, self.trussed, self.options);
         Ok(())
     }
 
@@ -945,7 +944,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         let read_valid =
             self.state
                 .volatile
-                .read_valid_key(container, self.trussed, &self.options)?;
+                .read_valid_key(container, self.trussed, self.options)?;
 
         use state::ContainerStorage;
         let tag = match container {
@@ -1064,9 +1063,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             #[cfg(feature = "rsa")]
             (AsymmetricAlgorithms::Rsa2048, AsymmetricKeyReference::PivAuthentication) => {
                 use trussed_rsa_alloc::RsaImportFormat;
-                let p = get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
-                let q = get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
-                let e = get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
+                let p = tlv::get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
+                let q = tlv::get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
+                let e = tlv::get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
                 let id = syscall!(self.trussed.unsafe_inject_key(
                     trussed::types::Mechanism::Rsa2048Raw,
                     &RsaImportFormat { e, p, q }.serialize().map_err(|_err| {

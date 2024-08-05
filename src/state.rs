@@ -658,7 +658,7 @@ impl Persistent {
         syscall!(client.write_file(
             options.storage,
             PathBuf::from(USER_PUBLIC_KEY),
-            Bytes::from_slice(&*key).unwrap(),
+            Bytes::from_slice(&key).unwrap(),
             None
         ));
 

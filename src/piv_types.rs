@@ -514,6 +514,7 @@ impl CardHolderUniqueIdentifier<'_> {
     }
 }
 
+#[allow(unused)]
 #[derive(Clone, Copy, Encodable, Eq, PartialEq)]
 #[tlv(application, number = "0x13")]
 pub struct DiscoveryObject {

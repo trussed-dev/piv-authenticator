@@ -697,44 +697,55 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             warn!("Attempt to sign with an incorrect key");
             return Err(Status::IncorrectP1OrP2Parameter);
         };
-        let Some(KeyWithAlg { alg, id }) =
-            self.state.persistent.keys.asymetric_for_reference(key_ref)
+
+        let Some(key) = self
+            .state
+            .use_valid_key(key_ref, self.trussed, self.options)?
         else {
-            warn!("Attempt to use unset key");
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if alg != auth.algorithm {
-            warn!("Bad algorithm: {:?}", auth.algorithm);
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
-        match key_ref.use_security_condition() {
-            SecurityCondition::Pin => {
-                if !self.state.volatile.pin_verified() {
-                    warn!("Authenticate challenge without pin validated");
-                    return Err(Status::SecurityStatusNotSatisfied);
-                }
-            }
-            SecurityCondition::PinAlways => {
-                if !just_verified {
-                    warn!("authenticate challenge without pin validated");
-                    return Err(Status::SecurityStatusNotSatisfied);
-                }
-            }
-            SecurityCondition::Always => {}
-        }
+        // let Some(KeyWithAlg { alg, id }) =
+        //     self.state.persistent.keys.asymetric_for_reference(key_ref)
+        // else {
+        //     warn!("Attempt to use unset key");
+        //     return Err(Status::ConditionsOfUseNotSatisfied);
+        // };
 
-        if alg.sign_len() != message.len() {
+        // if alg != auth.algorithm {
+        //     warn!("Bad algorithm: {:?}", auth.algorithm);
+        //     return Err(Status::IncorrectP1OrP2Parameter);
+        // }
+        // match key_ref.use_key_security_condition() {
+        //     SecurityCondition::Pin => {
+        //         if !self.state.volatile.pin_verified() {
+        //             warn!("Authenticate challenge without pin validated");
+        //             return Err(Status::SecurityStatusNotSatisfied);
+        //         }
+        //     }
+        //     SecurityCondition::PinAlways => {
+        //         if !just_verified {
+        //             warn!("authenticate challenge without pin validated");
+        //             return Err(Status::SecurityStatusNotSatisfied);
+        //         }
+        //     }
+        //     SecurityCondition::Always => {}
+        // }
+
+        if key.alg.sign_len() != message.len() {
             return Err(Status::IncorrectDataParameter);
         }
 
         let response = syscall!(self.trussed.sign(
-            alg.sign_mechanism(),
-            id,
+            key.alg.sign_mechanism(),
+            key.key,
             message,
-            alg.sign_serialization(),
+            key.alg.sign_serialization(),
         ))
         .signature;
+
+        key.clear(self.trussed);
+
         reply.expand(&[0x7C])?;
         let offset = reply.len();
         {
@@ -763,22 +774,19 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             );
             Status::IncorrectP1OrP2Parameter
         })?;
-        let Some(KeyWithAlg { alg, id }) = self
+        let Some(key) = self
             .state
-            .persistent
-            .keys
-            .asymetric_for_reference(key_reference)
+            .use_valid_key(key_reference, self.trussed, self.options)?
         else {
-            warn!("Attempt to use unset key");
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if alg != auth.algorithm {
+        if key.alg != auth.algorithm {
             warn!("Attempt to exponentiate with incorrect algorithm");
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
-        let Some(mechanism) = alg.ecdh_mechanism() else {
+        let Some(mechanism) = key.alg.ecdh_mechanism() else {
             warn!("Attempt to exponentiate with non ECDH algorithm");
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
@@ -801,7 +809,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         .key;
         let shared_secret = syscall!(self.trussed.agree(
             mechanism,
-            id,
+            key.key,
             public_key,
             StorageAttributes::default()
                 .set_persistence(Location::Volatile)
@@ -817,6 +825,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         .serialized_key;
         syscall!(self.trussed.delete(public_key));
         syscall!(self.trussed.delete(shared_secret));
+        key.clear(self.trussed);
 
         reply.expand(&[0x7C])?;
         let offset = reply.len();
@@ -879,6 +888,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             reference,
             parsed_mechanism,
             self.trussed,
+            self.options.storage,
         );
 
         let public_key = syscall!(self.trussed.derive_key(
@@ -1016,14 +1026,16 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     }
 
     fn get_key_history_object<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
-        let num_keys = self
-            .state
-            .persistent
-            .keys
-            .retired_keys
-            .iter()
-            .filter(|k| k.is_some())
-            .count() as u8;
+        // let num_keys = self
+        //     .state
+        //     .persistent
+        //     .keys
+        //     .retired_keys
+        //     .iter()
+        //     .filter(|k| k.is_some())
+        //     .count() as u8;
+        // TODO: fix count
+        let num_keys: u8 = 0u8;
         let mut num_certs = 0u8;
 
         use state::ContainerStorage;
@@ -1046,7 +1058,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         &mut self,
         algo: AsymmetricAlgorithms,
         key: AsymmetricKeyReference,
-        data: &[u8],
+        #[cfg_attr(not(feature = "rsa"), allow(unused))] data: &[u8],
         mut _reply: Reply<'_, R>,
     ) -> Result {
         if !self
@@ -1072,13 +1084,17 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                         error!("Failed rsa import serialization: {_err:?}");
                         Status::UnspecifiedNonpersistentExecutionError
                     })?,
-                    self.options.storage,
+                    AsymmetricKeyReference::PivAuthentication.storage(self.options.storage),
                     KeySerialization::RsaParts
                 ))
                 .key;
-                self.state
-                    .persistent
-                    .replace_asymmetric_key(key, algo, id, self.trussed);
+                self.state.persistent.replace_asymmetric_key(
+                    key,
+                    algo,
+                    id,
+                    self.trussed,
+                    self.options.storage,
+                );
                 Ok(())
             }
             _ => Err(Status::FunctionNotSupported),

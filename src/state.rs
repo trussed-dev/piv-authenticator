@@ -1,5 +1,5 @@
 use core::convert::{TryFrom, TryInto};
-use core::mem::{self, replace};
+use core::mem;
 
 use flexiber::EncodableHeapless;
 use heapless::Vec;
@@ -15,7 +15,6 @@ use trussed::{
 };
 use trussed_chunked::utils;
 
-use crate::container::KeySecurityCondition;
 use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::reply::Reply;
 use crate::{constants::*, piv_types::AsymmetricAlgorithms};
@@ -213,26 +212,26 @@ impl Keys {
                         Some(mem::replace(&mut self.authentication_alg, new.alg))
                     }
                     AsymmetricKeyReference::DigitalSignature => self.signature_alg.replace(new.alg),
-                    AsymmetricKeyReference::Retired01 => self.retired_keys[01].replace(new.alg),
-                    AsymmetricKeyReference::Retired02 => self.retired_keys[02].replace(new.alg),
-                    AsymmetricKeyReference::Retired03 => self.retired_keys[03].replace(new.alg),
-                    AsymmetricKeyReference::Retired04 => self.retired_keys[04].replace(new.alg),
-                    AsymmetricKeyReference::Retired05 => self.retired_keys[05].replace(new.alg),
-                    AsymmetricKeyReference::Retired06 => self.retired_keys[06].replace(new.alg),
-                    AsymmetricKeyReference::Retired07 => self.retired_keys[07].replace(new.alg),
-                    AsymmetricKeyReference::Retired08 => self.retired_keys[08].replace(new.alg),
-                    AsymmetricKeyReference::Retired09 => self.retired_keys[09].replace(new.alg),
-                    AsymmetricKeyReference::Retired10 => self.retired_keys[10].replace(new.alg),
-                    AsymmetricKeyReference::Retired11 => self.retired_keys[11].replace(new.alg),
-                    AsymmetricKeyReference::Retired12 => self.retired_keys[12].replace(new.alg),
-                    AsymmetricKeyReference::Retired13 => self.retired_keys[13].replace(new.alg),
-                    AsymmetricKeyReference::Retired14 => self.retired_keys[14].replace(new.alg),
-                    AsymmetricKeyReference::Retired15 => self.retired_keys[15].replace(new.alg),
-                    AsymmetricKeyReference::Retired16 => self.retired_keys[16].replace(new.alg),
-                    AsymmetricKeyReference::Retired17 => self.retired_keys[17].replace(new.alg),
-                    AsymmetricKeyReference::Retired18 => self.retired_keys[18].replace(new.alg),
-                    AsymmetricKeyReference::Retired19 => self.retired_keys[19].replace(new.alg),
-                    AsymmetricKeyReference::Retired20 => self.retired_keys[20].replace(new.alg),
+                    AsymmetricKeyReference::Retired01 => self.retired_keys[0].replace(new.alg),
+                    AsymmetricKeyReference::Retired02 => self.retired_keys[1].replace(new.alg),
+                    AsymmetricKeyReference::Retired03 => self.retired_keys[2].replace(new.alg),
+                    AsymmetricKeyReference::Retired04 => self.retired_keys[3].replace(new.alg),
+                    AsymmetricKeyReference::Retired05 => self.retired_keys[4].replace(new.alg),
+                    AsymmetricKeyReference::Retired06 => self.retired_keys[5].replace(new.alg),
+                    AsymmetricKeyReference::Retired07 => self.retired_keys[6].replace(new.alg),
+                    AsymmetricKeyReference::Retired08 => self.retired_keys[7].replace(new.alg),
+                    AsymmetricKeyReference::Retired09 => self.retired_keys[8].replace(new.alg),
+                    AsymmetricKeyReference::Retired10 => self.retired_keys[9].replace(new.alg),
+                    AsymmetricKeyReference::Retired11 => self.retired_keys[10].replace(new.alg),
+                    AsymmetricKeyReference::Retired12 => self.retired_keys[11].replace(new.alg),
+                    AsymmetricKeyReference::Retired13 => self.retired_keys[12].replace(new.alg),
+                    AsymmetricKeyReference::Retired14 => self.retired_keys[13].replace(new.alg),
+                    AsymmetricKeyReference::Retired15 => self.retired_keys[14].replace(new.alg),
+                    AsymmetricKeyReference::Retired16 => self.retired_keys[15].replace(new.alg),
+                    AsymmetricKeyReference::Retired17 => self.retired_keys[16].replace(new.alg),
+                    AsymmetricKeyReference::Retired18 => self.retired_keys[17].replace(new.alg),
+                    AsymmetricKeyReference::Retired19 => self.retired_keys[18].replace(new.alg),
+                    AsymmetricKeyReference::Retired20 => self.retired_keys[19].replace(new.alg),
                     AsymmetricKeyReference::KeyManagement
                     | AsymmetricKeyReference::CardAuthentication => unreachable!(),
                 })
@@ -313,11 +312,11 @@ impl<'t> LoadedState<'t> {
         key: AsymmetricKeyReference,
         client: &mut impl crate::Client,
         options: &crate::Options,
+        just_verified: bool,
     ) -> Result<Option<UseValidKey>, Status> {
         let security_condition = key.use_security_condition();
         match security_condition {
-            SecurityCondition::PinAlways if self.volatile.app_security_status.pin_just_verified => {
-            }
+            SecurityCondition::PinAlways if just_verified => {}
             SecurityCondition::Pin if self.volatile.app_security_status.pin_verified.is_some() => {}
             SecurityCondition::Always => {}
             _ => return Err(Status::SecurityStatusNotSatisfied),

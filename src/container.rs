@@ -79,17 +79,6 @@ macro_rules! enum_subset {
     }
 }
 
-macro_rules! impl_transitive_into (
-    ($leaf:ident, $($interemediary:ident),+ => $grandfather:ident) => {
-        impl From<$leaf> for $grandfather {
-            fn from(value: $leaf) -> $grandfather {
-                $(let value = $interemediary::from(value);)+
-                $grandfather::from(value)
-            }
-        }
-    }
-);
-
 pub(crate) use enum_subset;
 use trussed::types::Location;
 
@@ -162,17 +151,13 @@ crate::enum_u8! {
 impl KeyReference {
     #[deprecated]
     pub fn use_security_condition(self) -> SecurityCondition {
-        self.use_key_security_condition().into()
-    }
-
-    pub fn use_key_security_condition(self) -> KeySecurityCondition {
         match self {
             Self::SecureMessaging
             | Self::CardAuthentication
             | Self::PivCardApplicationAdministration
-            | Self::KeyManagement => KeySecurityCondition::Always,
-            Self::DigitalSignature => KeySecurityCondition::PinAlways(self.name()),
-            _ => KeySecurityCondition::Pin(self.name()),
+            | Self::KeyManagement => SecurityCondition::Always,
+            Self::DigitalSignature => SecurityCondition::PinAlways,
+            _ => SecurityCondition::Pin,
         }
     }
 
@@ -220,17 +205,11 @@ macro_rules! impl_sub_enum_methods {
     ($($name:ident,)*) => {
         $(
             impl $name {
-                #[deprecated]
                 pub fn use_security_condition(self) -> SecurityCondition {
                     let tmp: KeyReference = self.into();
                     #[allow(deprecated)]
                     tmp.use_security_condition()
                 }
-                pub fn use_key_security_condition(self) -> KeySecurityCondition {
-                    let tmp: KeyReference = self.into();
-                    tmp.use_key_security_condition()
-                }
-
                 pub fn name(self) -> &'static Path {
                     let tmp: KeyReference = self.into();
                     tmp.name()
@@ -278,11 +257,6 @@ enum_subset! {
     }
 }
 
-enum AsymmetricKeyMaybeProtected {
-    Unprocteced(UnprotectedAsymmetricKeyReference),
-    Protected(ProtectedAsymmetricKeyReference),
-}
-
 impl AsymmetricKeyReference {
     /// Get the location to store a new key (important for keys that are encrypted and should be generated in volatile stoarge)
     pub fn storage(self, storage: Location) -> Location {
@@ -290,122 +264,6 @@ impl AsymmetricKeyReference {
             Self::CardAuthentication | Self::KeyManagement => storage,
             _ => Location::Volatile,
         }
-    }
-
-    pub fn encrypted_or_plain(self) -> AsymmetricKeyMaybeProtected {
-        match self {
-            Self::PivAuthentication => AsymmetricKeyMaybeProtected::Protected(
-                ProtectedAsymmetricKeyReference::PivAuthentication,
-            ),
-            Self::DigitalSignature => AsymmetricKeyMaybeProtected::Protected(
-                ProtectedAsymmetricKeyReference::DigitalSignature,
-            ),
-            Self::KeyManagement => AsymmetricKeyMaybeProtected::Unprocteced(
-                UnprotectedAsymmetricKeyReference::KeyManagement,
-            ),
-            Self::CardAuthentication => AsymmetricKeyMaybeProtected::Unprocteced(
-                UnprotectedAsymmetricKeyReference::CardAuthentication,
-            ),
-            Self::Retired01 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired01)
-            }
-            Self::Retired02 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired02)
-            }
-            Self::Retired03 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired03)
-            }
-            Self::Retired04 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired04)
-            }
-            Self::Retired05 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired05)
-            }
-            Self::Retired06 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired06)
-            }
-            Self::Retired07 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired07)
-            }
-            Self::Retired08 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired08)
-            }
-            Self::Retired09 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired09)
-            }
-            Self::Retired10 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired10)
-            }
-            Self::Retired11 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired11)
-            }
-            Self::Retired12 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired12)
-            }
-            Self::Retired13 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired13)
-            }
-            Self::Retired14 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired14)
-            }
-            Self::Retired15 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired15)
-            }
-            Self::Retired16 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired16)
-            }
-            Self::Retired17 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired17)
-            }
-            Self::Retired18 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired18)
-            }
-            Self::Retired19 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired19)
-            }
-            Self::Retired20 => {
-                AsymmetricKeyMaybeProtected::Protected(ProtectedAsymmetricKeyReference::Retired20)
-            }
-        }
-    }
-}
-
-enum_subset! {
-    #[derive(Debug)]
-    pub enum UnprotectedAsymmetricKeyReference: AsymmetricKeyReference {
-        KeyManagement,
-        CardAuthentication,
-    }
-}
-
-impl_transitive_into!(UnprotectedAsymmetricKeyReference, AsymmetricKeyReference => KeyReference);
-impl_transitive_into!(ProtectedAsymmetricKeyReference, AsymmetricKeyReference => KeyReference);
-
-enum_subset! {
-    #[derive(Debug)]
-    pub enum ProtectedAsymmetricKeyReference: AsymmetricKeyReference {
-        PivAuthentication,
-        DigitalSignature,
-        Retired01,
-        Retired02,
-        Retired03,
-        Retired04,
-        Retired05,
-        Retired06,
-        Retired07,
-        Retired08,
-        Retired09,
-        Retired10,
-        Retired11,
-        Retired12,
-        Retired13,
-        Retired14,
-        Retired15,
-        Retired16,
-        Retired17,
-        Retired18,
-        Retired19,
-        Retired20,
     }
 }
 
@@ -468,8 +326,6 @@ enum_subset! {
 impl_sub_enum_methods!(
     AttestKeyReference,
     AsymmetricKeyReference,
-    UnprotectedAsymmetricKeyReference,
-    ProtectedAsymmetricKeyReference,
     ChangeReferenceKeyReference,
     VerifyKeyReference,
     AuthenticateKeyReference,

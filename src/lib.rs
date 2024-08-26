@@ -941,6 +941,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             }
         };
         syscall!(self.trussed.delete(public_key));
+        syscall!(self.trussed.delete(secret_key));
 
         Ok(())
     }

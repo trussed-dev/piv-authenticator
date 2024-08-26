@@ -703,33 +703,6 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        // let Some(KeyWithAlg { alg, id }) =
-        //     self.state.persistent.keys.asymetric_for_reference(key_ref)
-        // else {
-        //     warn!("Attempt to use unset key");
-        //     return Err(Status::ConditionsOfUseNotSatisfied);
-        // };
-
-        // if alg != auth.algorithm {
-        //     warn!("Bad algorithm: {:?}", auth.algorithm);
-        //     return Err(Status::IncorrectP1OrP2Parameter);
-        // }
-        // match key_ref.use_key_security_condition() {
-        //     SecurityCondition::Pin => {
-        //         if !self.state.volatile.pin_verified() {
-        //             warn!("Authenticate challenge without pin validated");
-        //             return Err(Status::SecurityStatusNotSatisfied);
-        //         }
-        //     }
-        //     SecurityCondition::PinAlways => {
-        //         if !just_verified {
-        //             warn!("authenticate challenge without pin validated");
-        //             return Err(Status::SecurityStatusNotSatisfied);
-        //         }
-        //     }
-        //     SecurityCondition::Always => {}
-        // }
-
         if key.alg.sign_len() != message.len() {
             return Err(Status::IncorrectDataParameter);
         }

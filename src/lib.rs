@@ -47,8 +47,6 @@ pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
 
-use crate::container::SecurityCondition;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     storage: Location,
@@ -491,7 +489,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 challenge: None,
                 response: Some([]),
                 exponentiation: Some(p),
-            } => self.key_agreement(auth, p, reply.lend())?,
+            } => self.key_agreement(auth, p, reply.lend(), just_verified)?,
             Auth {
                 witness: None,
                 challenge: Some([]),
@@ -698,9 +696,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::IncorrectP1OrP2Parameter);
         };
 
-        let Some(key) = self
-            .state
-            .use_valid_key(key_ref, self.trussed, self.options)?
+        let Some(key) =
+            self.state
+                .use_valid_key(key_ref, self.trussed, self.options, just_verified)?
         else {
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
@@ -765,6 +763,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         auth: GeneralAuthenticate,
         data: &[u8],
         mut reply: Reply<'_, R>,
+        just_verified: bool,
     ) -> Result {
         info!("Request for exponentiation");
         let key_reference = auth.key_reference.try_into().map_err(|_| {
@@ -774,9 +773,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             );
             Status::IncorrectP1OrP2Parameter
         })?;
-        let Some(key) = self
-            .state
-            .use_valid_key(key_reference, self.trussed, self.options)?
+        let Some(key) =
+            self.state
+                .use_valid_key(key_reference, self.trussed, self.options, just_verified)?
         else {
             return Err(Status::ConditionsOfUseNotSatisfied);
         };

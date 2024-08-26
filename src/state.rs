@@ -307,6 +307,17 @@ impl Drop for UseValidKey {
 }
 
 impl<'t> LoadedState<'t> {
+    pub fn key_exists(
+        &self,
+        client: &mut impl crate::Client,
+        options: &crate::Options,
+        key: AsymmetricKeyReference,
+    ) -> bool {
+        syscall!(client.entry_metadata(options.storage, key.name().into()))
+            .metadata
+            .is_some()
+    }
+
     pub fn use_valid_key(
         &mut self,
         key: AsymmetricKeyReference,

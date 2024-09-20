@@ -80,9 +80,10 @@ macro_rules! enum_subset {
         impl $name {
             #[allow(unused)]
             pub(crate) fn all() -> &'static [Self] {
-                &[
-                    $(Self::$var,)*
-                ]
+                &[$(
+                    $(#[cfg($inner)])?
+                    Self::$var,
+                )*]
             }
         }
     }

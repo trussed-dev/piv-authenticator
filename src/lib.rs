@@ -14,7 +14,6 @@ use commands::{GeneralAuthenticate, PutData, ResetRetryCounter};
 pub mod constants;
 pub mod container;
 use container::{AuthenticateKeyReference, Container, GenerateKeyReference, KeyReference};
-pub mod derp;
 #[cfg(feature = "apdu-dispatch")]
 mod dispatch;
 pub mod piv_types;

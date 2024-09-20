@@ -276,10 +276,7 @@ impl AsymmetricKeyReference {
     }
 
     pub fn is_encrypted(self) -> bool {
-        match self {
-            Self::CardAuthentication => false,
-            _ => true,
-        }
+        !matches!(self, Self::CardAuthentication)
     }
 }
 

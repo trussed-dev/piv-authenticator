@@ -164,8 +164,7 @@ impl KeyReference {
         match self {
             Self::SecureMessaging
             | Self::CardAuthentication
-            | Self::PivCardApplicationAdministration
-            | Self::KeyManagement => SecurityCondition::Always,
+            | Self::PivCardApplicationAdministration => SecurityCondition::Always,
             Self::DigitalSignature => SecurityCondition::PinAlways,
             _ => SecurityCondition::Pin,
         }
@@ -271,8 +270,15 @@ impl AsymmetricKeyReference {
     /// Get the location to store a new key (important for keys that are encrypted and should be generated in volatile stoarge)
     pub fn storage(self, storage: Location) -> Location {
         match self {
-            Self::CardAuthentication | Self::KeyManagement => storage,
+            Self::CardAuthentication => storage,
             _ => Location::Volatile,
+        }
+    }
+
+    pub fn is_encrypted(self) -> bool {
+        match self {
+            Self::CardAuthentication => false,
+            _ => true,
         }
     }
 }

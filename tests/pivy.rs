@@ -56,19 +56,24 @@ fn generate() {
     }
 }
 
-#[test_log::test]
-fn ecdh() {
+fn ecdh_inner(key: &str, requires_pin: bool) {
     let test = || {
-        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456").unwrap();
-        p.expect(Regex(
-            "ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}",
-        ))
+        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456")).unwrap();
+        p.expect(Regex(&format!(
+            "{}{key}{}",
+            "ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_",
+            "@[A-F0-9]{20}",
+        )))
         .unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
 
         let mut p = Command::new("pivy-tool")
-            .args(["ecdh", "9A", "-P", "123456"])
+            .args(if requires_pin {
+                vec!["sign", key, "-P", "123456"]
+            } else {
+                vec!["sign", key]
+            })
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -86,10 +91,23 @@ fn ecdh() {
     with_vsc(WITHOUT_UUID, test);
 }
 
+#[test_log::test]
+fn ecdh_9a() {
+    ecdh_inner("9A", true);
+}
+#[test_log::test]
+fn ecdh_9d() {
+    ecdh_inner("9D", true);
+}
+#[test_log::test]
+fn ecdh_9e() {
+    ecdh_inner("9E", false);
+}
+
 fn sign_inner(key: &str, requires_pin: bool) {
     #[cfg(feature = "rsa")]
     let test_rsa = || {
-        let mut p = spawn(&format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a rsa2048 -P 123456")).unwrap();
+        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a rsa2048 -P 123456")).unwrap();
         p.expect(Regex(&format!(
             "{}{key}{}",
             "ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_",
@@ -117,7 +135,7 @@ fn sign_inner(key: &str, requires_pin: bool) {
     };
 
     let test_p256 = || {
-        let mut p = spawn(&format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456")).unwrap();
+        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456")).unwrap();
         p.expect(Regex(&format!("{}{key}{}","ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_", "@[A-F0-9]{20}"))).unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));

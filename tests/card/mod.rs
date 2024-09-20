@@ -11,7 +11,9 @@ pub const WITH_UUID: Options = Options::new().uuid(Some([0; 16]));
 pub const WITHOUT_UUID: Options = Options::new();
 
 pub fn with_vsc<F: FnOnce() -> R, R>(options: Options, f: F) -> R {
-    let _lock = VSC_MUTEX.lock().unwrap();
+    let Ok(_lock) = VSC_MUTEX.lock() else {
+        panic!("Some other test failed, this test is therefore ignored")
+    };
 
     let mut vpicc = vpicc::connect().expect("failed to connect to vpcd");
 

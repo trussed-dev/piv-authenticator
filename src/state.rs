@@ -123,7 +123,7 @@ pub struct Keys {
     pub signature_alg: Option<AsymmetricAlgorithms>,
     // 9d "Key Management Key" (YK: Key Management)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub key_management: Option<KeyWithAlg<AsymmetricAlgorithms>>,
+    pub key_management_alg: Option<AsymmetricAlgorithms>,
     // 9e "Card Authentication Key" (YK: Card Authentication)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub card_authentication: Option<KeyWithAlg<AsymmetricAlgorithms>>,
@@ -141,7 +141,7 @@ impl Keys {
         match key {
             AsymmetricKeyReference::PivAuthentication => Encrypted(Some(self.authentication_alg)),
             AsymmetricKeyReference::DigitalSignature => Encrypted(self.signature_alg),
-            AsymmetricKeyReference::KeyManagement => Plain(self.key_management),
+            AsymmetricKeyReference::KeyManagement => Encrypted(self.key_management_alg),
             AsymmetricKeyReference::CardAuthentication => Plain(self.card_authentication),
             AsymmetricKeyReference::Retired01 => Encrypted(self.retired_keys[0]),
             AsymmetricKeyReference::Retired02 => Encrypted(self.retired_keys[1]),
@@ -190,9 +190,6 @@ impl Keys {
         };
 
         let old = match key {
-            AsymmetricKeyReference::KeyManagement => {
-                KeyOrEncryptedWithAlg::Plain(self.key_management.replace(new))
-            }
             AsymmetricKeyReference::CardAuthentication => {
                 KeyOrEncryptedWithAlg::Plain(self.card_authentication.replace(new))
             }
@@ -211,6 +208,10 @@ impl Keys {
                     AsymmetricKeyReference::PivAuthentication => {
                         Some(mem::replace(&mut self.authentication_alg, new.alg))
                     }
+                    AsymmetricKeyReference::KeyManagement => {
+                        self.key_management_alg.replace(new.alg)
+                    }
+
                     AsymmetricKeyReference::DigitalSignature => self.signature_alg.replace(new.alg),
                     AsymmetricKeyReference::Retired01 => self.retired_keys[0].replace(new.alg),
                     AsymmetricKeyReference::Retired02 => self.retired_keys[1].replace(new.alg),
@@ -232,8 +233,7 @@ impl Keys {
                     AsymmetricKeyReference::Retired18 => self.retired_keys[17].replace(new.alg),
                     AsymmetricKeyReference::Retired19 => self.retired_keys[18].replace(new.alg),
                     AsymmetricKeyReference::Retired20 => self.retired_keys[19].replace(new.alg),
-                    AsymmetricKeyReference::KeyManagement
-                    | AsymmetricKeyReference::CardAuthentication => unreachable!(),
+                    AsymmetricKeyReference::CardAuthentication => unreachable!(),
                 })
             }
         };
@@ -873,7 +873,7 @@ impl Persistent {
             administration,
             is_admin_default: true,
             signature_alg: None,
-            key_management: None,
+            key_management_alg: None,
             card_authentication: None,
             retired_keys: Default::default(),
         };

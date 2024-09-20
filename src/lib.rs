@@ -231,6 +231,12 @@ where
                     .yubico_set_administration_key(data, touch_policy, reply)?;
             }
 
+            YubicoPivExtension::GetMetadata(KeyReference::CardAuthentication) => {
+                let this = self.load()?;
+                if this.state.persistent.keys.card_authentication.is_some() {
+                    reply.expand(&[0x02, 0x02, 0x01, 0x00])?;
+                }
+            }
             YubicoPivExtension::GetMetadata(_reference) => { /* TODO */ }
             YubicoPivExtension::ImportAsymmetricKey(algo, key) => {
                 self.load()?.import_asymmetric_key(algo, key, data, reply)?;
@@ -913,7 +919,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             }
         };
         syscall!(self.trussed.delete(public_key));
-        syscall!(self.trussed.delete(secret_key));
+        if reference.is_encrypted() {
+            syscall!(self.trussed.delete(secret_key));
+        }
 
         Ok(())
     }

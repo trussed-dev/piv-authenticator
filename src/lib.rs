@@ -1001,7 +1001,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     fn get_key_history_object<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
         let num_keys = AsymmetricKeyReference::all()
             .iter()
-            .filter(|k| self.state.key_exists(self.trussed, &self.options, **k))
+            .filter(|k| self.state.key_exists(self.trussed, self.options, **k))
             .count() as u8;
         let mut num_certs = 0u8;
 

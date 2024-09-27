@@ -433,7 +433,9 @@ impl Volatile {
     ) -> Option<KeyId> {
         self.clear_pin_verified(client);
         let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
-        let pin_key = syscall!(client.get_pin_key(PinType::UserPin, pin)).result?;
+        let pin_key = try_syscall!(client.get_pin_key(PinType::UserPin, pin))
+            .ok()?
+            .result?;
         let key = syscall!(client.unwrap_key_from_file(
             Mechanism::Chacha8Poly1305,
             pin_key,

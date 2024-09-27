@@ -239,7 +239,7 @@ impl Keys {
         };
 
         if let Some(key_id) = user_public_key {
-            syscall!(client.delete(key_id));
+            syscall!(client.clear(key_id));
         }
         old
     }
@@ -456,7 +456,7 @@ impl Volatile {
 
     pub fn clear_pin_verified(&mut self, client: &mut impl crate::Client) {
         if let Some(key) = self.app_security_status.pin_verified {
-            syscall!(client.delete(key));
+            syscall!(client.clear(key));
         }
         self.app_security_status.pin_verified = None;
         self.app_security_status.pin_just_verified = false;
@@ -1195,7 +1195,7 @@ impl ContainerStorage {
             Status::UnspecifiedNonpersistentExecutionError
         })?;
 
-        syscall!(client.delete(key_to_seal));
+        syscall!(client.clear(key_to_seal));
         Ok(())
     }
 }

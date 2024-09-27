@@ -920,7 +920,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         };
         syscall!(self.trussed.delete(public_key));
         if reference.is_encrypted() {
-            syscall!(self.trussed.delete(secret_key));
+            syscall!(self.trussed.clear(secret_key));
         }
 
         Ok(())

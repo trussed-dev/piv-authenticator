@@ -2,19 +2,48 @@
 
 mod card;
 
-use card::{with_vsc, WITHOUT_UUID, WITH_UUID};
+use card::*;
 
+use cfg_if::cfg_if;
 use expectrl::{spawn, Eof, Regex, WaitStatus};
 
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
+use std::time::Duration;
+
+const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
+
+const EXPECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(30));
+
+// #[derive(Default)]
+// struct LogWriter(Vec<u8>);
+
+// impl Write for LogWriter {
+//     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+//         self.0.write(buf)
+//     }
+
+//     fn flush(&mut self) -> io::Result<()> {
+//         self.0.flush()
+//     }
+// }
+
+// impl Drop for LogWriter {
+//     fn drop(&mut self) {
+//         io::stdout().write_all(&self.0).unwrap();
+//     }
+// }
 
 #[test_log::test]
 fn list() {
     let test = || {
-        let mut p = spawn("pivy-tool list").unwrap();
-        p.expect(Regex("card: [0-9A-Z]*")).unwrap();
-        p.expect("device: Virtual PCD 00 00").unwrap();
+        let mut p = spawn("pivy-tool list")
+            // .unwrap()
+            // .with_log(LogWriter(Vec::new()))
+            .unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
+        p.expect(Regex("card: [0-9A-Z]{8}")).unwrap();
+        p.expect(&format!("device: {CARD}")).unwrap();
         p.expect("chuid: ok").unwrap();
         p.expect(Regex("guid: [0-9A-Z]*")).unwrap();
         p.expect("algos: 3DES AES256 ECCP256 (null) (null)")
@@ -22,14 +51,21 @@ fn list() {
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
     };
-    with_vsc(WITH_UUID, test);
-    with_vsc(WITHOUT_UUID, test);
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
 }
 
 #[test_log::test]
 fn generate() {
     let test = || {
         let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp256 -P 123456").unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex(
             "ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}",
         ))
@@ -37,13 +73,19 @@ fn generate() {
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
     };
-    with_vsc(WITH_UUID, test);
-    with_vsc(WITHOUT_UUID, test);
-
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
     #[cfg(feature = "rsa")]
     {
         let test = || {
             let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a rsa2048 -P 123456").unwrap();
+            p.set_expect_timeout(EXPECT_TIMEOUT);
             p.expect(Regex(
             "ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}",
         ))
@@ -51,14 +93,21 @@ fn generate() {
             p.expect(Eof).unwrap();
             assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
         };
-        with_vsc(WITH_UUID, test);
-        with_vsc(WITHOUT_UUID, test);
+        cfg_if! {
+            if #[cfg(not(feature = "dangerous-test-real-card"))]{
+                with_vsc(WITH_UUID, test);
+                with_vsc(WITHOUT_UUID, test);
+            } else {
+            with_lock_and_reset(test)
+            }
+        }
     }
 }
 
 fn ecdh_inner(key: &str, requires_pin: bool) {
     let test = || {
         let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456")).unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex(&format!(
             "{}{key}{}",
             "ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_",
@@ -87,8 +136,14 @@ fn ecdh_inner(key: &str, requires_pin: bool) {
 
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
-    with_vsc(WITH_UUID, test);
-    with_vsc(WITHOUT_UUID, test);
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
 }
 
 #[test_log::test]
@@ -107,7 +162,12 @@ fn ecdh_9e() {
 fn sign_inner(key: &str, requires_pin: bool) {
     #[cfg(feature = "rsa")]
     let test_rsa = || {
-        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a rsa2048 -P 123456")).unwrap();
+        let mut logger = LogWriter::default();
+        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a rsa2048 -P 123456"))
+            // .unwrap()
+            // .with_log(LogWriter(Vec::new()))
+            .unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex(&format!(
             "{}{key}{}",
             "ssh-rsa (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_",
@@ -135,7 +195,12 @@ fn sign_inner(key: &str, requires_pin: bool) {
     };
 
     let test_p256 = || {
-        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456")).unwrap();
+        let mut logger = LogWriter::default();
+        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456"))
+            // .unwrap()
+            // .with_log(LogWriter(Vec::new()))
+            .unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex(&format!("{}{key}{}","ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_", "@[A-F0-9]{20}"))).unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
@@ -157,6 +222,7 @@ fn sign_inner(key: &str, requires_pin: bool) {
 
         let mut out = Vec::new();
         stdout.read_to_end(&mut out).unwrap();
+        println!("{out:02x?}");
         // Check that the signature is an asn.1 sequence
         let res: asn1::ParseResult<_> = asn1::parse(&out, |d| {
             d.read_element::<asn1::Sequence>()?.parse(|d| {
@@ -176,8 +242,14 @@ fn sign_inner(key: &str, requires_pin: bool) {
         test_rsa();
     };
 
-    with_vsc(WITH_UUID, test);
-    with_vsc(WITHOUT_UUID, test);
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
 }
 
 #[test_log::test]
@@ -262,6 +334,12 @@ fn large_cert() {
         assert_eq!(&buf, LARGE_CERT);
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
-    with_vsc(WITH_UUID, test);
-    with_vsc(WITHOUT_UUID, test);
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
 }

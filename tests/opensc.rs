@@ -23,7 +23,10 @@ fn list() {
             .unwrap();
         p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
     };
     cfg_if! {
         if #[cfg(not(feature = "dangerous-test-real-card"))] {
@@ -48,7 +51,10 @@ fn admin_mutual() {
             .unwrap();
         // p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
     };
     cfg_if! {
         if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -75,7 +81,10 @@ fn admin_card() {
             .unwrap();
         p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
     };
     cfg_if! {
         if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -99,7 +108,7 @@ fn generate_key() {
     //         .unwrap();
     //     p.expect(Eof).unwrap();
     //     // Non zero exit code?
-    //     assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 1));
+    //     assert_eq!(p.get_process().wait().unwrap(), WaitStatus::Exited(p.get_process().pid(), 1));
     // });
     // cfg_if! {
     //     if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -120,7 +129,7 @@ fn generate_key() {
     //         .unwrap();
     //     p.expect(Eof).unwrap();
     //     // Non zero exit code?
-    //     assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 1));
+    //     assert_eq!(p.get_process().wait().unwrap(), WaitStatus::Exited(p.get_process().pid(), 1));
     // };
     // cfg_if! {
     //     if #[cfg(not(feature = "dangerous-test-real-card"))]{

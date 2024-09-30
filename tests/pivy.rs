@@ -15,32 +15,31 @@ const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
 
 const EXPECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(30));
 
-// #[derive(Default)]
-// struct LogWriter(Vec<u8>);
+#[derive(Default)]
+struct LogWriter(Vec<u8>);
 
-// impl Write for LogWriter {
-//     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-//         self.0.write(buf)
-//     }
+impl Write for LogWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf)
+    }
 
-//     fn flush(&mut self) -> io::Result<()> {
-//         self.0.flush()
-//     }
-// }
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
 
-// impl Drop for LogWriter {
-//     fn drop(&mut self) {
-//         io::stdout().write_all(&self.0).unwrap();
-//     }
-// }
+impl Drop for LogWriter {
+    fn drop(&mut self) {
+        io::stdout().write_all(&self.0).unwrap();
+    }
+}
 
 #[test_log::test]
 fn list() {
     let test = || {
-        let mut p = spawn("pivy-tool list")
-            // .unwrap()
-            // .with_log(LogWriter(Vec::new()))
-            .unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let p = spawn("pivy-tool list").unwrap();
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex("card: [0-9A-Z]{8}")).unwrap();
         p.expect(&format!("device: {CARD}")).unwrap();
@@ -49,7 +48,10 @@ fn list() {
         p.expect("algos: 3DES AES256 ECCP256 (null) (null)")
             .unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
     };
     cfg_if! {
         if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -71,7 +73,10 @@ fn generate() {
         ))
         .unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
     };
     cfg_if! {
         if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -91,7 +96,10 @@ fn generate() {
         ))
         .unwrap();
             p.expect(Eof).unwrap();
-            assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+            assert_eq!(
+                p.get_process().wait().unwrap(),
+                WaitStatus::Exited(p.get_process().pid(), 0)
+            );
         };
         cfg_if! {
             if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -115,7 +123,10 @@ fn ecdh_inner(key: &str, requires_pin: bool) {
         )))
         .unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
 
         let mut p = Command::new("pivy-tool")
             .args(if requires_pin {
@@ -162,11 +173,10 @@ fn ecdh_9e() {
 fn sign_inner(key: &str, requires_pin: bool) {
     #[cfg(feature = "rsa")]
     let test_rsa = || {
-        let mut logger = LogWriter::default();
-        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a rsa2048 -P 123456"))
-            // .unwrap()
-            // .with_log(LogWriter(Vec::new()))
+        let mut logger = LogWriter(Vec::new());
+        let p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a rsa2048 -P 123456"))
             .unwrap();
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex(&format!(
             "{}{key}{}",
@@ -175,7 +185,10 @@ fn sign_inner(key: &str, requires_pin: bool) {
         )))
         .unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
 
         let mut p = Command::new("pivy-tool")
             .args(if requires_pin {
@@ -196,14 +209,16 @@ fn sign_inner(key: &str, requires_pin: bool) {
 
     let test_p256 = || {
         let mut logger = LogWriter::default();
-        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456"))
-            // .unwrap()
-            // .with_log(LogWriter(Vec::new()))
+        let p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp256 -P 123456"))
             .unwrap();
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex(&format!("{}{key}{}","ecdsa-sha2-nistp256 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_", "@[A-F0-9]{20}"))).unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(p.wait().unwrap(), WaitStatus::Exited(p.pid(), 0));
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
 
         let mut p = Command::new("pivy-tool")
             .args(if requires_pin {

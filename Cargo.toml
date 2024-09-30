@@ -37,6 +37,7 @@ trussed-hpke = "0.1.0"
 trussed-wrap-key-to-file = "0.1.0"
 trussed-staging = { version = "0.3.0", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
 littlefs2 = "0.4.0"
+cfg-if = "1.0.0"
 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["getrandom"] }
@@ -77,6 +78,8 @@ log-info = []
 log-debug = []
 log-warn = []
 log-error = []
+
+dangerous-test-real-card = []
 
 [patch.crates-io]
 trussed = { git = "https://github.com/Nitrokey/trussed" , tag = "v0.1.0-nitrokey.18" }

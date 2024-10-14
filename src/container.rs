@@ -2,7 +2,7 @@ use core::convert::TryFrom;
 
 use hex_literal::hex;
 
-use littlefs2::{path, path::Path};
+use littlefs2_core::{path, Path};
 
 macro_rules! enum_subset {
     (

@@ -31,7 +31,7 @@ trussed-chunked = "0.1.0"
 trussed-hpke = "0.1.0"
 trussed-wrap-key-to-file = "0.1.0"
 trussed-staging = { version = "0.3.2", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
-littlefs2 = "0.4.0"
+littlefs2-core = "0.1.0"
 cfg-if = "1.0.0"
 
 [dev-dependencies]
@@ -76,12 +76,11 @@ log-error = []
 dangerous-test-real-card = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/Nitrokey/trussed" , tag = "v0.1.0-nitrokey.18" }
-littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "498fee7f7b908cb14e6ac18dca8442e19c89c0a9" }
-trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.3.0"}
+trussed = { git = "https://github.com/trussed-dev/trussed", rev = "046478b7a4f6e2315acf9112d98308379c2e3eee" }
+trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", rev = "c030b82ad3441f337af09afe3a69e8a6da5785ea" }
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.2.1" }
 trussed-chunked = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "chunked-v0.1.0" }
-trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.3.2" }
+trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", rev = "53eba84d2cd0bcacc3a7096d4b7a2490dcf6f069" }
 trussed-hpke = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "hpke-v0.1.0" }
 trussed-wrap-key-to-file = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "wrap-key-to-file-v0.1.0" }
 

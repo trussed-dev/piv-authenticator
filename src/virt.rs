@@ -11,7 +11,7 @@ pub mod dispatch {
         service::ServiceResources,
         types::{Bytes, Context, Location},
     };
-    use trussed_auth::{AuthBackend, AuthContext, AuthExtension, MAX_HW_KEY_LEN};
+    use trussed_auth::{AuthBackend, AuthContext, AuthExtension, FilesystemLayout, MAX_HW_KEY_LEN};
     use trussed_chunked::ChunkedExtension;
     use trussed_hpke::HpkeExtension;
     #[cfg(feature = "rsa")]
@@ -86,14 +86,14 @@ pub mod dispatch {
     impl Dispatch {
         pub fn new() -> Self {
             Self {
-                auth: AuthBackend::new(Location::Internal),
+                auth: AuthBackend::new(Location::Internal, FilesystemLayout::V0),
                 staging: StagingBackend::new(),
             }
         }
 
         pub fn with_hw_key(hw_key: Bytes<MAX_HW_KEY_LEN>) -> Self {
             Self {
-                auth: AuthBackend::with_hw_key(Location::Internal, hw_key),
+                auth: AuthBackend::with_hw_key(Location::Internal, hw_key, FilesystemLayout::V0),
                 staging: StagingBackend::new(),
             }
         }

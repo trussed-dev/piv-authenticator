@@ -74,7 +74,7 @@ impl<'l> Command<'l> {
     /// Core method, constructs a PIV command, if the iso7816::Command is valid.
     ///
     /// Inherent method re-exposing the `TryFrom` implementation.
-    pub fn try_from<const C: usize>(command: &'l iso7816::Command<C>) -> Result<Self, Status> {
+    pub fn try_from(command: iso7816::command::CommandView<'l>) -> Result<Self, Status> {
         command.try_into()
     }
 }
@@ -295,7 +295,7 @@ impl<'data> TryFrom<&'data [u8]> for PutData<'data> {
     }
 }
 
-impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
+impl<'l> TryFrom<iso7816::command::CommandView<'l>> for Command<'l> {
     type Error = Status;
     /// The first layer of unraveling the iso7816::Command onion.
     ///
@@ -303,7 +303,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
     /// in the "Command Syntax" boxes of NIST SP 800-73-4, and return early errors.
     ///
     /// The individual piv::Command TryFroms then further interpret these validated parameters.
-    fn try_from(command: &'l iso7816::Command<C>) -> Result<Self, Self::Error> {
+    fn try_from(command: iso7816::command::CommandView<'l>) -> Result<Self, Self::Error> {
         let (class, instruction, p1, p2) = (
             command.class(),
             command.instruction(),
@@ -323,13 +323,9 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
         // TODO: should we check `command.expected() == 0`, where specified?
 
         Ok(match (class.into_inner(), instruction, p1, p2) {
-            (0x00, Instruction::Select, 0x04, 0x00) => {
-                Self::Select(Select::try_from(data.as_slice())?)
-            }
+            (0x00, Instruction::Select, 0x04, 0x00) => Self::Select(Select::try_from(data)?),
 
-            (0x00, Instruction::GetData, 0x3F, 0xFF) => {
-                Self::GetData(GetData::try_from(data.as_slice())?.0)
-            }
+            (0x00, Instruction::GetData, 0x3F, 0xFF) => Self::GetData(GetData::try_from(data)?.0),
 
             (0x00, Instruction::Verify, p1, p2) => {
                 let logout = VerifyLogout::try_from(p1)?;
@@ -350,7 +346,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
             }
 
             (0x00, Instruction::ResetRetryCounter, 0x00, 0x80) => {
-                Self::ResetRetryCounter(ResetRetryCounter::try_from(data.as_slice())?)
+                Self::ResetRetryCounter(ResetRetryCounter::try_from(data)?)
             }
 
             (0x00, Instruction::GeneralAuthenticate, p1, p2) => {
@@ -365,9 +361,7 @@ impl<'l, const C: usize> TryFrom<&'l iso7816::Command<C>> for Command<'l> {
                 })
             }
 
-            (0x00, Instruction::PutData, 0x3F, 0xFF) => {
-                Self::PutData(PutData::try_from(data.as_slice())?)
-            }
+            (0x00, Instruction::PutData, 0x3F, 0xFF) => Self::PutData(PutData::try_from(data)?),
 
             (0x00, Instruction::GenerateAsymmetricKeyPair, 0x00, p2) => Self::GenerateAsymmetric(
                 GenerateKeyReference::try_from(p2).map_err(|_| Status::IncorrectP1OrP2Parameter)?,

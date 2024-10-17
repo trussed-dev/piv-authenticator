@@ -153,9 +153,9 @@ where
         Ok(())
     }
 
-    pub fn respond<const R: usize, const C: usize>(
+    pub fn respond<const R: usize>(
         &mut self,
-        command: &iso7816::Command<C>,
+        command: iso7816::command::CommandView<'_>,
         reply: &mut Data<R>,
     ) -> Result {
         let just_verified = self.state.volatile.app_security_status.pin_just_verified;

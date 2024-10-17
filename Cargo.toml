@@ -1,6 +1,6 @@
 [package]
 name = "piv-authenticator"
-version = "0.3.7"
+version = "0.3.8"
 authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"
@@ -35,7 +35,7 @@ trussed-rsa-alloc = { version = "0.2.1", features = ["raw"], optional = true }
 trussed-chunked = "0.1.0"
 trussed-hpke = "0.1.0"
 trussed-wrap-key-to-file = "0.1.0"
-trussed-staging = { version = "0.3.0", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
+trussed-staging = { version = "0.3.2", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
 littlefs2 = "0.4.0"
 cfg-if = "1.0.0"
 
@@ -87,9 +87,9 @@ littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "498fe
 trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth.git", tag = "v0.3.0"}
 trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.2.1" }
 trussed-chunked = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "chunked-v0.1.0" }
-trussed-staging = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "40ac4268c0ebbe20b0ef71553a345dd0905326de" }
-trussed-hpke = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "f0babe53813e7882cfe5ce749ebe3a65fc143fd7" }
-trussed-wrap-key-to-file = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "40ac4268c0ebbe20b0ef71553a345dd0905326de" }
+trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.3.2" }
+trussed-hpke = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "hpke-v0.1.0" }
+trussed-wrap-key-to-file = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "wrap-key-to-file-v0.1.0" }
 apdu-dispatch = { git = "https://github.com/Nitrokey/apdu-dispatch", tag = "v0.1.2-nitrokey.2" }
 trussed-usbip = { git = "https://github.com/Nitrokey/pc-usbip-runner.git", tag = "v0.0.1-nitrokey.1" }
 usbd-ccid = { git = "https://github.com/Nitrokey/usbd-ccid", tag = "v0.2.0-nitrokey.1" }

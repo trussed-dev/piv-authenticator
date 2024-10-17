@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.3.8][] (2024-10-17)
+
+[v0.3.8]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.8
+
+- Encrypt data on external flash ([#57](https://github.com/Nitrokey/piv-authenticator/pull/57))
+
 ## [v0.3.7][] (2024-04-21)
 
 - Bump rsa backend version ([#53][])

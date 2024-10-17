@@ -1,18 +1,18 @@
 use crate::{reply::Reply, Authenticator, /*constants::PIV_AID,*/ Result};
 
-use apdu_dispatch::{app::App, command, response, Command};
+use apdu_app::{App, CommandView, Data};
 use iso7816::{Interface, Status};
 
 #[cfg(feature = "apdu-dispatch")]
-impl<T> App<{ command::SIZE }, { response::SIZE }> for Authenticator<T>
+impl<T, const R: usize> App<R> for Authenticator<T>
 where
     T: crate::Client,
 {
     fn select(
         &mut self,
         interface: Interface,
-        _apdu: &Command,
-        reply: &mut response::Data,
+        _apdu: CommandView<'_>,
+        reply: &mut Data<R>,
     ) -> Result {
         if interface != Interface::Contact {
             return Err(Status::ConditionsOfUseNotSatisfied);
@@ -24,7 +24,7 @@ where
         self.deselect()
     }
 
-    fn call(&mut self, interface: Interface, apdu: &Command, reply: &mut response::Data) -> Result {
+    fn call(&mut self, interface: Interface, apdu: CommandView<'_>, reply: &mut Data<R>) -> Result {
         if interface != Interface::Contact {
             return Err(Status::ConditionsOfUseNotSatisfied);
         }

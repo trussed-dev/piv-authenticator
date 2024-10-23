@@ -11,11 +11,6 @@ documentation = "https://docs.rs/piv-authenticator"
 name = "vpicc"
 required-features = ["vpicc"]
 
-
-[[example]]
-name = "usbip"
-required-features = ["apdu-dispatch", "virt"]
-
 [dependencies]
 apdu-app = { version = "0.1", optional = true }
 delog = { version = "0.1.5", optional = true }
@@ -56,8 +51,6 @@ iso7816 = { version = "0.1.2", features = ["std"] }
 
 # Examples
 # usbip
-trussed-usbip = { version = "0.0.1", default-features = false, features = ["ccid"] }
-usbd-ccid = { version = "0.2.0", features = ["highspeed-usb"]}
 rand = "0.8.5"
 asn1 = "0.15.2"
 
@@ -91,8 +84,6 @@ trussed-chunked = { git = "https://github.com/trussed-dev/trussed-staging.git", 
 trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.3.2" }
 trussed-hpke = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "hpke-v0.1.0" }
 trussed-wrap-key-to-file = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "wrap-key-to-file-v0.1.0" }
-trussed-usbip = { git = "https://github.com/Nitrokey/pc-usbip-runner.git", tag = "v0.0.1-nitrokey.1" }
-usbd-ccid = { git = "https://github.com/Nitrokey/usbd-ccid", tag = "v0.2.0-nitrokey.1" }
 
 [profile.dev.package.rsa]
 opt-level = 2

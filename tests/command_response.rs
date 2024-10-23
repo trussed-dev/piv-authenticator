@@ -462,7 +462,7 @@ impl IoCmd {
                 panic!("Bad command: {err:?}, for command: {}", hex::encode(input))
             });
         let status: Status = card
-            .respond(&cmd, &mut rep)
+            .respond(cmd.as_view(), &mut rep)
             .err()
             .map(Into::into)
             .unwrap_or_default();

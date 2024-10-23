@@ -37,7 +37,7 @@ impl VpiccCard {
                 command
                     .map(|command| {
                         self.response_buffer
-                            .handle(&command, |c, b| self.card.respond(c, b))
+                            .handle(&command, |c, b| self.card.respond(c.as_view(), b))
                     })
                     .unwrap_or_default()
             })

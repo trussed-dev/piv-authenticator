@@ -19,7 +19,7 @@ fn list() {
     let test = || {
         let mut p = spawn("piv-tool -n").unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
-        p.expect(&format!("Using reader with a card: {CARD}"))
+        p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
         p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
@@ -47,7 +47,7 @@ fn admin_mutual() {
             .args(["-A", "M:9B:03"]);
         let mut p = expectrl::session::Session::spawn(command).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
-        p.expect(&format!("Using reader with a card: {CARD}"))
+        p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
         // p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();

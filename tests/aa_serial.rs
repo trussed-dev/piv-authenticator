@@ -9,8 +9,8 @@ const SERIAL: &str = env!("PIV_DANGEROUS_TEST_CARD_PIV_SERIAL");
 #[test]
 fn test_serial_number() {
     let mut p = spawn("piv-tool --serial").unwrap();
-    p.expect(&format!("Using reader with a card: {CARD}"))
+    p.expect(format!("Using reader with a card: {CARD}"))
         .unwrap();
-    p.expect(&format!("{SERIAL}")).unwrap();
+    p.expect(SERIAL).unwrap();
     p.expect(Eof).unwrap();
 }

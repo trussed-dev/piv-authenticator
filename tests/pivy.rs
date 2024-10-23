@@ -42,7 +42,7 @@ fn list() {
         let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(Regex("card: [0-9A-Z]{8}")).unwrap();
-        p.expect(&format!("device: {CARD}")).unwrap();
+        p.expect(format!("device: {CARD}")).unwrap();
         p.expect("chuid: ok").unwrap();
         p.expect(Regex("guid: [0-9A-Z]*")).unwrap();
         p.expect("algos: 3DES AES256 ECCP256 (null) (null)")

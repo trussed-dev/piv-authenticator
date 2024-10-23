@@ -212,17 +212,24 @@ where
             YubicoPivExtension::Attest(_slot) => return Err(Status::FunctionNotSupported),
 
             YubicoPivExtension::Reset => {
-                let this = self.load()?;
-                if this.state.persistent.remaining_pin_retries(this.trussed) != 0 {
-                    return Err(Status::ConditionsOfUseNotSatisfied);
-                }
+                let mut this;
+                let trussed = match self.load() {
+                    Err(_err) => &mut self.trussed,
+                    Ok(loaded) => {
+                        this = loaded;
+                        if this.state.persistent.remaining_pin_retries(this.trussed) != 0 {
+                            return Err(Status::ConditionsOfUseNotSatisfied);
+                        }
+                        &mut this.trussed
+                    }
+                };
 
                 // TODO: find out what all needs resetting :)
                 for location in [Location::Volatile, Location::External, Location::Internal] {
-                    try_syscall!(this.trussed.delete_all(location)).ok();
-                    try_syscall!(this.trussed.remove_dir_all(location, PathBuf::new())).ok();
+                    try_syscall!(trussed.delete_all(location)).ok();
+                    try_syscall!(trussed.remove_dir_all(location, PathBuf::new())).ok();
                 }
-                try_syscall!(this.trussed.delete_all_pins()).ok();
+                try_syscall!(trussed.delete_all_pins()).ok();
                 self.state.persistent = None;
             }
 

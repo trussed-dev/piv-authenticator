@@ -90,7 +90,7 @@ macro_rules! enum_subset {
 }
 
 pub(crate) use enum_subset;
-use trussed::types::Location;
+use trussed_core::types::Location;
 
 /// Security condition for the use of a given key.
 pub enum SecurityCondition {

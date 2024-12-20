@@ -5,15 +5,14 @@ use flexiber::EncodableHeapless;
 use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
-use littlefs2_core::path;
-use trussed::Client;
-use trussed::{
+use littlefs2_core::{path, Path, PathBuf};
+use trussed_chunked::utils;
+use trussed_core::{
     api::reply::Metadata,
     config::MAX_MESSAGE_LENGTH,
     syscall, try_syscall,
-    types::{KeyId, KeySerialization, Location, Mechanism, Path, PathBuf, StorageAttributes},
+    types::{KeyId, KeySerialization, Location, Mechanism, Message, StorageAttributes},
 };
-use trussed_chunked::utils;
 
 use crate::piv_types::CardHolderUniqueIdentifier;
 use crate::reply::Reply;
@@ -292,7 +291,7 @@ pub struct UseValidKey {
 }
 
 impl UseValidKey {
-    pub fn clear(mut self, client: &mut impl Client) {
+    pub fn clear(mut self, client: &mut impl crate::Client) {
         if self.need_clear {
             syscall!(client.clear(self.key));
         }
@@ -906,7 +905,7 @@ impl Persistent {
             return Self::initialize(client, options);
         };
 
-        let mut parsed: Self = trussed::cbor_deserialize(&bytes).map_err(|_err| {
+        let mut parsed: Self = cbor_smol::cbor_deserialize(&bytes).map_err(|_err| {
             error!("{_err:?}");
             Status::UnspecifiedPersistentExecutionError
         })?;
@@ -915,7 +914,8 @@ impl Persistent {
     }
 
     pub fn save(&mut self, client: &mut impl crate::Client) {
-        let data: trussed::types::Message = trussed::cbor_serialize_bytes(&self).unwrap();
+        let mut data = Message::new();
+        cbor_smol::cbor_serialize_to(&self, &mut data).unwrap();
 
         syscall!(client.write_file(self.storage, PathBuf::from(Self::FILENAME), data, None,));
     }

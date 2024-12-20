@@ -3,7 +3,7 @@ use core::convert::{TryFrom, TryInto};
 use flexiber::Encodable;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
-use trussed::types::{Mechanism, SignatureSerialization};
+use trussed_core::types::{Mechanism, SignatureSerialization};
 
 #[macro_export]
 macro_rules! enum_u8 {

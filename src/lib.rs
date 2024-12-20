@@ -36,9 +36,10 @@ use core::convert::TryInto;
 use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
-use trussed::types::{KeySerialization, Location, PathBuf, StorageAttributes};
-use trussed::{client, syscall, try_syscall};
 use trussed_auth::AuthClient;
+use trussed_core::mechanisms::{Ed255, Tdes};
+use trussed_core::types::{KeySerialization, Location, Mechanism, PathBuf, StorageAttributes};
+use trussed_core::{syscall, try_syscall, CryptoClient, FilesystemClient};
 
 use constants::*;
 
@@ -802,7 +803,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         .shared_secret;
 
         let serialized_secret = syscall!(self.trussed.serialize_key(
-            trussed::types::Mechanism::SharedSecret,
+            Mechanism::SharedSecret,
             shared_secret,
             KeySerialization::Raw
         ))
@@ -888,7 +889,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 let serialized_key = syscall!(self.trussed.serialize_key(
                     parsed_mechanism.key_mechanism(),
                     public_key,
-                    trussed::types::KeySerialization::Raw
+                    KeySerialization::Raw
                 ))
                 .serialized_key;
                 reply.expand(&[0x7F, 0x49])?;
@@ -907,7 +908,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 let tmp = syscall!(self.trussed.serialize_key(
                     parsed_mechanism.key_mechanism(),
                     public_key,
-                    trussed::types::KeySerialization::RsaParts
+                    KeySerialization::RsaParts
                 ))
                 .serialized_key;
                 let serialized = RsaPublicParts::deserialize(&tmp).map_err(|_err| {
@@ -1060,7 +1061,7 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
                 let q = tlv::get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
                 let e = tlv::get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
                 let id = syscall!(self.trussed.unsafe_inject_key(
-                    trussed::types::Mechanism::Rsa2048Raw,
+                    Mechanism::Rsa2048Raw,
                     &RsaImportFormat { e, p, q }.serialize().map_err(|_err| {
                         error!("Failed rsa import serialization: {_err:?}");
                         Status::UnspecifiedNonpersistentExecutionError
@@ -1085,21 +1086,23 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
 
 /// Super trait with all trussed extensions required by opcard
 pub trait Client:
-    trussed::Client
+    CryptoClient
+    + FilesystemClient
     + AuthClient
     + ChunkedClient
-    + trussed::client::Ed255
-    + client::Tdes
+    + Ed255
+    + Tdes
     + WrapKeyToFileClient
     + HpkeClient
 {
 }
 impl<
-        C: trussed::Client
+        C: CryptoClient
+            + FilesystemClient
             + AuthClient
             + ChunkedClient
-            + trussed::client::Ed255
-            + client::Tdes
+            + Ed255
+            + Tdes
             + WrapKeyToFileClient
             + HpkeClient,
     > Client for C

@@ -115,6 +115,7 @@ enum_u8! {
         Aes256 = 0xC,
         P256 = 0x11,
         P384 = 0x14,
+        Rsa3072 = 0x05,
 
         // // non-standard! in piv-go though!
         // Ed255_prev = 0x22,
@@ -122,8 +123,7 @@ enum_u8! {
         // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
         P521 = 0x15,
         // non-standard!
-        Rsa3072 = 0xE0,
-        Rsa4096 = 0xE1,
+        Rsa4096 = 0x16,
         Ed25519 = 0xE2,
         X25519 = 0xE3,
         Ed448 = 0xE4,
@@ -143,6 +143,8 @@ crate::container::enum_subset! {
     pub enum AsymmetricAlgorithms: Algorithms {
         #[cfg(feature = "rsa")]
         Rsa2048,
+        #[cfg(feature = "rsa")]
+        Rsa3072,
         #[cfg(feature = "rsa")]
         Rsa4096,
         P256,
@@ -173,6 +175,8 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa2048 => Mechanism::Rsa2048Raw,
             #[cfg(feature = "rsa")]
+            Self::Rsa3072 => Mechanism::Rsa3072Raw,
+            #[cfg(feature = "rsa")]
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256,
             Self::P384 => Mechanism::P384,
@@ -195,6 +199,8 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa2048 => Mechanism::Rsa2048Raw,
             #[cfg(feature = "rsa")]
+            Self::Rsa3072 => Mechanism::Rsa3072Raw,
+            #[cfg(feature = "rsa")]
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256Prehashed,
             Self::P384 => Mechanism::P384Prehashed,
@@ -207,6 +213,8 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa2048 => 256,
             #[cfg(feature = "rsa")]
+            Self::Rsa3072 => 384,
+            #[cfg(feature = "rsa")]
             Self::Rsa4096 => 512,
             Self::P256 => 32,
             Self::P384 => 48,
@@ -216,7 +224,7 @@ impl AsymmetricAlgorithms {
     pub fn sign_serialization(self) -> SignatureSerialization {
         match self {
             #[cfg(feature = "rsa")]
-            Self::Rsa2048 | Self::Rsa4096 => SignatureSerialization::Raw,
+            Self::Rsa2048 | Self::Rsa3072 | Self::Rsa4096 => SignatureSerialization::Raw,
             Self::P256 => SignatureSerialization::Asn1Der,
             Self::P384 => SignatureSerialization::Asn1Der,
         }
@@ -226,7 +234,9 @@ impl AsymmetricAlgorithms {
         #[cfg(feature = "rsa")]
         return matches!(
             self,
-            AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096
+            AsymmetricAlgorithms::Rsa2048
+                | AsymmetricAlgorithms::Rsa3072
+                | AsymmetricAlgorithms::Rsa4096
         );
         #[cfg(not(feature = "rsa"))]
         return false;
@@ -251,6 +261,7 @@ crate::container::enum_subset! {
     #[derive(Debug,Deserialize,Serialize)]
     pub enum RsaAlgorithms: Algorithms {
         Rsa2048,
+        Rsa3072,
         Rsa4096,
     }
 }
@@ -259,6 +270,7 @@ impl RsaAlgorithms {
     pub fn mechanism(self) -> Mechanism {
         match self {
             Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            Self::Rsa3072 => Mechanism::Rsa3072Raw,
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
         }
     }

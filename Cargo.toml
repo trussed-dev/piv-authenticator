@@ -69,6 +69,7 @@ pivy-tests = []
 opensc-tests = []
 alloc = []
 rsa = ["trussed-rsa-alloc", "alloc"]
+delog  = ["dep:delog"]
 
 log-all = []
 log-none = []

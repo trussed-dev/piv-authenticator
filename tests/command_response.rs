@@ -458,8 +458,14 @@ impl IoCmd {
             .into_iter()
             .flatten()
             .collect();
+        let algo = match p.len() {
+            128 => 0x07,
+            192 => 0x05,
+            256 => 0x16,
+            _ => panic!("Invalid RSA key size"),
+        };
         Self::run_bytes(
-            &build_command(0x00, 0xFE, 0x07, 0x9A, &data, 0),
+            &build_command(0x00, 0xFE, algo, 0x9A, &data, 0),
             &MATCH_EMPTY,
             expected_status,
             card,

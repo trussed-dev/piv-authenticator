@@ -29,7 +29,7 @@ log = "0.4"
 heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
 # TODO: only enable rsa features when needed
-trussed-core = { version = "0.1.0-rc.1", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa4096", "shared-secret", "tdes", "x255"] }
+trussed-core = { version = "0.1.0-rc.1", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa3072", "rsa4096", "shared-secret", "tdes", "x255"] }
 trussed-rsa-alloc = { version = "0.2.1", features = ["raw"], optional = true }
 trussed-chunked = "0.2.0"
 trussed-hpke = "0.2.0"

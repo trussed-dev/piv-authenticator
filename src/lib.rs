@@ -909,6 +909,21 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 reply.expand(&serialized_key)?;
                 reply.prepend_len(offset)?;
             }
+            AsymmetricAlgorithms::P384 => {
+                let serialized_key = syscall!(self.trussed.serialize_key(
+                    parsed_mechanism.key_mechanism(),
+                    public_key,
+                    KeySerialization::Raw
+                ))
+                .serialized_key;
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                reply.expand(&[0x86])?;
+                reply.append_len(serialized_key.len() + 1)?;
+                reply.expand(&[0x04])?;
+                reply.expand(&serialized_key)?;
+                reply.prepend_len(offset)?;
+            }
             #[cfg(feature = "rsa")]
             AsymmetricAlgorithms::Rsa2048 | AsymmetricAlgorithms::Rsa4096 => {
                 use trussed_rsa_alloc::RsaPublicParts;

@@ -105,6 +105,18 @@ fn generate() {
             p.get_process().wait().unwrap(),
             WaitStatus::Exited(p.get_process().pid(), 0)
         );
+
+        let mut p = spawn("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate 9A -a eccp384 -P 123456").unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
+        p.expect(Regex(
+            "ecdsa-sha2-nistp384 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_9A@[A-F0-9]{20}",
+        ))
+        .unwrap();
+        p.expect(Eof).unwrap();
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
     };
     cfg_if! {
         if #[cfg(not(feature = "dangerous-test-real-card"))]{
@@ -171,6 +183,49 @@ fn ecdh_inner(key: &str, requires_pin: bool) {
         let mut stdin = p.stdin.take().unwrap();
         write!(stdin,
             "ecdsa-sha2-nistp256 \
+                AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIK+WUxBiBEwHgT4ykw3FDC1kRRMZCQo2+iM9+8WQgz7eFhEcU78eVweIrqG0nyJaZeWhgcYTSDP+VisDftiQgo= \
+                PIV_slot_9A@6E9BCA45D8AF4B9D95AA2E8C8C23BA49"        ).unwrap();
+        drop(stdin);
+
+        assert_eq!(p.wait().unwrap().code(), Some(0));
+    };
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
+
+    let test = || {
+        let mut p = spawn(format!("pivy-tool -A 3des -K 010203040506070801020304050607080102030405060708 generate {key} -a eccp384 -P 123456")).unwrap();
+        p.set_expect_timeout(EXPECT_TIMEOUT);
+        p.expect(Regex(&format!(
+            "{}{key}{}",
+            "ecdsa-sha2-nistp384 (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)? PIV_slot_",
+            "@[A-F0-9]{20}",
+        )))
+        .unwrap();
+        p.expect(Eof).unwrap();
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 0)
+        );
+
+        let mut p = Command::new("pivy-tool")
+            .args(if requires_pin {
+                vec!["sign", key, "-P", "123456"]
+            } else {
+                vec!["sign", key]
+            })
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdin = p.stdin.take().unwrap();
+        write!(stdin,
+            "ecdsa-sha2-nistp384 \
                 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIK+WUxBiBEwHgT4ykw3FDC1kRRMZCQo2+iM9+8WQgz7eFhEcU78eVweIrqG0nyJaZeWhgcYTSDP+VisDftiQgo= \
                 PIV_slot_9A@6E9BCA45D8AF4B9D95AA2E8C8C23BA49"        ).unwrap();
         drop(stdin);
@@ -354,8 +409,7 @@ Dmf/WiLYxRCpxr8tkkc332OlmHeBsDHKYY0G6dpdiTAGrjGNQZJJQc1wzy/+guZE
 UWr6jSVOel/u47jadbFK2/4a8ZnZEuEU0nn5h01lFY3fvrHr93Z3yzZ60LKeMszs
 SmDyoVI1XfNSJd8YbshGP91CVHFnDWDqo1JWV7hRev5g3XJfobIAAAqbL/H92BCT
 N4vF6RP8Ck9wj1OYq/w82MkgxOPleUju4Q==
------END CERTIFICATE-----
-";
+-----END CERTIFICATE-----";
 
 #[test_log::test]
 fn large_cert() {
@@ -382,7 +436,7 @@ fn large_cert() {
         let mut stdout = p.stdout.take().unwrap();
         let mut buf = String::new();
         stdout.read_to_string(&mut buf).unwrap();
-        assert_eq!(&buf, LARGE_CERT);
+        assert_eq!(buf.strip_suffix('\n').unwrap(), LARGE_CERT);
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
     cfg_if! {

@@ -147,10 +147,12 @@ crate::container::enum_subset! {
         Rsa4096,
         P256,
 
+        // not standard
+        P384,
+
         // Not supported
         // Rsa1024 = 0x6,
         // Rsa3072 = 0xE0,
-        // P384 = 0x14,
         // P521 = 0x15,
 
         // non-standard! in piv-go though!
@@ -173,6 +175,7 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256,
+            Self::P384 => Mechanism::P384,
         }
     }
 
@@ -180,6 +183,7 @@ impl AsymmetricAlgorithms {
         use AsymmetricAlgorithms::*;
         match self {
             P256 => Some(Mechanism::P256),
+            P384 => Some(Mechanism::P384),
             /* P384 | P521 | X25519 | X448 */
             #[allow(unreachable_patterns)]
             _ => None,
@@ -193,6 +197,7 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256Prehashed,
+            Self::P384 => Mechanism::P384Prehashed,
         }
     }
 
@@ -204,6 +209,7 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa4096 => 512,
             Self::P256 => 32,
+            Self::P384 => 48,
         }
     }
 
@@ -212,6 +218,7 @@ impl AsymmetricAlgorithms {
             #[cfg(feature = "rsa")]
             Self::Rsa2048 | Self::Rsa4096 => SignatureSerialization::Raw,
             Self::P256 => SignatureSerialization::Asn1Der,
+            Self::P384 => SignatureSerialization::Asn1Der,
         }
     }
 

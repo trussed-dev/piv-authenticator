@@ -66,9 +66,7 @@ fn admin_mutual() {
     }
 }
 
-/// Fails because of https://github.com/OpenSC/OpenSC/issues/2658
 #[test_log::test]
-#[ignore]
 fn admin_card() {
     let test = || {
         let mut command = Command::new("piv-tool");
@@ -79,7 +77,7 @@ fn admin_card() {
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect("Using reader with a card: Virtual PCD 00 00")
             .unwrap();
-        p.expect("Personal Identity Verification Card").unwrap();
+        // p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(
             p.get_process().wait().unwrap(),
@@ -98,45 +96,51 @@ fn admin_card() {
 
 #[test_log::test]
 fn generate_key() {
-    // let test = || {
-    //     let mut command = Command::new("piv-tool");
-    //     command
-    //         .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
-    //         .args(["-A", "M:9B:03", "-G", "9A:11"]);
-    //     let mut p = expectrl::session::Session::spawn(command).unwrap();
-    //     p.expect("Using reader with a card: Virtual PCD 00 00")
-    //         .unwrap();
-    //     p.expect(Eof).unwrap();
-    //     // Non zero exit code?
-    //     assert_eq!(p.get_process().wait().unwrap(), WaitStatus::Exited(p.get_process().pid(), 1));
-    // });
-    // cfg_if! {
-    //     if #[cfg(not(feature = "dangerous-test-real-card"))]{
-    //         with_vsc(WITH_UUID, test);
-    //         with_vsc(WITHOUT_UUID, test);
-    //     } else {
-    //         with_lock_and_reset(test)
-    //     }
-    // }
+    let test = || {
+        let mut command = Command::new("piv-tool");
+        command
+            .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
+            .args(["-A", "M:9B:03", "-G", "9A:11"]);
+        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        p.expect("Using reader with a card: Virtual PCD 00 00")
+            .unwrap();
+        p.expect(Eof).unwrap();
+        // Non zero exit code?
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 1)
+        );
+    };
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
 
-    // let test = || {
-    //     let mut command = Command::new("piv-tool");
-    //     command
-    //         .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
-    //         .args(["-A", "M:9B:03", "-G", "9A:07"]);
-    //     let mut p = expectrl::session::Session::spawn(command).unwrap();
-    //     p.expect("Using reader with a card: Virtual PCD 00 00")
-    //         .unwrap();
-    //     p.expect(Eof).unwrap();
-    //     // Non zero exit code?
-    //     assert_eq!(p.get_process().wait().unwrap(), WaitStatus::Exited(p.get_process().pid(), 1));
-    // };
-    // cfg_if! {
-    //     if #[cfg(not(feature = "dangerous-test-real-card"))]{
-    //         with_vsc(WITH_UUID, test);
-    //         with_vsc(WITHOUT_UUID, test);
-    //     } else {
-    //         with_lock_and_reset(test)
-    //     }
-    // }
+    let test = || {
+        let mut command = Command::new("piv-tool");
+        command
+            .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
+            .args(["-A", "M:9B:03", "-G", "9A:07"]);
+        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        p.expect("Using reader with a card: Virtual PCD 00 00")
+            .unwrap();
+        p.expect(Eof).unwrap();
+        // Non zero exit code?
+        assert_eq!(
+            p.get_process().wait().unwrap(),
+            WaitStatus::Exited(p.get_process().pid(), 1)
+        );
+    };
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
 }

@@ -4,10 +4,31 @@ mod setup;
 
 use std::borrow::Cow;
 
-use aes::Aes256Enc;
 use hex_literal::hex;
+use rand::thread_rng;
 use serde::Deserialize;
 use trussed::types::GenericArray;
+
+macro_rules! assert_eq_hex {
+    ($left:expr, $right:expr $(,)?) => {
+        match (&$left, &$right) {
+            (left_val, right_val) => {
+                if !(*left_val == *right_val) {
+                    panic!("assertion `left == right` failed\n  left: {left_val:02x?}\n right: {right_val:02x?}");
+                }
+            }
+        }
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        match (&$left, &$right) {
+            (left_val, right_val) => {
+                if !(*left_val == *right_val) {
+                    panic!("assertion `left == right` failed\n  left: {left_val:02x?}\n right: {right_val:02x?}");
+                }
+            }
+        }
+    };
+}
 
 // iso7816::Status doesn't support serde
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy, Default)]
@@ -274,6 +295,8 @@ enum IoCmd {
     AuthenticateManagement {
         key: ManagementKey,
         #[serde(default)]
+        mutual: bool,
+        #[serde(default)]
         expected_status_challenge: Status,
         #[serde(default)]
         expected_status_response: Status,
@@ -347,9 +370,22 @@ impl IoCmd {
             } => Self::run_verify_global_pin(pin, *expected_status, card),
             Self::AuthenticateManagement {
                 key,
+                mutual: false,
                 expected_status_challenge,
                 expected_status_response,
-            } => Self::run_authenticate_management(
+            } => Self::run_authenticate_management_single(
+                key.algorithm,
+                &key.key,
+                *expected_status_challenge,
+                *expected_status_response,
+                card,
+            ),
+            Self::AuthenticateManagement {
+                key,
+                mutual: true,
+                expected_status_challenge,
+                expected_status_response,
+            } => Self::run_authenticate_management_mutual(
                 key.algorithm,
                 &key.key,
                 *expected_status_challenge,
@@ -519,13 +555,14 @@ impl IoCmd {
         );
     }
 
-    fn run_authenticate_management(
+    fn run_authenticate_management_single(
         alg: Algorithm,
         key: &str,
         expected_status_challenge: Status,
         expected_status_response: Status,
         card: &mut setup::Piv,
     ) {
+        use aes::Aes256Enc;
         use des::{
             cipher::{BlockEncrypt, KeyInit},
             TdesEde3,
@@ -534,11 +571,21 @@ impl IoCmd {
         let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
         let key = parse_hex(key);
         if expected_status_challenge != Status::Success {
-            res = heapless::Vec::from_slice(&vec![0; alg.challenge_len() + 6]).unwrap();
+            return;
         }
 
+        assert_eq_hex!(
+            res[..4],
+            [
+                0x7C,
+                alg.challenge_len() as u8 + 2,
+                0x81,
+                alg.challenge_len() as u8
+            ]
+        );
         // Remove header
-        let challenge = &mut res[4..][..alg.challenge_len()];
+        let challenge = &mut res[4..];
+        assert_eq_hex!(challenge.len(), alg.challenge_len());
         match alg {
             Algorithm::Tdes => {
                 let cipher = TdesEde3::new(GenericArray::from_slice(&key));
@@ -553,6 +600,88 @@ impl IoCmd {
         let second_data = tlv(&[0x7C], &tlv(&[0x82], challenge));
         let command = build_command(0x00, 0x87, alg as u8, 0x9B, &second_data, 0);
         Self::run_bytes(&command, &MATCH_ANY, expected_status_response, card);
+    }
+
+    fn run_authenticate_management_mutual(
+        alg: Algorithm,
+        key: &str,
+        expected_status_challenge: Status,
+        expected_status_response: Status,
+        card: &mut setup::Piv,
+    ) {
+        use aes::Aes256Dec;
+        use des::{
+            cipher::{BlockDecrypt, KeyInit},
+            TdesEde3,
+        };
+        use rand::RngCore;
+        let command = build_command(0x00, 0x87, alg as u8, 0x9B, &hex!("7C 02 80 00"), 0);
+        let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
+        let key = parse_hex(key);
+        if expected_status_challenge != Status::Success {
+            return;
+        }
+
+        assert_eq_hex!(
+            res[..4],
+            [
+                0x7C,
+                alg.challenge_len() as u8 + 2,
+                0x80,
+                alg.challenge_len() as u8
+            ]
+        );
+        // Remove header
+        let challenge = &mut res[4..];
+        assert_eq_hex!(challenge.len(), alg.challenge_len());
+        match alg {
+            Algorithm::Tdes => {
+                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
+                cipher.decrypt_block(GenericArray::from_mut_slice(challenge));
+            }
+            Algorithm::Aes256 => {
+                let cipher = Aes256Dec::new(GenericArray::from_slice(&key));
+                cipher.decrypt_block(GenericArray::from_mut_slice(challenge));
+            }
+            _ => panic!(),
+        }
+        let mut random_challenge = vec![0; alg.challenge_len()];
+        thread_rng().fill_bytes(&mut random_challenge);
+        let challenge_and_random: Vec<u8> =
+            [tlv(&[0x80], &challenge), tlv(&[0x81], &random_challenge)]
+                .into_iter()
+                .flatten()
+                .collect();
+        let second_data = tlv(&[0x7C], &challenge_and_random);
+        let command = build_command(0x00, 0x87, alg as u8, 0x9B, &second_data, 0);
+        let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_response, card);
+        if expected_status_response != Status::Success {
+            return;
+        }
+        assert_eq_hex!(
+            res[..4],
+            [
+                0x7C,
+                alg.challenge_len() as u8 + 2,
+                0x82,
+                alg.challenge_len() as u8
+            ]
+        );
+        // Remove header
+        let response_challenge = &mut res[4..];
+        assert_eq_hex!(response_challenge.len(), alg.challenge_len());
+        match alg {
+            Algorithm::Tdes => {
+                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
+                cipher.decrypt_block(GenericArray::from_mut_slice(response_challenge));
+            }
+            Algorithm::Aes256 => {
+                let cipher = Aes256Dec::new(GenericArray::from_slice(&key));
+                cipher.decrypt_block(GenericArray::from_mut_slice(response_challenge));
+            }
+            _ => panic!(),
+        }
+        assert_eq_hex!(response_challenge, random_challenge);
     }
 
     fn run_verify_application_pin(pin: &str, expected_status: Status, card: &mut setup::Piv) {

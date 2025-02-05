@@ -14,6 +14,33 @@
         ]
     ),
     IoTest(
+        name: "Bad management key",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 FFFFFFFFFFFFFFFF"
+                ),
+                expected_status_response: IncorrectDataParameter,
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status_challenge: IncorrectP1OrP2Parameter,
+            ),
+            // Admin commands then must fail
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status: SecurityStatusNotSatisfied,
+            ),
+        ]
+    ),
+    IoTest(
         name: "Default management key",
         cmd_resp: [
             AuthenticateManagement(
@@ -48,6 +75,30 @@
         ]
     ),
     IoTest(
+        name: "Bad Aes management key",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 FFFFFFFFFFFFFFFF"
+                ),
+                expected_status_response: IncorrectDataParameter,
+            )
+        ]
+    ),
+    IoTest(
         name: "unauthenticated set management key",
         cmd_resp: [
             SetManagementKey(
@@ -63,7 +114,118 @@
                     key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
                 ),
                 expected_status_challenge: IncorrectP1OrP2Parameter,
-                expected_status_response: IncorrectP1OrP2Parameter,
+            )
+        ]
+    ),
+    IoTest(
+        name: "Bad management key Mutual Auth",
+        cmd_resp: [
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 FFFFFFFFFFFFFFFF"
+                ),
+                expected_status_response: IncorrectDataParameter,
+            ),
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status_challenge: IncorrectP1OrP2Parameter,
+            ),
+            // Admin commands then must fail
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status: SecurityStatusNotSatisfied,
+            ),
+        ]
+    ),
+    IoTest(
+        name: "Default management key Mutual Auth",
+        cmd_resp: [
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            )
+        ]
+    ),
+    IoTest(
+        name: "Aes management key Mutual Auth",
+        cmd_resp: [
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                )
+            )
+        ]
+    ),
+    IoTest(
+        name: "Bad Aes management key Mutual Auth",
+        cmd_resp: [
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                )
+            ),
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 FFFFFFFFFFFFFFFF"
+                ),
+                expected_status_response: IncorrectDataParameter,
+            )
+        ]
+    ),
+    IoTest(
+        name: "unauthenticated set management key Mutual Auth",
+        cmd_resp: [
+            SetManagementKey(
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status: SecurityStatusNotSatisfied,
+            ),
+            AuthenticateManagement(
+                mutual: true,
+                key: (
+                    algorithm: Aes256,
+                    key: "0102030405060708 0102030405060708 0102030405060708 0102030405060708"
+                ),
+                expected_status_challenge: IncorrectP1OrP2Parameter,
             )
         ]
     ),

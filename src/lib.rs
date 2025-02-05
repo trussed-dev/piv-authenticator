@@ -570,20 +570,21 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         info!("Single auth 1");
         let key = self.validate_auth_management(auth)?;
         let pl = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+        let ciphertext =
+            syscall!(self
+                .trussed
+                .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
+            .ciphertext;
         self.state.volatile.command_cache = Some(CommandCache::SingleAuthChallenge(
-            Bytes::from_slice(&pl).unwrap(),
+            Bytes::from_slice(&ciphertext).unwrap(),
         ));
-        let data = syscall!(self
-            .trussed
-            .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
-        .ciphertext;
 
         reply.expand(&[0x7C])?;
         let offset = reply.len();
         {
             reply.expand(&[0x81])?;
-            reply.append_len(data.len())?;
-            reply.expand(&data)?;
+            reply.append_len(pl.len())?;
+            reply.expand(&pl)?;
         }
         reply.prepend_len(offset)?;
         Ok(())
@@ -605,8 +606,8 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
         };
 
         let is_eq: bool = response.ct_eq(&plaintext_challenge).into();
-        if is_eq {
-            warn!("Bad auth challenge");
+        if !is_eq {
+            warn!("Failed admin authentication. Challenge did not match");
             return Err(Status::IncorrectDataParameter);
         }
 
@@ -623,24 +624,29 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
     ) -> Result {
         info!("Mutual auth 1");
         let key = self.validate_auth_management(auth)?;
-        let pl = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+        let plaintext = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
+
+        let ciphertext =
+            syscall!(self
+                .trussed
+                .encrypt(key.alg.mechanism(), key.id, &plaintext, &[], None))
+            .ciphertext;
+
         self.state.volatile.command_cache = Some(CommandCache::MutualAuthChallenge(
-            Bytes::from_slice(&pl).unwrap(),
+            Bytes::from_slice(&plaintext).unwrap(),
         ));
-        let data = syscall!(self
-            .trussed
-            .encrypt(key.alg.mechanism(), key.id, &pl, &[], None))
-        .ciphertext;
+
         reply.expand(&[0x7C])?;
         let offset = reply.len();
         {
             reply.expand(&[0x80])?;
-            reply.append_len(data.len())?;
-            reply.expand(&data)?;
+            reply.append_len(ciphertext.len())?;
+            reply.expand(&ciphertext)?;
         }
         reply.prepend_len(offset)?;
         Ok(())
     }
+
     fn mutual_auth_2<const R: usize>(
         &mut self,
         auth: GeneralAuthenticate,
@@ -666,8 +672,9 @@ impl<'a, T: Client> LoadedAuthenticator<'a, T> {
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
-        if challenge.ct_eq(&plaintext_challenge).into() {
-            warn!("Bad auth challenge");
+        let is_eq: bool = response.ct_eq(&plaintext_challenge).into();
+        if !is_eq {
+            warn!("Failed admin authentication. Challenge did not match");
             return Err(Status::IncorrectDataParameter);
         }
 

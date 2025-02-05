@@ -358,3 +358,23 @@ fn large_cert() {
         }
     }
 }
+
+#[test_log::test]
+fn bad_admin_key() {
+    let test = || {
+        let output = Command::new("pivy-tool")
+            .args(["-A", "3des", "-K", "@tests/bad_admin_key", "generate", "9A"])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+    };
+
+    cfg_if! {
+        if #[cfg(not(feature = "dangerous-test-real-card"))]{
+            with_vsc(WITH_UUID, test);
+            with_vsc(WITHOUT_UUID, test);
+        } else {
+            with_lock_and_reset(test)
+        }
+    }
+}

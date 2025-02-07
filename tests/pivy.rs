@@ -8,8 +8,36 @@ use cfg_if::cfg_if;
 use expectrl::{spawn, Eof, Regex, WaitStatus};
 
 use std::io::{self, Read, Write};
-use std::process::{Command, Stdio};
+use std::ops::{Deref, DerefMut};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::Duration;
+
+pub struct CommandWrapper(pub Child);
+
+impl Deref for CommandWrapper {
+    type Target = Child;
+    fn deref(&self) -> &Child {
+        &self.0
+    }
+}
+
+impl DerefMut for CommandWrapper {
+    fn deref_mut(&mut self) -> &mut Child {
+        &mut self.0
+    }
+}
+
+impl CommandWrapper {
+    pub fn wait(&mut self) -> io::Result<ExitStatus> {
+        self.0.wait()
+    }
+}
+
+impl Drop for CommandWrapper {
+    fn drop(&mut self) {
+        self.0.wait().ok();
+    }
+}
 
 const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
 
@@ -128,16 +156,18 @@ fn ecdh_inner(key: &str, requires_pin: bool) {
             WaitStatus::Exited(p.get_process().pid(), 0)
         );
 
-        let mut p = Command::new("pivy-tool")
-            .args(if requires_pin {
-                vec!["sign", key, "-P", "123456"]
-            } else {
-                vec!["sign", key]
-            })
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+        let mut p = CommandWrapper(
+            Command::new("pivy-tool")
+                .args(if requires_pin {
+                    vec!["sign", key, "-P", "123456"]
+                } else {
+                    vec!["sign", key]
+                })
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
         let mut stdin = p.stdin.take().unwrap();
         write!(stdin,
             "ecdsa-sha2-nistp256 \
@@ -190,16 +220,18 @@ fn sign_inner(key: &str, requires_pin: bool) {
             WaitStatus::Exited(p.get_process().pid(), 0)
         );
 
-        let mut p = Command::new("pivy-tool")
-            .args(if requires_pin {
-                vec!["sign", key, "-P", "123456"]
-            } else {
-                vec!["sign", key]
-            })
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+        let mut p = CommandWrapper(
+            Command::new("pivy-tool")
+                .args(if requires_pin {
+                    vec!["sign", key, "-P", "123456"]
+                } else {
+                    vec!["sign", key]
+                })
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
         let mut stdin = p.stdin.take().unwrap();
         write!(stdin, "data").unwrap();
         drop(stdin);
@@ -220,16 +252,18 @@ fn sign_inner(key: &str, requires_pin: bool) {
             WaitStatus::Exited(p.get_process().pid(), 0)
         );
 
-        let mut p = Command::new("pivy-tool")
-            .args(if requires_pin {
-                vec!["sign", key, "-P", "123456"]
-            } else {
-                vec!["sign", key]
-            })
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+        let mut p = CommandWrapper(
+            Command::new("pivy-tool")
+                .args(if requires_pin {
+                    vec!["sign", key, "-P", "123456"]
+                } else {
+                    vec!["sign", key]
+                })
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
         let mut stdin = p.stdin.take().unwrap();
         let mut stdout = p.stdout.take().unwrap();
         write!(stdin, "data").unwrap();
@@ -326,12 +360,14 @@ N4vF6RP8Ck9wj1OYq/w82MkgxOPleUju4Q==
 #[test_log::test]
 fn large_cert() {
     let test = || {
-        let mut p = Command::new("pivy-tool")
-            .args(["write-cert", "9A"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
+        let mut p = CommandWrapper(
+            Command::new("pivy-tool")
+                .args(["write-cert", "9A"])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
         let mut stdin = p.stdin.take().unwrap();
         stdin.write_all(LARGE_CERT.as_bytes()).unwrap();
         drop(stdin);

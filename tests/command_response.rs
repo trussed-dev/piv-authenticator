@@ -648,7 +648,7 @@ impl IoCmd {
         let mut random_challenge = vec![0; alg.challenge_len()];
         thread_rng().fill_bytes(&mut random_challenge);
         let challenge_and_random: Vec<u8> =
-            [tlv(&[0x80], &challenge), tlv(&[0x81], &random_challenge)]
+            [tlv(&[0x80], challenge), tlv(&[0x81], &random_challenge)]
                 .into_iter()
                 .flatten()
                 .collect();

@@ -72,8 +72,9 @@ rsa = ["trussed-rsa-alloc", "alloc"]
 
 log-all = []
 log-none = []
-log-info = []
+log-trace = []
 log-debug = []
+log-info = []
 log-warn = []
 log-error = []
 

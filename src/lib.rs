@@ -255,7 +255,7 @@ where
     }
 }
 
-impl<'a, T: Client> LoadedAuthenticator<'a, T> {
+impl<T: Client> LoadedAuthenticator<'_, T> {
     pub fn yubico_set_administration_key<const R: usize>(
         &mut self,
         data: &[u8],

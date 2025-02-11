@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.3.9][] (2025-02-11)
+
+[v0.3.9]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.9
+
+- Fix admin authentication
+
 ## [v0.3.8][] (2024-10-17)
 
 [v0.3.8]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.8

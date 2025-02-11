@@ -508,17 +508,17 @@ impl Volatile {
 
         Ok(ReadValid::Encrypted(unsealed_key.key))
     }
-    pub fn take_single_challenge(&mut self) -> Option<Bytes<16>> {
+    pub fn take_single_challenge_reference(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
-            Some(CommandCache::SingleAuthChallenge(b)) => return Some(b),
+            Some(CommandCache::SingleAuthChallengeReference(b)) => return Some(b),
             old => self.command_cache = old,
         };
         None
     }
 
-    pub fn take_mutual_challenge(&mut self) -> Option<Bytes<16>> {
+    pub fn take_mutual_witness_reference(&mut self) -> Option<Bytes<16>> {
         match self.command_cache.take() {
-            Some(CommandCache::MutualAuthChallenge(b)) => return Some(b),
+            Some(CommandCache::MutualAuthWitnessReference(b)) => return Some(b),
             old => self.command_cache = old,
         };
         None
@@ -535,8 +535,8 @@ pub struct AppSecurityStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandCache {
-    SingleAuthChallenge(Bytes<16>),
-    MutualAuthChallenge(Bytes<16>),
+    SingleAuthChallengeReference(Bytes<16>),
+    MutualAuthWitnessReference(Bytes<16>),
 }
 
 impl Persistent {

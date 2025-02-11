@@ -294,7 +294,6 @@ enum IoCmd {
     },
     AuthenticateManagement {
         key: ManagementKey,
-        #[serde(default)]
         mutual: bool,
         #[serde(default)]
         expected_status_challenge: Status,

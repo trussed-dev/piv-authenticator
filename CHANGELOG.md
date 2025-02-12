@@ -6,6 +6,10 @@
 
 - Fix admin authentication
 
+### Security
+
+- Fix [CVE-2025-25201](https://github.com/Nitrokey/piv-authenticator/security/advisories/GHSA-28p6-c99x-fg8j)
+
 ## [v0.3.8][] (2024-10-17)
 
 [v0.3.8]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.8

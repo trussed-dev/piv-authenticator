@@ -11,7 +11,8 @@ pub mod dispatch {
         service::ServiceResources,
         types::{Bytes, Context, Location},
     };
-    use trussed_auth::{AuthBackend, AuthContext, AuthExtension, FilesystemLayout, MAX_HW_KEY_LEN};
+    use trussed_auth::AuthExtension;
+    use trussed_auth_backend::{AuthBackend, AuthContext, FilesystemLayout, MAX_HW_KEY_LEN};
     use trussed_chunked::ChunkedExtension;
     use trussed_hpke::HpkeExtension;
     #[cfg(feature = "rsa")]

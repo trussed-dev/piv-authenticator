@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.5.0][] (2025-02-26)
+
+[v0.5.0]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.4.0
+
+- Add support for RSA 3072, 4096 and nist P-384
+
 ## [v0.3.9][] (2025-02-11)
 
 [v0.3.9]: https://github.com/Nitrokey/piv-authenticator/releases/tag/v0.3.9

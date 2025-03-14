@@ -37,7 +37,7 @@ use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
 use iso7816::{Data, Status};
 use trussed_auth::AuthClient;
-use trussed_core::mechanisms::{Ed255, Tdes};
+use trussed_core::mechanisms::Tdes;
 use trussed_core::types::{KeySerialization, Location, Mechanism, PathBuf, StorageAttributes};
 use trussed_core::{syscall, try_syscall, CryptoClient, FilesystemClient};
 
@@ -143,9 +143,7 @@ where
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
             .with_application_label(self.options.label)
             .with_application_url(self.options.url)
-            .with_supported_cryptographic_algorithms(&[
-                Tdes, Aes256, P256, Ed25519, X25519, Rsa2048,
-            ]);
+            .with_supported_cryptographic_algorithms(&[Tdes, Aes256, P256, Rsa2048]);
 
         application_property_template
             .encode_to_heapless_vec(*reply)
@@ -1121,7 +1119,6 @@ pub trait Client:
     + FilesystemClient
     + AuthClient
     + ChunkedClient
-    + Ed255
     + Tdes
     + WrapKeyToFileClient
     + HpkeClient
@@ -1132,7 +1129,6 @@ impl<
             + FilesystemClient
             + AuthClient
             + ChunkedClient
-            + Ed255
             + Tdes
             + WrapKeyToFileClient
             + HpkeClient,

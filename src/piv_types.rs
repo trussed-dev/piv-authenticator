@@ -108,7 +108,7 @@ enum_u8! {
     // references Opacity ZKM.
     pub enum Algorithms {
         Tdes = 0x3,
-        Rsa1024 = 0x6,
+        // Rsa1024 = 0x6,
         Rsa2048 = 0x7,
         Aes128 = 0x8,
         Aes192 = 0xA,
@@ -121,20 +121,20 @@ enum_u8! {
         // Ed255_prev = 0x22,
 
         // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
-        P521 = 0x15,
+        // P521 = 0x15,
         // non-standard!
         Rsa4096 = 0x16,
-        Ed25519 = 0xE2,
-        X25519 = 0xE3,
-        Ed448 = 0xE4,
-        X448 = 0xE5,
+        // Ed25519 = 0xE2,
+        // X25519 = 0xE3,
+        // Ed448 = 0xE4,
+        // X448 = 0xE5,
 
         // non-standard! picked by Alex, but maybe due for removal
-        P256Sha1 = 0xF0,
-        P256Sha256 = 0xF1,
-        P384Sha1 = 0xF2,
-        P384Sha256 = 0xF3,
-        P384Sha384 = 0xF4,
+        // P256Sha1 = 0xF0,
+        // P256Sha256 = 0xF1,
+        // P384Sha1 = 0xF2,
+        // P384Sha256 = 0xF3,
+        // P384Sha384 = 0xF4,
     }
 }
 

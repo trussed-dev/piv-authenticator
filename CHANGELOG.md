@@ -2,7 +2,7 @@
 
 ## [v0.5.0][] (2025-02-26)
 
-[v0.5.0]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.4.0
+[v0.5.0]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.5.0
 
 - Add support for RSA 3072, 4096 and nist P-384
 

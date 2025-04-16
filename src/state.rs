@@ -559,11 +559,48 @@ impl Persistent {
             .unwrap_or(0)
     }
 
-    pub fn verify_puk<T: crate::Client>(&mut self, value: &Puk, client: &mut T) -> bool {
+    pub fn reset_retry_counter<T: crate::Client>(
+        &mut self,
+        puk: &Puk,
+        new_pin: &Pin,
+        client: &mut T,
+    ) -> Result<bool, Status> {
+        let Some(puk_key) = self.get_puk_key(puk, client)? else {
+            return Ok(false);
+        };
+
+        let Some(pin_key) = syscall!(client.unwrap_key_from_file(
+            Mechanism::Chacha8Poly1305,
+            puk_key,
+            PathBuf::from(PUK_USER_KEY_BACKUP),
+            self.storage,
+            Location::Volatile,
+            PUK_USER_KEY_BACKUP.as_str().as_bytes()
+        ))
+        .key
+        else {
+            error!("Failed to unwrap pin backup");
+            return Err(Status::UnspecifiedNonpersistentExecutionError);
+        };
+
+        self.reset_pin(*new_pin, pin_key, client)?;
+        syscall!(client.delete(pin_key));
+        syscall!(client.delete(puk_key));
+        Ok(true)
+    }
+
+    pub fn get_puk_key<T: crate::Client>(
+        &mut self,
+        value: &Puk,
+        client: &mut T,
+    ) -> Result<Option<KeyId>, Status> {
         let puk = Bytes::from_slice(&value.0).expect("Convertion of static array");
-        try_syscall!(client.check_pin(PinType::Puk, puk))
-            .map(|r| r.success)
-            .unwrap_or(false)
+        try_syscall!(client.get_pin_key(PinType::Puk, puk))
+            .map(|r| r.result)
+            .map_err(|_err| {
+                error!("Failed to get puk key: {_err:?}");
+                Status::UnspecifiedNonpersistentExecutionError
+            })
     }
 
     pub fn change_pin<T: crate::Client>(
@@ -592,17 +629,18 @@ impl Persistent {
             .unwrap_or(false)
     }
 
-    pub fn set_pin<T: crate::Client>(
+    fn reset_pin<T: crate::Client>(
         &mut self,
         new_pin: Pin,
+        old_key: KeyId,
         client: &mut T,
     ) -> Result<(), Status> {
         let new_pin = Bytes::from_slice(&new_pin.0).expect("Convertion of static array");
-        try_syscall!(client.set_pin(
+        try_syscall!(client.set_pin_with_key(
             PinType::UserPin,
             new_pin,
             Some(Self::PIN_RETRIES_DEFAULT),
-            true
+            old_key,
         ))
         .map_err(|_err| {
             error!("Failed to set pin");
@@ -623,13 +661,6 @@ impl Persistent {
                 Status::UnspecifiedPersistentExecutionError
             })
             .map(drop)
-    }
-    pub fn reset_pin<T: crate::Client>(
-        &mut self,
-        new_pin: Pin,
-        client: &mut T,
-    ) -> Result<(), Status> {
-        self.set_pin(new_pin, client)
     }
     pub fn reset_puk<T: crate::Client>(
         &mut self,

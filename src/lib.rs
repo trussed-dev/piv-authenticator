@@ -1025,17 +1025,16 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
     }
 
     fn reset_retry_counter(&mut self, data: ResetRetryCounter) -> Result {
-        if !self
-            .state
-            .persistent
-            .verify_puk(&Puk(data.puk), self.trussed)
-        {
-            return Err(Status::VerificationFailed);
+        let res = self.state.persistent.reset_retry_counter(
+            &Puk(data.puk),
+            &Pin(data.pin),
+            self.trussed,
+        )?;
+        if !res {
+            return Err(Status::RemainingRetries(
+                self.state.persistent.remaining_puk_retries(self.trussed),
+            ));
         }
-        self.state
-            .persistent
-            .reset_pin(Pin(data.pin), self.trussed)?;
-
         Ok(())
     }
 

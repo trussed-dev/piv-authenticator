@@ -335,6 +335,12 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    ResetRetryCounter {
+        #[serde(default)]
+        expected_status: Status,
+        puk: String,
+        new_pin: String,
+    },
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
@@ -420,6 +426,11 @@ impl IoCmd {
             } => Self::run_sign(*algo, *key_reference, data, output, *expected_status, card),
             Self::Select => Self::run_select(card),
             Self::Reset { expected_status } => Self::run_reset(*expected_status, card),
+            Self::ResetRetryCounter {
+                expected_status,
+                puk,
+                new_pin,
+            } => Self::run_reset_retry_counter(*expected_status, puk, new_pin, card),
         }
     }
 
@@ -739,6 +750,21 @@ impl IoCmd {
     }
     fn run_reset(expected_status: Status, card: &mut setup::Piv) {
         Self::run_bytes(&hex!("00 FB 00 00"), &MATCH_EMPTY, expected_status, card);
+    }
+
+    fn run_reset_retry_counter(
+        expected_status: Status,
+        puk: &str,
+        new_pin: &str,
+        card: &mut setup::Piv,
+    ) {
+        let data = parse_hex(&format!("{puk}{new_pin}"));
+        Self::run_bytes(
+            &build_command(0, 0x2C, 0x00, 0x80, &data, 0x00),
+            &MATCH_EMPTY,
+            expected_status,
+            card,
+        );
     }
 
     fn run_change_pin(old: &str, new: &str, status: Status, card: &mut setup::Piv) {

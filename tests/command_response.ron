@@ -387,6 +387,10 @@
                 new: "0102030405060708",
             ),
             VerifyApplicationPin(pin: "313233343536FFFF", expected_status: RemainingRetries(2)),
+            ResetRetryCounter(puk: "FFFFFFFFFFFFFFFF", new_pin: "3132333435363738", expected_status: RemainingRetries(2)),
+            VerifyApplicationPin(pin: "3132333435363738", expected_status: RemainingRetries(1)),
+            ResetRetryCounter(puk: "0102030405060708", new_pin: "3132333435363738"),
+            VerifyApplicationPin(pin: "3132333435363738"),
             ChangePuk(
                 old: "0102030405060708",
                 new: "AABBCCDDEEFF0011",

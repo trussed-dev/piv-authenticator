@@ -1039,14 +1039,9 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
     }
 
     fn get_key_history_object<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
-        let num_keys = AsymmetricKeyReference::all()
-            .iter()
-            .filter(|k| self.state.key_exists(self.trussed, self.options, **k))
-            .count() as u8;
-        let mut num_certs = 0u8;
-
         use state::ContainerStorage;
 
+        let mut num_certs = 0;
         for c in RETIRED_CERTS {
             if ContainerStorage(c).exists(self.trussed, self.options.storage)? {
                 num_certs += 1;
@@ -1056,7 +1051,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         reply.expand(&[0xC1, 0x01])?;
         reply.expand(&[num_certs])?;
         reply.expand(&[0xC2, 0x01])?;
-        reply.expand(&[num_keys.saturating_sub(num_certs)])?;
+        reply.expand(&[0])?;
         reply.expand(&[0xFE, 0x00])?;
         Ok(())
     }

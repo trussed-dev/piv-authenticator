@@ -74,7 +74,7 @@ fn list() {
         p.expect(format!("device: {CARD}")).unwrap();
         p.expect("chuid: ok").unwrap();
         p.expect(Regex("guid: [0-9A-Z]*")).unwrap();
-        p.expect("algos: 3DES AES256 ECCP256 (null) (null)")
+        p.expect("algos: 3DES AES256 ECCP256 RSA2048 (null) (null) ECCP384")
             .unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(

@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.5.1][] (2025-05-12)
+
+[v0.5.1]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.5.1
+
+- Fix PUK validation
+- Fix key history object
+
 ## [v0.5.0][] (2025-02-26)
 
 [v0.5.0]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.5.0

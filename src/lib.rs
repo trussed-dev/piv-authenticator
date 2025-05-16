@@ -319,10 +319,8 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
     // maybe reserve this for the case VerifyLogin::PivPin?
     pub fn login(&mut self, login: commands::VerifyLogin) -> Result {
         if let commands::VerifyLogin::PivPin(pin) = login {
-            self.state
-                .volatile
-                .verify_pin(&pin, self.trussed, self.options);
-            if self.state.volatile.pin_verified() {
+            let pin_verified = self.state.volatile.verify_pin(&pin, self.trussed);
+            if pin_verified.is_verified() {
                 Ok(())
             } else {
                 // should we logout here?
@@ -379,9 +377,11 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         {
             return Err(Status::VerificationFailed);
         }
-        self.state
+        assert!(self
+            .state
             .volatile
-            .verify_pin(&new_pin, self.trussed, self.options);
+            .verify_pin(&new_pin, self.trussed)
+            .is_verified());
         Ok(())
     }
 

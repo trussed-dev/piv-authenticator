@@ -41,7 +41,7 @@ fn take_tag(data: &[u8]) -> Option<(u16, &[u8])> {
 
         if (b2 & 0b10000000) != 0 {
             // OpenPGP doesn't have any DO with a tag longer than 2 bytes
-            warn!("Got a tag larger than 2 bytes: {data:x?}");
+            warn!("Got a tag larger than 2 bytes: {data:02x?}");
             return None;
         }
         Some((u16::from_be_bytes([b1, b2]), &data[2..]))

@@ -6,6 +6,7 @@ use heapless::Vec;
 use heapless_bytes::Bytes;
 use iso7816::Status;
 use littlefs2_core::{path, Path, PathBuf};
+use trussed_auth::reply::GetPinKey;
 use trussed_chunked::utils;
 use trussed_core::{
     api::reply::Metadata,
@@ -349,7 +350,8 @@ impl LoadedState<'_> {
         let security_condition = key.use_security_condition();
         match security_condition {
             SecurityCondition::PinAlways if just_verified => {}
-            SecurityCondition::Pin if self.volatile.app_security_status.pin_verified.is_some() => {}
+            SecurityCondition::Pin
+                if self.volatile.app_security_status.pin_verified.is_verified() => {}
             SecurityCondition::Always => {}
             _ => return Err(Status::SecurityStatusNotSatisfied),
         };
@@ -368,7 +370,12 @@ impl LoadedState<'_> {
             KeyOrEncryptedWithAlg::Encrypted(Some(alg)) => alg,
         };
 
-        let pin_key = self.volatile.app_security_status.pin_verified.unwrap();
+        let pin_key = self
+            .volatile
+            .app_security_status
+            .pin_verified
+            .get_user_key(options.storage, client)?
+            .unwrap();
 
         let unsealed_key = try_syscall!(client.hpke_open_key_from_file(
             pin_key,
@@ -446,49 +453,48 @@ pub enum ReadValid {
 }
 
 impl Volatile {
-    pub fn verify_pin<T: crate::Client>(
-        &mut self,
+    #[must_use]
+    pub fn verify_pin<'this, T: crate::Client>(
+        &'this mut self,
         value: &Pin,
         client: &mut T,
-        options: &crate::Options,
-    ) -> Option<KeyId> {
+    ) -> &'this mut PinVerified {
         self.clear_pin_verified(client);
         let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
-        let pin_key = try_syscall!(client.get_pin_key(PinType::UserPin, pin))
-            .ok()?
-            .result?;
-        let key = syscall!(client.unwrap_key_from_file(
-            Mechanism::Chacha8Poly1305,
-            pin_key,
-            PathBuf::from(USER_PRIVATE_KEY),
-            options.storage,
-            Location::Volatile,
-            USER_PRIVATE_KEY.as_str().as_bytes()
-        ))
-        .key
-        .expect("Failed to unwrap private key");
-        syscall!(client.delete(pin_key));
-        self.app_security_status.pin_verified = Some(key);
+        let syscall_res = try_syscall!(client.get_pin_key(PinType::UserPin, pin));
+        let pin_key = match syscall_res {
+            Err(_err) => {
+                error!("Failed to get pin key: {_err:?}");
+
+                return &mut self.app_security_status.pin_verified;
+            }
+            Ok(GetPinKey {
+                result: Some(pin_key),
+            }) => pin_key,
+            Ok(_) => {
+                warn!("Invalid user pin");
+                return &mut self.app_security_status.pin_verified;
+            }
+        };
+
+        self.app_security_status.pin_verified = PinVerified::PinKeyAvailable(pin_key);
         self.app_security_status.pin_just_verified = true;
-        Some(key)
+        &mut self.app_security_status.pin_verified
     }
 
     pub fn pin_verified(&self) -> bool {
-        self.app_security_status.pin_verified.is_some()
+        self.app_security_status.pin_verified.is_verified()
     }
 
     pub fn clear_pin_verified(&mut self, client: &mut impl crate::Client) {
-        if let Some(key) = self.app_security_status.pin_verified {
-            syscall!(client.clear(key));
-        }
-        self.app_security_status.pin_verified = None;
+        self.app_security_status.pin_verified.clear(client);
         self.app_security_status.pin_just_verified = false;
     }
 
     pub fn security_valid(&self, condition: SecurityCondition, just_verified: bool) -> bool {
         use SecurityCondition::*;
         match condition {
-            Pin => self.app_security_status.pin_verified.is_some(),
+            Pin => self.app_security_status.pin_verified.is_verified(),
             PinAlways => just_verified,
             Always => true,
         }
@@ -502,16 +508,20 @@ impl Volatile {
     ) -> Result<ReadValid, Status> {
         let pin_key = match (
             container.contact_access_rule(),
-            self.app_security_status.pin_verified,
+            self.app_security_status.pin_verified.is_verified(),
         ) {
-            (ReadAccessRule::Pin | ReadAccessRule::PinOrOcc, None) => {
+            (ReadAccessRule::Pin | ReadAccessRule::PinOrOcc, false) => {
                 warn!("Unauthorized attempt to access: {:?}", container);
                 return Err(Status::SecurityStatusNotSatisfied);
             }
             (ReadAccessRule::Always, _) => {
                 return Ok(ReadValid::Plain);
             }
-            (ReadAccessRule::Pin | ReadAccessRule::PinOrOcc, Some(key)) => key,
+            (ReadAccessRule::Pin | ReadAccessRule::PinOrOcc, true) => self
+                .app_security_status
+                .pin_verified
+                .get_user_key(options.storage, client)?
+                .expect("pin is verified"),
         };
         // Here we have the pin key, and we are in the complex case
 
@@ -548,9 +558,63 @@ impl Volatile {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum PinVerified {
+    #[default]
+    Unverified,
+    // The Key that is obtained from trussed-auth is available
+    PinKeyAvailable(KeyId),
+    // The Private user Key that was decrypted using the PIN key is available
+    UserKeyAvailable(KeyId),
+}
+
+impl PinVerified {
+    fn clear(&mut self, trussed: &mut impl crate::Client) {
+        match mem::take(self) {
+            Self::Unverified => {}
+            Self::PinKeyAvailable(key) => {
+                syscall!(trussed.delete(key));
+            }
+            Self::UserKeyAvailable(key) => {
+                syscall!(trussed.clear(key));
+            }
+        }
+    }
+
+    fn get_user_key(
+        &mut self,
+        storage: Location,
+        client: &mut impl crate::Client,
+    ) -> Result<Option<KeyId>, Status> {
+        match self {
+            Self::Unverified => Ok(None),
+            Self::PinKeyAvailable(pin_key) => {
+                let pin_key = *pin_key;
+                let key = syscall!(client.unwrap_key_from_file(
+                    Mechanism::Chacha8Poly1305,
+                    pin_key,
+                    PathBuf::from(USER_PRIVATE_KEY),
+                    storage,
+                    Location::Volatile,
+                    USER_PRIVATE_KEY.as_str().as_bytes()
+                ))
+                .key
+                .expect("Failed to unwrap private key");
+                *self = Self::UserKeyAvailable(key);
+                syscall!(client.delete(pin_key));
+                Ok(Some(key))
+            }
+            Self::UserKeyAvailable(key) => Ok(Some(*key)),
+        }
+    }
+
+    pub fn is_verified(&self) -> bool {
+        matches!(self, Self::PinKeyAvailable(_) | Self::UserKeyAvailable(_))
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AppSecurityStatus {
-    /// Contains the decrypted asymetric key
-    pin_verified: Option<KeyId>,
+    pin_verified: PinVerified,
     pub pin_just_verified: bool,
     pub administrator_verified: bool,
 }

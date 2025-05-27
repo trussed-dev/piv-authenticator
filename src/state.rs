@@ -317,7 +317,29 @@ impl LoadedState<'_> {
             .is_some()
     }
 
-    pub fn use_valid_key(
+    pub fn with_valid_key<C: crate::Client>(
+        &mut self,
+        key: AsymmetricKeyReference,
+        client: &mut C,
+        options: &crate::Options,
+        just_verified: bool,
+        f: impl FnOnce(Result<Option<&mut UseValidKey>, Status>, &mut C) -> crate::Result,
+    ) -> crate::Result {
+        let mut owned_valid_key = self.use_valid_key(key, client, options, just_verified);
+        let valid_key = match owned_valid_key {
+            Ok(Some(ref mut k)) => Ok(Some(k)),
+            Ok(None) => Ok(None),
+            Err(err) => Err(err),
+        };
+
+        let res = f(valid_key, client);
+        if let Ok(Some(k)) = owned_valid_key {
+            k.clear(client);
+        }
+        res
+    }
+
+    fn use_valid_key(
         &mut self,
         key: AsymmetricKeyReference,
         client: &mut impl crate::Client,

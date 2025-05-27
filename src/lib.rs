@@ -718,40 +718,40 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             return Err(Status::IncorrectP1OrP2Parameter);
         };
 
-        let Some(key) =
-            self.state
-                .use_valid_key(key_ref, self.trussed, self.options, just_verified)?
-        else {
-            return Err(Status::ConditionsOfUseNotSatisfied);
-        };
+        self.state.with_valid_key(
+            key_ref,
+            self.trussed,
+            self.options,
+            just_verified,
+            |key, trussed| {
+                let Some(key) = key? else {
+                    return Err(Status::ConditionsOfUseNotSatisfied);
+                };
+                if key.alg.sign_len() != message.len() {
+                    return Err(Status::IncorrectDataParameter);
+                }
+                let response = syscall!(trussed.sign(
+                    key.alg.sign_mechanism(),
+                    key.key,
+                    message,
+                    key.alg.sign_serialization(),
+                ))
+                .signature;
 
-        if key.alg.sign_len() != message.len() {
-            key.clear(self.trussed);
-            return Err(Status::IncorrectDataParameter);
-        }
+                reply.expand(&[0x7C])?;
+                let offset = reply.len();
+                {
+                    reply.expand(&[0x82])?;
+                    reply.append_len(response.len())?;
+                    reply.expand(&response)?;
+                }
+                debug!("Signed data len: {}, Data:", response.len());
+                // error!("{}", delog::hexstr!(&response));
 
-        let response = syscall!(self.trussed.sign(
-            key.alg.sign_mechanism(),
-            key.key,
-            message,
-            key.alg.sign_serialization(),
-        ))
-        .signature;
-
-        key.clear(self.trussed);
-
-        reply.expand(&[0x7C])?;
-        let offset = reply.len();
-        {
-            reply.expand(&[0x82])?;
-            reply.append_len(response.len())?;
-            reply.expand(&response)?;
-        }
-        debug!("Signed data len: {}, Data:", response.len());
-        // error!("{}", delog::hexstr!(&response));
-
-        reply.prepend_len(offset)?;
-        Ok(())
+                reply.prepend_len(offset)?;
+                Ok(())
+            },
+        )
     }
 
     fn key_agreement<const R: usize>(
@@ -769,73 +769,74 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             );
             Status::IncorrectP1OrP2Parameter
         })?;
-        let Some(key) =
-            self.state
-                .use_valid_key(key_reference, self.trussed, self.options, just_verified)?
-        else {
-            return Err(Status::ConditionsOfUseNotSatisfied);
-        };
 
-        if key.alg != auth.algorithm {
-            key.clear(self.trussed);
-            warn!("Attempt to exponentiate with incorrect algorithm");
-            return Err(Status::IncorrectP1OrP2Parameter);
-        }
+        self.state.with_valid_key(
+            key_reference,
+            self.trussed,
+            self.options,
+            just_verified,
+            |key, trussed| {
+                let Some(key) = key? else {
+                    return Err(Status::ConditionsOfUseNotSatisfied);
+                };
 
-        let Some(mechanism) = key.alg.ecdh_mechanism() else {
-            key.clear(self.trussed);
-            warn!("Attempt to exponentiate with non ECDH algorithm");
-            return Err(Status::ConditionsOfUseNotSatisfied);
-        };
+                if key.alg != auth.algorithm {
+                    warn!("Attempt to exponentiate with incorrect algorithm");
+                    return Err(Status::IncorrectP1OrP2Parameter);
+                }
 
-        if data.first() != Some(&0x04) {
-            key.clear(self.trussed);
-            warn!("Bad data format for ECDH");
-            return Err(Status::IncorrectDataParameter);
-        }
+                let Some(mechanism) = key.alg.ecdh_mechanism() else {
+                    warn!("Attempt to exponentiate with non ECDH algorithm");
+                    return Err(Status::ConditionsOfUseNotSatisfied);
+                };
 
-        let public_key = match try_syscall!(self.trussed.deserialize_key(
-            mechanism,
-            &data[1..],
-            KeySerialization::Raw,
-            StorageAttributes::default().set_persistence(Location::Volatile)
-        )) {
-            Ok(key) => key.key,
-            Err(_err) => {
-                key.clear(self.trussed);
-                warn!("Failed to load public key: {:?}", _err);
-                return Err(Status::IncorrectDataParameter);
-            }
-        };
-        let shared_secret = syscall!(self.trussed.agree(
-            mechanism,
-            key.key,
-            public_key,
-            StorageAttributes::default()
-                .set_persistence(Location::Volatile)
-                .set_serializable(true)
-        ))
-        .shared_secret;
+                if data.first() != Some(&0x04) {
+                    warn!("Bad data forat for ECDH");
+                    return Err(Status::IncorrectDataParameter);
+                }
 
-        let serialized_secret = syscall!(self.trussed.serialize_key(
-            Mechanism::SharedSecret,
-            shared_secret,
-            KeySerialization::Raw
-        ))
-        .serialized_key;
-        syscall!(self.trussed.delete(public_key));
-        syscall!(self.trussed.delete(shared_secret));
-        key.clear(self.trussed);
+                let public_key = match try_syscall!(trussed.deserialize_key(
+                    mechanism,
+                    &data[1..],
+                    KeySerialization::Raw,
+                    StorageAttributes::default().set_persistence(Location::Volatile)
+                )) {
+                    Ok(key) => key.key,
+                    Err(_err) => {
+                        warn!("Failed to load public key: {:?}", _err);
+                        return Err(Status::IncorrectDataParameter);
+                    }
+                };
+                let shared_secret = syscall!(trussed.agree(
+                    mechanism,
+                    key.key,
+                    public_key,
+                    StorageAttributes::default()
+                        .set_persistence(Location::Volatile)
+                        .set_serializable(true)
+                ))
+                .shared_secret;
 
-        reply.expand(&[0x7C])?;
-        let offset = reply.len();
-        {
-            reply.expand(&[0x82])?;
-            reply.append_len(serialized_secret.len())?;
-            reply.expand(&serialized_secret)?;
-        }
-        reply.prepend_len(offset)?;
-        Ok(())
+                let serialized_secret = syscall!(trussed.serialize_key(
+                    Mechanism::SharedSecret,
+                    shared_secret,
+                    KeySerialization::Raw
+                ))
+                .serialized_key;
+                syscall!(trussed.delete(public_key));
+                syscall!(trussed.delete(shared_secret));
+
+                reply.expand(&[0x7C])?;
+                let offset = reply.len();
+                {
+                    reply.expand(&[0x82])?;
+                    reply.append_len(serialized_secret.len())?;
+                    reply.expand(&serialized_secret)?;
+                }
+                reply.prepend_len(offset)?;
+                Ok(())
+            },
+        )
     }
 
     pub fn generate_asymmetric_keypair<const R: usize>(

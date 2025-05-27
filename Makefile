@@ -36,7 +36,7 @@ tarpaulin:
 
 .PHONY: vpicc-example
 vpicc-example:
-	cargo run --example vpicc --features vpicc
+	cargo run --example vpicc --features vpicc,rsa
 	
 .PHONY: ci
 ci: lint tarpaulin

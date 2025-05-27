@@ -74,7 +74,7 @@ fn list() {
         p.expect(format!("device: {CARD}")).unwrap();
         p.expect("chuid: ok").unwrap();
         p.expect(Regex("guid: [0-9A-Z]*")).unwrap();
-        p.expect("algos: 3DES AES256 ECCP256 RSA2048 (null) (null) ECCP384")
+        p.expect("algos: 3DES AES256 ECCP256 RSA2048 RSA3072 RSA4096 ECCP384")
             .unwrap();
         p.expect(Eof).unwrap();
         assert_eq!(
@@ -253,7 +253,7 @@ fn ecdh_9d() {
 }
 #[test_log::test]
 fn ecdh_9e() {
-    ecdh_inner("9E", false);
+    ecdh_inner("9E", true);
 }
 
 fn sign_inner(key: &str, requires_pin: bool) {
@@ -367,7 +367,7 @@ fn sign_9d() {
 }
 #[test_log::test]
 fn sign_9e() {
-    sign_inner("9E", false);
+    sign_inner("9E", true);
 }
 
 const LARGE_CERT: &str = "-----BEGIN CERTIFICATE-----

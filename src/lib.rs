@@ -726,6 +726,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         };
 
         if key.alg.sign_len() != message.len() {
+            key.clear(self.trussed);
             return Err(Status::IncorrectDataParameter);
         }
 
@@ -776,31 +777,36 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         };
 
         if key.alg != auth.algorithm {
+            key.clear(self.trussed);
             warn!("Attempt to exponentiate with incorrect algorithm");
             return Err(Status::IncorrectP1OrP2Parameter);
         }
 
         let Some(mechanism) = key.alg.ecdh_mechanism() else {
+            key.clear(self.trussed);
             warn!("Attempt to exponentiate with non ECDH algorithm");
             return Err(Status::ConditionsOfUseNotSatisfied);
         };
 
         if data.first() != Some(&0x04) {
+            key.clear(self.trussed);
             warn!("Bad data format for ECDH");
             return Err(Status::IncorrectDataParameter);
         }
 
-        let public_key = try_syscall!(self.trussed.deserialize_key(
+        let public_key = match try_syscall!(self.trussed.deserialize_key(
             mechanism,
             &data[1..],
             KeySerialization::Raw,
             StorageAttributes::default().set_persistence(Location::Volatile)
-        ))
-        .map_err(|_err| {
-            warn!("Failed to load public key: {:?}", _err);
-            Status::IncorrectDataParameter
-        })?
-        .key;
+        )) {
+            Ok(key) => key.key,
+            Err(_err) => {
+                key.clear(self.trussed);
+                warn!("Failed to load public key: {:?}", _err);
+                return Err(Status::IncorrectDataParameter);
+            }
+        };
         let shared_secret = syscall!(self.trussed.agree(
             mechanism,
             key.key,

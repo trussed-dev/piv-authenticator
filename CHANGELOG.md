@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased][]
+
+### Changed
+
+- Fix missing clear calls on `UseValidKey` ([#30][])
+- Improve PIN validation speed ([#28][])
+
+[#30]: https://github.com/trussed-dev/piv-authenticator/pull/30
+[#28]: https://github.com/trussed-dev/piv-authenticator/pull/28
+[Unreleased]: https://github.com/trussed-dev/trussed-staging/compare/v0.5.1...HEAD
+
 ## [v0.5.1][] (2025-05-12)
 
 [v0.5.1]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.5.1

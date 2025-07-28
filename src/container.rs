@@ -1,7 +1,5 @@
 use core::convert::TryFrom;
 
-use hex_literal::hex;
-
 use littlefs2_core::{path, Path};
 
 macro_rules! enum_subset {
@@ -450,47 +448,60 @@ impl Container {
 impl TryFrom<&[u8]> for Container {
     type Error = ();
     fn try_from(tag: &[u8]) -> Result<Self, ()> {
+        macro_rules! hex_match{
+            ($matching:expr => { $($hex:literal => $value:expr,)* _ => $default:expr, } ) => {
+                $(
+                    if $matching == hex_literal::hex!($hex) {
+                        $value
+                    } else
+                )*
+                {
+                    $default
+                }
+            }
+        }
+
         use Container::*;
-        Ok(match tag {
-            hex!("5FC107") => CardCapabilityContainer,
-            hex!("5FC102") => CardHolderUniqueIdentifier,
-            hex!("5FC105") => X509CertificateFor9A,
-            hex!("5FC103") => CardholderFingerprints,
-            hex!("5FC106") => SecurityObject,
-            hex!("5FC108") => CardholderFacialImage,
-            hex!("5FC101") => X509CertificateFor9E,
-            hex!("5FC109") => PrintedInformation,
-            hex!("5FC10A") => X509CertificateFor9C,
-            hex!("5FC10B") => X509CertificateFor9D,
-            hex!("5FC10C") => KeyHistoryObject,
-            hex!("5FC10D") => RetiredCert01,
-            hex!("5FC10E") => RetiredCert02,
-            hex!("5FC10F") => RetiredCert03,
-            hex!("5FC110") => RetiredCert04,
-            hex!("5FC111") => RetiredCert05,
-            hex!("5FC112") => RetiredCert06,
-            hex!("5FC113") => RetiredCert07,
-            hex!("5FC114") => RetiredCert08,
-            hex!("5FC115") => RetiredCert09,
-            hex!("5FC116") => RetiredCert10,
-            hex!("5FC117") => RetiredCert11,
-            hex!("5FC118") => RetiredCert12,
-            hex!("5FC119") => RetiredCert13,
-            hex!("5FC11A") => RetiredCert14,
-            hex!("5FC11B") => RetiredCert15,
-            hex!("5FC11C") => RetiredCert16,
-            hex!("5FC11D") => RetiredCert17,
-            hex!("5FC11E") => RetiredCert18,
-            hex!("5FC11F") => RetiredCert19,
-            hex!("5FC120") => RetiredCert20,
+        Ok(hex_match! (tag => {
+            "5FC107" => CardCapabilityContainer,
+            "5FC102" => CardHolderUniqueIdentifier,
+            "5FC105" => X509CertificateFor9A,
+            "5FC103" => CardholderFingerprints,
+            "5FC106" => SecurityObject,
+            "5FC108" => CardholderFacialImage,
+            "5FC101" => X509CertificateFor9E,
+            "5FC109" => PrintedInformation,
+            "5FC10A" => X509CertificateFor9C,
+            "5FC10B" => X509CertificateFor9D,
+            "5FC10C" => KeyHistoryObject,
+            "5FC10D" => RetiredCert01,
+            "5FC10E" => RetiredCert02,
+            "5FC10F" => RetiredCert03,
+            "5FC110" => RetiredCert04,
+            "5FC111" => RetiredCert05,
+            "5FC112" => RetiredCert06,
+            "5FC113" => RetiredCert07,
+            "5FC114" => RetiredCert08,
+            "5FC115" => RetiredCert09,
+            "5FC116" => RetiredCert10,
+            "5FC117" => RetiredCert11,
+            "5FC118" => RetiredCert12,
+            "5FC119" => RetiredCert13,
+            "5FC11A" => RetiredCert14,
+            "5FC11B" => RetiredCert15,
+            "5FC11C" => RetiredCert16,
+            "5FC11D" => RetiredCert17,
+            "5FC11E" => RetiredCert18,
+            "5FC11F" => RetiredCert19,
+            "5FC120" => RetiredCert20,
 
-            hex!("5FC121") => CardholderIrisImages,
-            hex!("5FC122") => SecureMessagingCertificateSigner,
-            hex!("5FC123") => PairingCodeReferenceDataContainer,
+            "5FC121" => CardholderIrisImages,
+            "5FC122" => SecureMessagingCertificateSigner,
+            "5FC123" => PairingCodeReferenceDataContainer,
 
-            hex!("7E") => DiscoveryObject,
-            hex!("7F61") => BiometricInformationTemplatesGroupTemplate,
+            "7E" => DiscoveryObject,
+            "7F61" => BiometricInformationTemplatesGroupTemplate,
             _ => return Err(()),
-        })
+        }))
     }
 }

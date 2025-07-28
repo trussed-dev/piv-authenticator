@@ -31,7 +31,7 @@ impl VpiccCard {
     }
 
     fn handle(&mut self, request: &[u8]) -> (&[u8], Status) {
-        log::debug!("{:02x?} request", request);
+        log::debug!("{request:02x?} request");
         parse_command(request)
             .and_then(|command| self.request_buffer.handle(command))
             .map(|command| {

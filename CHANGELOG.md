@@ -4,7 +4,7 @@
 
 [Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.5.2...HEAD
 
--
+- Update `trussed-rsa-alloc` dependency to v0.3.
 
 ## [v0.5.2][] (2025-07-31)
 

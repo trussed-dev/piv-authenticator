@@ -2,6 +2,14 @@
 
 ## [Unreleased][]
 
+[Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.5.2...HEAD
+
+-
+
+## [v0.5.2][] (2025-07-31)
+
+[v0.5.2]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.5.2
+
 ### Changed
 
 - Fix missing clear calls on `UseValidKey` ([#30][])
@@ -9,7 +17,6 @@
 
 [#30]: https://github.com/trussed-dev/piv-authenticator/pull/30
 [#28]: https://github.com/trussed-dev/piv-authenticator/pull/28
-[Unreleased]: https://github.com/trussed-dev/trussed-staging/compare/v0.5.1...HEAD
 
 ## [v0.5.1][] (2025-05-12)
 

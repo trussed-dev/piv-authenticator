@@ -30,7 +30,7 @@ heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
 # TODO: only enable rsa features when needed
 trussed-core = { version = "0.1.0-rc.1", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa3072", "rsa4096", "shared-secret", "tdes", "x255"] }
-trussed-rsa-alloc = { version = "0.2.1", features = ["raw"], optional = true }
+trussed-rsa-alloc = { version = "0.3", features = ["raw"], optional = true }
 trussed-chunked = "0.2.0"
 trussed-hpke = "0.2.0"
 trussed-wrap-key-to-file = "0.2.0"
@@ -83,7 +83,7 @@ dangerous-test-real-card = []
 
 [patch.crates-io]
 trussed = { git = "https://github.com/trussed-dev/trussed", rev = "6bba8fde36d05c0227769eb63345744e87d84b2b" }
-trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", rev = "743d9aaa3d8a17d7dbf492bd54dc18ab8fca3dc0" }
+trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.3.0" }
 trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", rev = "1e1ca03a3a62ea9b802f4070ea4bce002eeb4bec" }
 trussed-auth-backend = { git = "https://github.com/trussed-dev/trussed-auth", tag = "v0.4.0" }
 

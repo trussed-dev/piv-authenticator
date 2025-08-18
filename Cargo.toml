@@ -30,6 +30,7 @@ heapless-bytes = "0.3.0"
 subtle = { version = "2", default-features = false }
 # TODO: only enable rsa features when needed
 trussed-core = { version = "0.1.0-rc.1", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa3072", "rsa4096", "shared-secret", "tdes", "x255"] }
+trussed-rsa-types = { version = "0.1", optional = true }
 trussed-rsa-alloc = { version = "0.3", features = ["raw"], optional = true }
 trussed-chunked = "0.2.0"
 trussed-hpke = "0.2.0"
@@ -64,11 +65,11 @@ apdu-dispatch = ["dep:apdu-app"]
 strict-pin = []
 std = []
 vpicc = ["std", "dep:vpicc", "virt", "dep:trussed-auth-backend"]
-virt = ["std", "trussed/virt", "dep:trussed-staging", "dep:trussed-auth-backend"]
+virt = ["std", "trussed/virt", "dep:trussed-staging", "dep:trussed-auth-backend", "dep:trussed-rsa-alloc"]
 pivy-tests = []
 opensc-tests = []
 alloc = []
-rsa = ["trussed-rsa-alloc", "alloc"]
+rsa = ["dep:trussed-rsa-types", "alloc"]
 delog  = ["dep:delog"]
 
 log-all = []

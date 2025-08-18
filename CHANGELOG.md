@@ -4,7 +4,8 @@
 
 [Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.5.3...HEAD
 
--
+- Replace `trussed-rsa-alloc` dependency with `trussed-rsa-types` for most use cases.
+  (Only the `virt` feature still requires `trussed-rsa-alloc`.)
 
 ## [v0.5.3][] (2025-07-31)
 

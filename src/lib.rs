@@ -935,7 +935,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             AsymmetricAlgorithms::Rsa2048
             | AsymmetricAlgorithms::Rsa3072
             | AsymmetricAlgorithms::Rsa4096 => {
-                use trussed_rsa_alloc::RsaPublicParts;
+                use trussed_rsa_types::RsaPublicParts;
                 reply.expand(&[0x7F, 0x49])?;
                 let offset = reply.len();
                 let tmp = syscall!(self.trussed.serialize_key(
@@ -1088,7 +1088,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 | AsymmetricAlgorithms::Rsa4096,
                 AsymmetricKeyReference::PivAuthentication,
             ) => {
-                use trussed_rsa_alloc::RsaImportFormat;
+                use trussed_rsa_types::RsaImportFormat;
                 let p = tlv::get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
                 let q = tlv::get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
                 let e = tlv::get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;

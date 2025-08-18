@@ -28,7 +28,7 @@ lint:
 	cargo fmt --check
 	cargo check --all-features --all-targets
 	cargo clippy --all-targets --all-features -- -Dwarnings
-	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features
+	RUSTDOCFLAGS='-Dwarnings' cargo doc --all-features --no-deps
 	
 .PHONY: tarpaulin
 tarpaulin:

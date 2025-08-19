@@ -43,29 +43,26 @@ pub const YUBICO_DEFAULT_MANAGEMENT_KEY_ALG: AdministrationAlgorithm =
     AdministrationAlgorithm::Tdes;
 
 pub const DISCOVERY_OBJECT: [u8; 18] = hex!(
-    "
-    4f 0b // PIV AID
-       a000000308000010000100
-    5f2f 02 // PIN usage Policy
-         4010"
+    "4f 0b" // PIV AID
+       "a000000308000010000100"
+    "5f2f 02" // PIN usage Policy
+         "4010"
 );
 
 pub const CARD_CAP: [u8; 27] = hex!(
-    "
-    F0 00 // card identifier
-    F1 00 // capability container version
-    F2 00 // capability container grammar
-    F3 00 // application card url
-    F4 00 // pkcs15
-    F5 01 10 // registereddata model number
-    F6 00 // access control rule table
-    F7 00 // card apdus
-    FA 00 // redirection tag
-    FB 00 // capability tuples
-    FC 00 // status tuples
-    FD 00 // next ccc
-    FE 00 // Error detection code
-"
+    "F0 00" // card identifier
+    "F1 00" // capability container version
+    "F2 00" // capability container grammar
+    "F3 00" // application card url
+    "F4 00" // pkcs15
+    "F5 01 10" // registereddata model number
+    "F6 00" // access control rule table
+    "F7 00" // card apdus
+    "FA 00" // redirection tag
+    "FB 00" // capability tuples
+    "FC 00" // status tuples
+    "FD 00" // next ccc
+    "FE 00" // Error detection code
 );
 
 pub const PRINTED_INFORMATION: [u8; 63] = hex!(

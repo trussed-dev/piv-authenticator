@@ -1,10 +1,11 @@
 use crate::{reply::Reply, Authenticator, /*constants::PIV_AID,*/ Result};
 
-use apdu_app::{App, CommandView, Data};
+use apdu_app::{App, CommandView};
+use heapless::VecView;
 use iso7816::{Interface, Status};
 
 #[cfg(feature = "apdu-dispatch")]
-impl<T, const R: usize> App<R> for Authenticator<T>
+impl<T> App for Authenticator<T>
 where
     T: crate::Client,
 {
@@ -12,7 +13,7 @@ where
         &mut self,
         interface: Interface,
         _apdu: CommandView<'_>,
-        reply: &mut Data<R>,
+        reply: &mut VecView<u8>,
     ) -> Result {
         if interface != Interface::Contact {
             return Err(Status::ConditionsOfUseNotSatisfied);
@@ -24,7 +25,12 @@ where
         self.deselect()
     }
 
-    fn call(&mut self, interface: Interface, apdu: CommandView<'_>, reply: &mut Data<R>) -> Result {
+    fn call(
+        &mut self,
+        interface: Interface,
+        apdu: CommandView<'_>,
+        reply: &mut VecView<u8>,
+    ) -> Result {
         if interface != Interface::Contact {
             return Err(Status::ConditionsOfUseNotSatisfied);
         }

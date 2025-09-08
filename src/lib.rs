@@ -21,6 +21,7 @@ mod reply;
 pub mod state;
 mod tlv;
 
+use heapless::VecView;
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 use trussed_chunked::ChunkedClient;
 use trussed_hpke::HpkeClient;
@@ -35,7 +36,7 @@ use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
-use iso7816::{Data, Status};
+use iso7816::Status;
 use trussed_auth::AuthClient;
 use trussed_core::mechanisms::Tdes;
 use trussed_core::types::{KeySerialization, Location, Mechanism, PathBuf, StorageAttributes};
@@ -136,7 +137,7 @@ where
     // The way apdu-dispatch currently works, this would deselect, resetting security indicators.
     pub fn deselect(&mut self) {}
 
-    pub fn select<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
+    pub fn select(&mut self, mut reply: Reply<'_>) -> Result {
         use piv_types::Algorithms::*;
         info!("selecting PIV maybe");
 
@@ -154,10 +155,10 @@ where
         Ok(())
     }
 
-    pub fn respond<const R: usize>(
+    pub fn respond(
         &mut self,
         command: iso7816::command::CommandView<'_>,
-        reply: &mut Data<R>,
+        reply: &mut VecView<u8>,
     ) -> Result {
         let just_verified = self.state.volatile.app_security_status.pin_just_verified;
         self.state.volatile.app_security_status.pin_just_verified = false;
@@ -192,11 +193,11 @@ where
         }
     }
 
-    pub fn yubico_piv_extension<const R: usize>(
+    pub fn yubico_piv_extension(
         &mut self,
         data: &[u8],
         instruction: YubicoPivExtension,
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
     ) -> Result {
         info!("yubico extension: {:?}", &instruction);
         match instruction {
@@ -256,11 +257,11 @@ where
 }
 
 impl<T: Client> LoadedAuthenticator<'_, T> {
-    pub fn yubico_set_administration_key<const R: usize>(
+    pub fn yubico_set_administration_key(
         &mut self,
         data: &[u8],
         _touch_policy: TouchPolicy,
-        _reply: Reply<'_, R>,
+        _reply: Reply<'_>,
     ) -> Result {
         // cmd := apdu{
         //     instruction: insSetMGMKey,
@@ -424,12 +425,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
     // - 9000, 61XX for success
     // - 6982 security status
     // - 6A80, 6A86 for data, P1/P2 issue
-    pub fn general_authenticate<const R: usize>(
+    pub fn general_authenticate(
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
         just_verified: bool,
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
     ) -> Result {
         // For "SSH", we need implement A.4.2 in SP-800-73-4 Part 2, ECDSA signatures
         //
@@ -562,11 +563,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         Ok(self.state.persistent.keys.administration)
     }
 
-    fn single_auth_1<const R: usize>(
-        &mut self,
-        auth: GeneralAuthenticate,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
+    fn single_auth_1(&mut self, auth: GeneralAuthenticate, mut reply: Reply<'_>) -> Result {
         info!("Single auth 1");
         let key = self.validate_auth_management(auth)?;
         let plaintext = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
@@ -576,7 +573,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 .encrypt(key.alg.mechanism(), key.id, &plaintext, &[], None))
             .ciphertext;
         self.state.volatile.command_cache = Some(CommandCache::SingleAuthChallengeReference(
-            Bytes::from_slice(&ciphertext).unwrap(),
+            Bytes::try_from(&*ciphertext).unwrap(),
         ));
 
         reply.expand(&[0x7C])?;
@@ -619,11 +616,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         Ok(())
     }
 
-    fn mutual_auth_1<const R: usize>(
-        &mut self,
-        auth: GeneralAuthenticate,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
+    fn mutual_auth_1(&mut self, auth: GeneralAuthenticate, mut reply: Reply<'_>) -> Result {
         info!("Mutual auth 1");
         let key = self.validate_auth_management(auth)?;
         let plaintext = syscall!(self.trussed.random_bytes(key.alg.challenge_length())).bytes;
@@ -635,7 +628,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             .ciphertext;
 
         self.state.volatile.command_cache = Some(CommandCache::MutualAuthWitnessReference(
-            Bytes::from_slice(&plaintext).unwrap(),
+            Bytes::try_from(&*plaintext).unwrap(),
         ));
 
         reply.expand(&[0x7C])?;
@@ -649,12 +642,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         Ok(())
     }
 
-    fn mutual_auth_2<const R: usize>(
+    fn mutual_auth_2(
         &mut self,
         auth: GeneralAuthenticate,
         response: &[u8],
         challenge: &[u8],
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
     ) -> Result {
         use subtle::ConstantTimeEq;
 
@@ -703,12 +696,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
     }
 
     // Sign a message. For RSA, since the key is exposed as a raw key, so it can also be used for decryption
-    fn sign<const R: usize>(
+    fn sign(
         &mut self,
         auth: GeneralAuthenticate,
         message: &[u8],
         just_verified: bool,
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
     ) -> Result {
         debug!("Request for sign, data length: {}, data:", message.len());
         // error!("{}", delog::hexstr!(message));
@@ -754,11 +747,11 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         )
     }
 
-    fn key_agreement<const R: usize>(
+    fn key_agreement(
         &mut self,
         auth: GeneralAuthenticate,
         data: &[u8],
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
         just_verified: bool,
     ) -> Result {
         info!("Request for exponentiation");
@@ -839,11 +832,11 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         )
     }
 
-    pub fn generate_asymmetric_keypair<const R: usize>(
+    pub fn generate_asymmetric_keypair(
         &mut self,
         reference: GenerateKeyReference,
         data: &[u8],
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
     ) -> Result {
         if !self
             .state
@@ -967,11 +960,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         Ok(())
     }
 
-    fn get_data<const R: usize>(
-        &mut self,
-        container: Container,
-        mut reply: Reply<'_, R>,
-    ) -> Result {
+    fn get_data(&mut self, container: Container, mut reply: Reply<'_>) -> Result {
         let read_valid =
             self.state
                 .volatile
@@ -1045,7 +1034,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         Ok(())
     }
 
-    fn get_key_history_object<const R: usize>(&mut self, mut reply: Reply<'_, R>) -> Result {
+    fn get_key_history_object(&mut self, mut reply: Reply<'_>) -> Result {
         use state::ContainerStorage;
 
         let mut num_certs = 0;
@@ -1063,12 +1052,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         Ok(())
     }
 
-    fn import_asymmetric_key<const R: usize>(
+    fn import_asymmetric_key(
         &mut self,
         algo: AsymmetricAlgorithms,
         key: AsymmetricKeyReference,
         #[cfg_attr(not(feature = "rsa"), allow(unused))] data: &[u8],
-        mut _reply: Reply<'_, R>,
+        mut _reply: Reply<'_>,
     ) -> Result {
         if !self
             .state

@@ -200,8 +200,8 @@ impl Keys {
                     storage,
                     user_public_key,
                     new.id,
-                    Bytes::from_slice(key.name().as_str().as_bytes()).unwrap(),
-                    Bytes::from_slice(HPKE_SEALKEY_REFERENCE_INFO).unwrap(),
+                    Bytes::try_from(key.name().as_str().as_bytes()).unwrap(),
+                    Bytes::try_from(HPKE_SEALKEY_REFERENCE_INFO).unwrap(),
                 ));
 
                 KeyOrEncryptedWithAlg::Encrypted(match key {
@@ -382,8 +382,8 @@ impl LoadedState<'_> {
             key.name().into(),
             options.storage,
             Location::Volatile,
-            Bytes::from_slice(key.name().as_str().as_bytes()).unwrap(),
-            Bytes::from_slice(HPKE_SEALKEY_REFERENCE_INFO).unwrap(),
+            Bytes::try_from(key.name().as_str().as_bytes()).unwrap(),
+            Bytes::try_from(HPKE_SEALKEY_REFERENCE_INFO).unwrap(),
         ))
         .map_err(|_err| {
             error!("Failed to unseal key: {_err:?}");
@@ -460,7 +460,7 @@ impl Volatile {
         client: &mut T,
     ) -> &'this mut PinVerified {
         self.clear_pin_verified(client);
-        let pin = Bytes::from_slice(&value.0).expect("Convertion of static array");
+        let pin = Bytes::try_from(&value.0).expect("Convertion of static array");
         let syscall_res = try_syscall!(client.get_pin_key(PinType::UserPin, pin));
         let pin_key = match syscall_res {
             Err(_err) => {
@@ -532,8 +532,8 @@ impl Volatile {
             data_encryption_sealed_key_path,
             options.storage,
             Location::Volatile,
-            Bytes::from_slice(ContainerStorage(container).path_key_str().as_bytes()).unwrap(),
-            Bytes::from_slice(HPKE_SEALKEY_CONTAINER_INFO).unwrap(),
+            Bytes::try_from(ContainerStorage(container).path_key_str().as_bytes()).unwrap(),
+            Bytes::try_from(HPKE_SEALKEY_CONTAINER_INFO).unwrap(),
         )) else {
             return Ok(ReadValid::EncryptedNotFound);
         };
@@ -680,7 +680,7 @@ impl Persistent {
         value: &Puk,
         client: &mut T,
     ) -> Result<Option<KeyId>, Status> {
-        let puk = Bytes::from_slice(&value.0).expect("Convertion of static array");
+        let puk = Bytes::try_from(&value.0).expect("Convertion of static array");
         try_syscall!(client.get_pin_key(PinType::Puk, puk))
             .map(|r| r.result)
             .map_err(|_err| {
@@ -695,8 +695,8 @@ impl Persistent {
         new_value: &Pin,
         client: &mut T,
     ) -> bool {
-        let old_pin = Bytes::from_slice(&old_value.0).expect("Convertion of static array");
-        let new_pin = Bytes::from_slice(&new_value.0).expect("Convertion of static array");
+        let old_pin = Bytes::try_from(&old_value.0).expect("Convertion of static array");
+        let new_pin = Bytes::try_from(&new_value.0).expect("Convertion of static array");
         try_syscall!(client.change_pin(PinType::UserPin, old_pin, new_pin))
             .map(|r| r.success)
             .unwrap_or(false)
@@ -708,8 +708,8 @@ impl Persistent {
         new_value: &Puk,
         client: &mut T,
     ) -> bool {
-        let old_puk = Bytes::from_slice(&old_value.0).expect("Convertion of static array");
-        let new_puk = Bytes::from_slice(&new_value.0).expect("Convertion of static array");
+        let old_puk = Bytes::try_from(&old_value.0).expect("Convertion of static array");
+        let new_puk = Bytes::try_from(&new_value.0).expect("Convertion of static array");
         try_syscall!(client.change_pin(PinType::Puk, old_puk, new_puk))
             .map(|r| r.success)
             .unwrap_or(false)
@@ -721,7 +721,7 @@ impl Persistent {
         old_key: KeyId,
         client: &mut T,
     ) -> Result<(), Status> {
-        let new_pin = Bytes::from_slice(&new_pin.0).expect("Convertion of static array");
+        let new_pin = Bytes::try_from(&new_pin.0).expect("Convertion of static array");
         try_syscall!(client.set_pin_with_key(
             PinType::UserPin,
             new_pin,
@@ -740,7 +740,7 @@ impl Persistent {
         new_puk: Puk,
         client: &mut T,
     ) -> Result<(), Status> {
-        let new_puk = Bytes::from_slice(&new_puk.0).expect("Convertion of static array");
+        let new_puk = Bytes::try_from(&new_puk.0).expect("Convertion of static array");
         try_syscall!(client.set_pin(PinType::Puk, new_puk, Some(Self::PUK_RETRIES_DEFAULT), true))
             .map_err(|_err| {
                 error!("Failed to set puk");
@@ -859,7 +859,7 @@ impl Persistent {
 
     fn init_pins<T: crate::Client>(client: &mut T, options: &crate::Options) -> Result<(), Status> {
         let default_pin =
-            Bytes::from_slice(&Self::DEFAULT_PIN.0).expect("Convertion of static array");
+            Bytes::try_from(&Self::DEFAULT_PIN.0).expect("Convertion of static array");
         try_syscall!(client.set_pin(
             PinType::UserPin,
             default_pin.clone(),
@@ -871,7 +871,7 @@ impl Persistent {
             Status::UnspecifiedPersistentExecutionError
         })?;
         let default_puk =
-            Bytes::from_slice(&Self::DEFAULT_PUK.0).expect("Convertion of static array");
+            Bytes::try_from(&Self::DEFAULT_PUK.0).expect("Convertion of static array");
         try_syscall!(client.set_pin(
             PinType::Puk,
             default_puk.clone(),
@@ -933,7 +933,7 @@ impl Persistent {
         syscall!(client.write_file(
             options.storage,
             PathBuf::from(USER_PUBLIC_KEY),
-            Bytes::from_slice(&key).unwrap(),
+            Bytes::try_from(&*key).unwrap(),
             None
         ));
 
@@ -1068,11 +1068,11 @@ fn load_if_exists(
 }
 
 /// Returns false if the file does not exist
-fn load_if_exists_streaming<const R: usize>(
+fn load_if_exists_streaming(
     client: &mut impl crate::Client,
     location: Location,
     path: &PathBuf,
-    mut buffer: Reply<'_, R>,
+    mut buffer: Reply<'_>,
     encryption: Option<KeyId>,
 ) -> Result<bool, Status> {
     let offset = buffer.len();
@@ -1218,11 +1218,11 @@ impl ContainerStorage {
     }
 
     // Write the length of the file and write
-    pub fn load<const R: usize>(
+    pub fn load(
         self,
         client: &mut impl crate::Client,
         storage: Location,
-        mut reply: Reply<'_, R>,
+        mut reply: Reply<'_>,
         read_valid: ReadValid,
     ) -> Result<bool, Status> {
         let encryption = match read_valid {
@@ -1292,8 +1292,8 @@ impl ContainerStorage {
             storage,
             user_public_key,
             key_to_seal,
-            Bytes::from_slice(self.path_key_str().as_bytes()).unwrap(),
-            Bytes::from_slice(HPKE_SEALKEY_CONTAINER_INFO).unwrap(),
+            Bytes::try_from(self.path_key_str().as_bytes()).unwrap(),
+            Bytes::try_from(HPKE_SEALKEY_CONTAINER_INFO).unwrap(),
         ));
         syscall!(client.delete(user_public_key));
 

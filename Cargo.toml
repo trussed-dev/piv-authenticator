@@ -12,7 +12,7 @@ name = "vpicc"
 required-features = ["vpicc"]
 
 [dependencies]
-apdu-app = { version = "0.1", optional = true }
+apdu-app = { version = "0.2", optional = true }
 cbor-smol = { version = "0.5", features = ["heapless-bytes-v0-5"] }
 delog = { version = "0.1.5", optional = true }
 flexiber = { version = "0.2", features = ["derive", "heapless"] }
@@ -21,7 +21,7 @@ hex-literal = "0.3"
 iso7816 = "0.2.0"
 serde = { version = "1", default-features = false, features = ["derive"] }
 trussed = { version = "0.1", default-features = false, features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "shared-secret", "serde-extensions", "tdes", "x255"], optional = true }
-trussed-auth = "0.4"
+trussed-auth = "0.5"
 trussed-auth-backend = { version = "0.1.0", optional = true }
 untrusted = "0.9"
 vpicc = { version = "0.1.0", optional = true }
@@ -29,13 +29,13 @@ log = "0.4"
 heapless-bytes = "0.5.0"
 subtle = { version = "2", default-features = false }
 # TODO: only enable rsa features when needed
-trussed-core = { version = "0.1.0-rc.1", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa3072", "rsa4096", "shared-secret", "tdes", "x255"] }
-trussed-rsa-types = { version = "0.1", optional = true }
-trussed-rsa-alloc = { version = "0.3", features = ["raw"], optional = true }
-trussed-chunked = "0.2.0"
-trussed-hpke = "0.2.0"
-trussed-wrap-key-to-file = "0.2.0"
-trussed-staging = { version = "0.3.2", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
+trussed-core = { version = "0.2", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa3072", "rsa4096", "shared-secret", "tdes", "x255"] }
+trussed-rsa-types = { version = "0.2", optional = true }
+trussed-rsa-alloc = { version = "0.4", features = ["raw"], optional = true }
+trussed-chunked = "0.3.0"
+trussed-hpke = "0.3.0"
+trussed-wrap-key-to-file = "0.3.0"
+trussed-staging = { version = "0.4", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
 littlefs2-core = "0.1.0"
 cfg-if = "1.0.0"
 
@@ -52,7 +52,7 @@ des = "0.8"
 aes = "0.8.2"
 stoppable_thread = "0.2.1"
 expectrl = "0.7.0"
-iso7816 = { version = "0.1.2", features = ["std"] }
+iso7816 = { version = "0.2", features = ["std"] }
 
 # Examples
 # usbip
@@ -83,10 +83,10 @@ log-error = []
 dangerous-test-real-card = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/trussed-dev/trussed", rev = "6bba8fde36d05c0227769eb63345744e87d84b2b" }
-trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.3.0" }
-trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", rev = "1e1ca03a3a62ea9b802f4070ea4bce002eeb4bec" }
-trussed-auth-backend = { git = "https://github.com/trussed-dev/trussed-auth", tag = "v0.4.0" }
+trussed = { git = "https://github.com/trussed-dev/trussed", rev = "0f8df68be879acdde1f8cf428c11e5d29692a47b" }
+trussed-auth-backend = { git = "https://github.com/trussed-dev/trussed-auth", tag = "backend-v0.1.0" }
+trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.4.0" }
+trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.4.0" }
 
 [profile.dev.package.rsa]
 opt-level = 2

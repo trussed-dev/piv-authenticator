@@ -1,5 +1,4 @@
 use iso7816::{command::FromSliceError, Command, Status};
-use trussed::virt::Ram;
 
 use crate::virt::VirtClient;
 
@@ -14,15 +13,15 @@ const RESPONSE_LEN: usize = 7609;
 ///
 /// This struct provides a vpicc PIV smart card implementation that can be used with
 /// `vpicc-rs` and [`vsmartcard`](https://frankmorgner.github.io/vsmartcard/) to emulate the card.
-pub struct VpiccCard {
+pub struct VpiccCard<'a> {
     request_buffer: RequestBuffer<REQUEST_LEN>,
     response_buffer: ResponseBuffer<RESPONSE_LEN>,
-    card: Authenticator<VirtClient<Ram>>,
+    card: Authenticator<VirtClient<'a>>,
 }
 
-impl VpiccCard {
+impl<'a> VpiccCard<'a> {
     /// Creates a new virtual smart card from the given card.
-    pub fn new(card: Authenticator<VirtClient<Ram>>) -> Self {
+    pub fn new(card: Authenticator<VirtClient<'a>>) -> Self {
         Self {
             request_buffer: Default::default(),
             response_buffer: Default::default(),
@@ -46,7 +45,7 @@ impl VpiccCard {
     }
 }
 
-impl vpicc::VSmartCard for VpiccCard {
+impl vpicc::VSmartCard for VpiccCard<'_> {
     fn power_on(&mut self) {}
 
     fn power_off(&mut self) {

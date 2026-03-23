@@ -460,7 +460,7 @@ impl Volatile {
         client: &mut T,
     ) -> &'this mut PinVerified {
         self.clear_pin_verified(client);
-        let pin = Bytes::try_from(&value.0).expect("Convertion of static array");
+        let pin = Bytes::from(&value.0);
         let syscall_res = try_syscall!(client.get_pin_key(PinType::UserPin, pin));
         let pin_key = match syscall_res {
             Err(_err) => {
@@ -680,7 +680,7 @@ impl Persistent {
         value: &Puk,
         client: &mut T,
     ) -> Result<Option<KeyId>, Status> {
-        let puk = Bytes::try_from(&value.0).expect("Convertion of static array");
+        let puk = Bytes::from(&value.0);
         try_syscall!(client.get_pin_key(PinType::Puk, puk))
             .map(|r| r.result)
             .map_err(|_err| {
@@ -695,8 +695,8 @@ impl Persistent {
         new_value: &Pin,
         client: &mut T,
     ) -> bool {
-        let old_pin = Bytes::try_from(&old_value.0).expect("Convertion of static array");
-        let new_pin = Bytes::try_from(&new_value.0).expect("Convertion of static array");
+        let old_pin = Bytes::from(&old_value.0);
+        let new_pin = Bytes::from(&new_value.0);
         try_syscall!(client.change_pin(PinType::UserPin, old_pin, new_pin))
             .map(|r| r.success)
             .unwrap_or(false)
@@ -708,8 +708,8 @@ impl Persistent {
         new_value: &Puk,
         client: &mut T,
     ) -> bool {
-        let old_puk = Bytes::try_from(&old_value.0).expect("Convertion of static array");
-        let new_puk = Bytes::try_from(&new_value.0).expect("Convertion of static array");
+        let old_puk = Bytes::from(&old_value.0);
+        let new_puk = Bytes::from(&new_value.0);
         try_syscall!(client.change_pin(PinType::Puk, old_puk, new_puk))
             .map(|r| r.success)
             .unwrap_or(false)
@@ -721,7 +721,7 @@ impl Persistent {
         old_key: KeyId,
         client: &mut T,
     ) -> Result<(), Status> {
-        let new_pin = Bytes::try_from(&new_pin.0).expect("Convertion of static array");
+        let new_pin = Bytes::from(&new_pin.0);
         try_syscall!(client.set_pin_with_key(
             PinType::UserPin,
             new_pin,
@@ -740,7 +740,7 @@ impl Persistent {
         new_puk: Puk,
         client: &mut T,
     ) -> Result<(), Status> {
-        let new_puk = Bytes::try_from(&new_puk.0).expect("Convertion of static array");
+        let new_puk = Bytes::from(&new_puk.0);
         try_syscall!(client.set_pin(PinType::Puk, new_puk, Some(Self::PUK_RETRIES_DEFAULT), true))
             .map_err(|_err| {
                 error!("Failed to set puk");
@@ -858,8 +858,7 @@ impl Persistent {
     }
 
     fn init_pins<T: crate::Client>(client: &mut T, options: &crate::Options) -> Result<(), Status> {
-        let default_pin =
-            Bytes::try_from(&Self::DEFAULT_PIN.0).expect("Convertion of static array");
+        let default_pin = Bytes::from(&Self::DEFAULT_PIN.0);
         try_syscall!(client.set_pin(
             PinType::UserPin,
             default_pin.clone(),
@@ -870,8 +869,7 @@ impl Persistent {
             error!("Failed to set pin");
             Status::UnspecifiedPersistentExecutionError
         })?;
-        let default_puk =
-            Bytes::try_from(&Self::DEFAULT_PUK.0).expect("Convertion of static array");
+        let default_puk = Bytes::from(&Self::DEFAULT_PUK.0);
         try_syscall!(client.set_pin(
             PinType::Puk,
             default_puk.clone(),

@@ -6,6 +6,17 @@
 
 - Replace `trussed-rsa-alloc` dependency with `trussed-rsa-types` for most use cases.
   (Only the `virt` feature still requires `trussed-rsa-alloc`.)
+- Update dependencies:
+  - `apdu-app` v0.2
+  - `cbor-smol` v0.5
+  - `flexiber` v0.2
+  - `heapless` v0.9
+  - `heapless-bytes` v0.5
+  - `iso7816` v0.2
+  - `trussed-chunked` v0.3
+  - `trussed-core` v0.2
+  - `trussed-hpke` v0.3
+  - `trussed-wrap-key-to-file` v0.3
 
 ## [v0.5.3][] (2025-07-31)
 

@@ -64,6 +64,7 @@ default = []
 apdu-dispatch = ["dep:apdu-app"]
 alloc = []
 rsa = ["dep:trussed-rsa-types", "alloc"]
+mldsa44 = ["trussed-core/mldsa44"]
 delog  = ["dep:delog"]
 
 log-all = []
@@ -73,6 +74,13 @@ log-debug = []
 log-info = []
 log-warn = []
 log-error = []
+
+# The ML-DSA-44 mechanism is not in a released trussed yet; released
+# trussed-core carries only the feature flag, not `Mechanism::MlDsa44`.
+# https://github.com/solokeys/trussed/tree/v0.3
+[patch.crates-io]
+trussed = { git = "https://github.com/solokeys/trussed", rev = "2ea719b28245f0e68960e99aab16131f7f14d8ff" }
+trussed-core = { git = "https://github.com/solokeys/trussed", rev = "2ea719b28245f0e68960e99aab16131f7f14d8ff" }
 
 [profile.dev.package.rsa]
 opt-level = 2

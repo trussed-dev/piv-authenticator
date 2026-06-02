@@ -34,7 +34,9 @@ use heapless_bytes::Bytes;
 use iso7816::Status;
 use trussed_auth::AuthClient;
 use trussed_core::mechanisms::Tdes;
-use trussed_core::types::{KeySerialization, Location, Mechanism, PathBuf, StorageAttributes};
+use trussed_core::types::{
+    KeySerialization, Location, Mechanism, PathBuf, SignatureSerialization, StorageAttributes,
+};
 use trussed_core::{syscall, try_syscall, CryptoClient, FilesystemClient};
 
 use constants::*;
@@ -715,6 +717,38 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 let Some(key) = key? else {
                     return Err(Status::ConditionsOfUseNotSatisfied);
                 };
+
+                // Arbitrary-length message, not a fixed digest: skip the length check.
+                let sign_raw_message = key.alg == AsymmetricAlgorithms::Ed25519 || {
+                    #[cfg(feature = "mldsa44")]
+                    {
+                        key.alg == AsymmetricAlgorithms::MlDsa44
+                    }
+                    #[cfg(not(feature = "mldsa44"))]
+                    {
+                        false
+                    }
+                };
+                if sign_raw_message {
+                    let signature = syscall!(trussed.sign(
+                        key.alg.sign_mechanism(),
+                        key.key,
+                        message,
+                        SignatureSerialization::Raw,
+                    ))
+                    .signature;
+
+                    reply.expand(&[0x7C])?;
+                    let offset = reply.len();
+                    {
+                        reply.expand(&[0x82])?;
+                        reply.append_len(signature.len())?;
+                        reply.expand(&signature)?;
+                    }
+                    reply.prepend_len(offset)?;
+                    return Ok(());
+                }
+
                 if key.alg.sign_len() != message.len() {
                     return Err(Status::IncorrectDataParameter);
                 }
@@ -944,6 +978,38 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 reply.append_len(serialized.e.len())?;
                 reply.expand(serialized.e)?;
 
+                reply.prepend_len(offset)?;
+            }
+            // Raw 32-byte key in 0x86; no SEC1 prefix.
+            AsymmetricAlgorithms::Ed25519 => {
+                let serialized_key = syscall!(self.trussed.serialize_key(
+                    parsed_mechanism.key_mechanism(),
+                    public_key,
+                    KeySerialization::Raw
+                ))
+                .serialized_key;
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                reply.expand(&[0x86])?;
+                reply.append_len(serialized_key.len())?;
+                reply.expand(&serialized_key)?;
+                reply.prepend_len(offset)?;
+            }
+            // Raw 1312-byte key in 0x86.
+            #[cfg(feature = "mldsa44")]
+            AsymmetricAlgorithms::MlDsa44 => {
+                let mldsa_pub = syscall!(self.trussed.serialize_key(
+                    Mechanism::MlDsa44,
+                    public_key,
+                    KeySerialization::Raw
+                ))
+                .serialized_key;
+
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                reply.expand(&[0x86])?;
+                reply.append_len(mldsa_pub.len())?;
+                reply.expand(&mldsa_pub)?;
                 reply.prepend_len(offset)?;
             }
         };

@@ -124,8 +124,11 @@ enum_u8! {
         // P521 = 0x15,
         // non-standard!
         Rsa4096 = 0x16,
-        // Ed25519 = 0xE2,
-        // X25519 = 0xE3,
+        // Non-standard; 0xE0 as in piv-go.
+        Ed25519 = 0xE0,
+        // X25519 = 0xE1,
+        // ML-DSA-44 with empty context; custom id (0xE0/0xE1 are taken by piv-go).
+        MlDsa44 = 0xE2,
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
@@ -152,17 +155,14 @@ crate::container::enum_subset! {
         // not standard
         P384,
 
+        Ed25519,
+
+        #[cfg(feature = "mldsa44")]
+        MlDsa44,
+
         // Not supported
         // Rsa1024 = 0x6,
-        // Rsa3072 = 0xE0,
         // P521 = 0x15,
-
-        // non-standard! in piv-go though!
-        // Ed255_prev = 0x22,
-        // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
-        // non-standard!
-        // Ed25519 = 0xE2,
-        // X25519 = 0xE3,
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
@@ -180,6 +180,9 @@ impl AsymmetricAlgorithms {
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256,
             Self::P384 => Mechanism::P384,
+            Self::Ed25519 => Mechanism::Ed255,
+            #[cfg(feature = "mldsa44")]
+            Self::MlDsa44 => Mechanism::MlDsa44,
         }
     }
 
@@ -188,7 +191,7 @@ impl AsymmetricAlgorithms {
         match self {
             P256 => Some(Mechanism::P256),
             P384 => Some(Mechanism::P384),
-            /* P384 | P521 | X25519 | X448 */
+            /* P521 | X25519 | X448 */
             #[allow(unreachable_patterns)]
             _ => None,
         }
@@ -204,6 +207,9 @@ impl AsymmetricAlgorithms {
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256Prehashed,
             Self::P384 => Mechanism::P384Prehashed,
+            Self::Ed25519 => Mechanism::Ed255,
+            #[cfg(feature = "mldsa44")]
+            Self::MlDsa44 => Mechanism::MlDsa44,
         }
     }
 
@@ -218,6 +224,10 @@ impl AsymmetricAlgorithms {
             Self::Rsa4096 => 512,
             Self::P256 => 32,
             Self::P384 => 48,
+            Self::Ed25519 => 64,
+            // Output signature length; the sign path skips the length check.
+            #[cfg(feature = "mldsa44")]
+            Self::MlDsa44 => 2420,
         }
     }
 
@@ -227,6 +237,9 @@ impl AsymmetricAlgorithms {
             Self::Rsa2048 | Self::Rsa3072 | Self::Rsa4096 => SignatureSerialization::Raw,
             Self::P256 => SignatureSerialization::Asn1Der,
             Self::P384 => SignatureSerialization::Asn1Der,
+            Self::Ed25519 => SignatureSerialization::Raw,
+            #[cfg(feature = "mldsa44")]
+            Self::MlDsa44 => SignatureSerialization::Raw,
         }
     }
 

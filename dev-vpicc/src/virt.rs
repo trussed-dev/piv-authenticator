@@ -3,17 +3,20 @@
 pub mod dispatch {
 
     use trussed::{
-        api::{Reply, Request, reply, request},
         backend::{Backend as _, BackendId},
-        error::Error,
         platform::Platform,
         serde_extensions::{ExtensionDispatch, ExtensionId, ExtensionImpl},
         service::ServiceResources,
-        types::{Bytes, Context, Location},
+        types::Context,
     };
     use trussed_auth::AuthExtension;
     use trussed_auth_backend::{AuthBackend, AuthContext, FilesystemLayout, MAX_HW_KEY_LEN};
     use trussed_chunked::ChunkedExtension;
+    use trussed_core::{
+        Error,
+        api::{Reply, Request, reply, request},
+        types::{Bytes, Location},
+    };
     use trussed_hpke::HpkeExtension;
     use trussed_rsa_alloc::SoftwareRsa;
     use trussed_staging::{StagingBackend, StagingContext};
@@ -206,10 +209,8 @@ pub mod dispatch {
 }
 
 use std::path::PathBuf;
-use trussed::{
-    types::Bytes,
-    virt::{self, Client, StorageConfig, StoreConfig},
-};
+use trussed::virt::{self, Client, StorageConfig, StoreConfig};
+use trussed_core::types::Bytes;
 
 /// Client type using a dispatcher with the backends required by opcard
 pub type VirtClient<'a> = Client<'a, dispatch::Dispatch>;

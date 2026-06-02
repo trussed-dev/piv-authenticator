@@ -9,10 +9,11 @@ heapless = "0.9"
 vpicc = "0.1.0"
 piv-authenticator = { path = ".." }
 log = "0.4"
-trussed-rsa-alloc = { version = "0.4", features = ["raw"] }
-trussed = { version = "0.1", default-features = false, features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "shared-secret", "serde-extensions", "tdes", "x255", "virt"]  }
-trussed-auth-backend = "0.1.0"
-trussed-staging = { version = "0.4", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false }
+trussed-rsa-alloc = { version = "0.5", features = ["raw"] }
+trussed = { version = "0.2", default-features = false, features = ["aes256-cbc", "chacha8-poly1305", "ed255", "p256", "p384", "shared-secret", "serde-extensions", "tdes", "x255", "virt"]  }
+trussed-core = "0.2"
+trussed-auth-backend = "0.2"
+trussed-staging = { version = "0.5", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false }
 trussed-wrap-key-to-file = "0.3.0"
 trussed-hpke = "0.3.0"
 trussed-chunked = "0.3.0"

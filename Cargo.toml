@@ -63,6 +63,7 @@ default = []
 apdu-dispatch = ["dep:apdu-app"]
 alloc = []
 rsa = ["dep:trussed-rsa-types", "alloc"]
+mldsa44 = ["trussed-core/mldsa44"]
 delog  = ["dep:delog"]
 
 log-all = []
@@ -74,10 +75,10 @@ log-warn = []
 log-error = []
 
 [patch.crates-io]
-trussed = { git = "https://github.com/trussed-dev/trussed", rev = "0f8df68be879acdde1f8cf428c11e5d29692a47b" }
-trussed-auth-backend = { git = "https://github.com/trussed-dev/trussed-auth", tag = "backend-v0.1.0" }
-trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.4.0" }
-trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.4.0" }
+# https://github.com/solokeys/trussed/tree/v0.3 provides the ML-DSA-44 mechanism.
+trussed = { git = "https://github.com/solokeys/trussed", rev = "2ea719b28245f0e68960e99aab16131f7f14d8ff" }
+trussed-core = { git = "https://github.com/solokeys/trussed", rev = "2ea719b28245f0e68960e99aab16131f7f14d8ff" }
+trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", rev = "8347be14d95ed592fdbdfbab59a69e6fad94c030" }
 
 [profile.dev.package.rsa]
 opt-level = 2

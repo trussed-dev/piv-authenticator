@@ -17,7 +17,7 @@ cbor-smol = { version = "0.5", features = ["heapless-bytes-v0-5"] }
 delog = { version = "0.1.5", optional = true }
 flexiber = { version = "0.2", features = ["derive", "heapless"] }
 heapless = "0.9.1"
-hex-literal = "0.3"
+hex-literal = "1"
 iso7816 = "0.2.0"
 serde = { version = "1", default-features = false, features = ["derive"] }
 trussed = { version = "0.1", default-features = false, features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "shared-secret", "serde-extensions", "tdes", "x255"], optional = true }
@@ -40,24 +40,24 @@ littlefs2-core = "0.1.0"
 cfg-if = "1.0.0"
 
 [dev-dependencies]
-rand_core = { version = "0.6", features = ["getrandom"] }
+rand_core = { version = "0.10" }
 trussed = { version = "0.1.0", features = ["virt"] }
-env_logger = "0.9"
+env_logger = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = { version = "0.11", features = ["std"] }
 hex  = "0.4"
 test-log = "0.2.11"
 ron  = "0.8"
-des = "0.8"
-aes = "0.8.2"
+des = "0.9"
+aes = "0.9.2"
 stoppable_thread = "0.2.1"
-expectrl = "0.7.0"
+expectrl = "0.9.0"
 iso7816 = { version = "0.2", features = ["std"] }
 
 # Examples
 # usbip
-rand = "0.8.5"
-asn1 = "0.15.2"
+rand = "0.10"
+asn1 = "0.24.1"
 
 [features]
 default = []

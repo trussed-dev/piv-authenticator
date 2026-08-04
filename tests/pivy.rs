@@ -1,12 +1,13 @@
 #![cfg(all(feature = "vpicc", feature = "pivy-tests"))]
-#![allow(clippy::zombie_processes)]
+#![allow(clippy::zombie_processes, clippy::result_large_err)]
 
 mod card;
 
 use card::*;
 
 use cfg_if::cfg_if;
-use expectrl::{spawn, Eof, Regex, WaitStatus};
+use expectrl::process::unix::WaitStatus;
+use expectrl::{spawn, Eof, Expect, Regex};
 
 use std::io::{self, Read, Write};
 use std::ops::{Deref, DerefMut};

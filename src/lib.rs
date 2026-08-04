@@ -165,7 +165,7 @@ where
 
         // info!("PIV responding to {:02x?}", command);
         let parsed_command: Command = command.try_into()?;
-        info!("parsed: {:02x?}", &parsed_command);
+        info!("parsed: {:02x?}", parsed_command);
         let reply = Reply(reply);
 
         match parsed_command {
@@ -199,7 +199,7 @@ where
         instruction: YubicoPivExtension,
         mut reply: Reply<'_>,
     ) -> Result {
-        info!("yubico extension: {:?}", &instruction);
+        info!("yubico extension: {:?}", instruction);
         match instruction {
             YubicoPivExtension::GetSerial => {
                 // make up a 4-byte serial
@@ -485,10 +485,10 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
 
         debug!(
             "witness: {}, challenge: {}, response: {}, exponentiation: {}",
-            &parsed.witness.is_some(),
-            &parsed.challenge.is_some(),
-            &parsed.response.is_some(),
-            &parsed.exponentiation.is_some(),
+            parsed.witness.is_some(),
+            parsed.challenge.is_some(),
+            parsed.response.is_some(),
+            parsed.exponentiation.is_some(),
         );
 
         match parsed {

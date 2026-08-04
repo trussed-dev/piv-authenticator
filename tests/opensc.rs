@@ -7,7 +7,8 @@ use std::process::Command;
 use card::*;
 
 use cfg_if::cfg_if;
-use expectrl::{spawn, Eof, WaitStatus};
+use expectrl::process::unix::WaitStatus;
+use expectrl::{spawn, Eof, Expect};
 
 const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
 

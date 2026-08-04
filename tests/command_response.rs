@@ -4,10 +4,10 @@ mod setup;
 
 use std::borrow::Cow;
 
+use aes::cipher::{Array, BlockCipherDecrypt, BlockCipherEncrypt};
 use hex_literal::hex;
-use rand::thread_rng;
+use rand::rng;
 use serde::Deserialize;
-use trussed::types::GenericArray;
 
 macro_rules! assert_eq_hex {
     ($left:expr, $right:expr $(,)?) => {
@@ -579,10 +579,7 @@ impl IoCmd {
         card: &mut setup::Piv,
     ) {
         use aes::Aes256Enc;
-        use des::{
-            cipher::{BlockEncrypt, KeyInit},
-            TdesEde3,
-        };
+        use des::{cipher::KeyInit, TdesEde3};
         let command = build_command(0x00, 0x87, alg as u8, 0x9B, &hex!("7C 02 81 00"), 0);
         let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
         let key = parse_hex(key);
@@ -604,12 +601,12 @@ impl IoCmd {
         assert_eq_hex!(challenge.len(), alg.challenge_len());
         match alg {
             Algorithm::Tdes => {
-                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
-                cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
+                let cipher = TdesEde3::new(Array::slice_as_array(&key).unwrap());
+                cipher.encrypt_block(Array::slice_as_mut_array(challenge).unwrap());
             }
             Algorithm::Aes256 => {
-                let cipher = Aes256Enc::new(GenericArray::from_slice(&key));
-                cipher.encrypt_block(GenericArray::from_mut_slice(challenge));
+                let cipher = Aes256Enc::new(Array::slice_as_array(&key).unwrap());
+                cipher.encrypt_block(Array::slice_as_mut_array(challenge).unwrap());
             }
             _ => panic!(),
         }
@@ -626,11 +623,8 @@ impl IoCmd {
         card: &mut setup::Piv,
     ) {
         use aes::Aes256Dec;
-        use des::{
-            cipher::{BlockDecrypt, KeyInit},
-            TdesEde3,
-        };
-        use rand::RngCore;
+        use des::{cipher::KeyInit, TdesEde3};
+        use rand::Rng;
         let command = build_command(0x00, 0x87, alg as u8, 0x9B, &hex!("7C 02 80 00"), 0);
         let mut res = Self::run_bytes(&command, &MATCH_ANY, expected_status_challenge, card);
         let key = parse_hex(key);
@@ -652,17 +646,17 @@ impl IoCmd {
         assert_eq_hex!(challenge.len(), alg.challenge_len());
         match alg {
             Algorithm::Tdes => {
-                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
-                cipher.decrypt_block(GenericArray::from_mut_slice(challenge));
+                let cipher = TdesEde3::new(Array::slice_as_array(&key).unwrap());
+                cipher.decrypt_block(Array::slice_as_mut_array(challenge).unwrap());
             }
             Algorithm::Aes256 => {
-                let cipher = Aes256Dec::new(GenericArray::from_slice(&key));
-                cipher.decrypt_block(GenericArray::from_mut_slice(challenge));
+                let cipher = Aes256Dec::new(Array::slice_as_array(&key).unwrap());
+                cipher.decrypt_block(Array::slice_as_mut_array(challenge).unwrap());
             }
             _ => panic!(),
         }
         let mut random_challenge = vec![0; alg.challenge_len()];
-        thread_rng().fill_bytes(&mut random_challenge);
+        rng().fill_bytes(&mut random_challenge);
         let challenge_and_random: Vec<u8> =
             [tlv(&[0x80], challenge), tlv(&[0x81], &random_challenge)]
                 .into_iter()
@@ -688,12 +682,12 @@ impl IoCmd {
         assert_eq_hex!(response_challenge.len(), alg.challenge_len());
         match alg {
             Algorithm::Tdes => {
-                let cipher = TdesEde3::new(GenericArray::from_slice(&key));
-                cipher.decrypt_block(GenericArray::from_mut_slice(response_challenge));
+                let cipher = TdesEde3::new(Array::slice_as_array(&key).unwrap());
+                cipher.decrypt_block(Array::slice_as_mut_array(response_challenge).unwrap());
             }
             Algorithm::Aes256 => {
-                let cipher = Aes256Dec::new(GenericArray::from_slice(&key));
-                cipher.decrypt_block(GenericArray::from_mut_slice(response_challenge));
+                let cipher = Aes256Dec::new(Array::slice_as_array(&key).unwrap());
+                cipher.decrypt_block(Array::slice_as_mut_array(response_challenge).unwrap());
             }
             _ => panic!(),
         }
@@ -720,27 +714,25 @@ impl IoCmd {
 
     fn run_select(card: &mut setup::Piv) {
         let matcher = OutputMatcher::Bytes(Cow::Borrowed(&hex!(
-            "
-            61 69 // Card application property template
-                4f 06 000010000100 // Application identifier
-                50 0c 4e6974726f6b657920504956 // Application label = b\"Nitrokey PIV\"
+            "61 69" // Card application property template
+                "4f 06 000010000100" // Application identifier
+                "50 0c 4e6974726f6b657920504956" // Application label = b\"Nitrokey PIV\"
 
                 // URL = b\"https://github.com/Nitrokey/piv-authenticator\"
-                5f50 2d 68747470733a2f2f6769746875622e636f6d2f4e6974726f6b65792f7069762d61757468656e74696361746f72
+                "5f50 2d 68747470733a2f2f6769746875622e636f6d2f4e6974726f6b65792f7069762d61757468656e74696361746f72"
                 // Cryptographic Algorithm Identifier Template
-                ac 18
-                    80 01 03 // TDES - ECB
-                    80 01 0c // AES256 - ECB
-                    80 01 11 // P-256
-                    80 01 07 // RSA 2048
-                    80 01 05 // RSA 3072
-                    80 01 16 // RSA 4096
-                    80 01 14 // P384
-                    06 01 00
+                "ac 18"
+                    "80 01 03" // TDES - ECB
+                    "80 01 0c" // AES256 - ECB
+                    "80 01 11" // P-256
+                    "80 01 07" // RSA 2048
+                    "80 01 05" // RSA 3072
+                    "80 01 16" // RSA 4096
+                    "80 01 14" // P384
+                    "06 01 00"
                 // Coexistent Tag Allocation Authority Template
-                79 07
-                    4f 05 a000000308
-        "
+                "79 07"
+                    "4f 05 a000000308"
         )));
         Self::run_bytes(
             &hex!("00 A4 04 00 0C A000000308000010000100 00"),

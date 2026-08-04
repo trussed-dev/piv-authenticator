@@ -24,9 +24,14 @@ fn list() {
             .unwrap();
         p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(
-            p.get_process().wait().unwrap(),
-            WaitStatus::Exited(p.get_process().pid(), 0)
+        let WaitStatus::Exited(pid, exit_code) = p.get_process().wait().unwrap() else {
+            panic!("Got wrong wait status");
+        };
+        assert_eq!(pid, p.get_process().pid());
+        // Some old versions on opensc could return 1 even on success.
+        assert!(
+            [0, 1].contains(&exit_code),
+            "Unexpectedexitcode: {exit_code}"
         );
     };
     cfg_if! {
@@ -52,9 +57,14 @@ fn admin_mutual() {
             .unwrap();
         // p.expect("Personal Identity Verification Card").unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(
-            p.get_process().wait().unwrap(),
-            WaitStatus::Exited(p.get_process().pid(), 0)
+        let WaitStatus::Exited(pid, exit_code) = p.get_process().wait().unwrap() else {
+            panic!("Got wrong wait status");
+        };
+        assert_eq!(pid, p.get_process().pid());
+        // Some old versions on opensc could return 1 even on success.
+        assert!(
+            [0, 1].contains(&exit_code),
+            "Unexpectedexitcode: {exit_code}"
         );
     };
     cfg_if! {
@@ -79,9 +89,14 @@ fn admin_card() {
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
         p.expect(Eof).unwrap();
-        assert_eq!(
-            p.get_process().wait().unwrap(),
-            WaitStatus::Exited(p.get_process().pid(), 0)
+        let WaitStatus::Exited(pid, exit_code) = p.get_process().wait().unwrap() else {
+            panic!("Got wrong wait status");
+        };
+        assert_eq!(pid, p.get_process().pid());
+        // Some old versions on opensc could return 1 even on success.
+        assert!(
+            [0, 1].contains(&exit_code),
+            "Unexpectedexitcode: {exit_code}"
         );
     };
     cfg_if! {
@@ -162,10 +177,14 @@ fn generate_key() {
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
         p.expect(Eof).unwrap();
-        // Non zero exit code?
-        assert_eq!(
-            p.get_process().wait().unwrap(),
-            WaitStatus::Exited(p.get_process().pid(), 1)
+        let WaitStatus::Exited(pid, exit_code) = p.get_process().wait().unwrap() else {
+            panic!("Got wrong wait status");
+        };
+        assert_eq!(pid, p.get_process().pid());
+        // Some old versions on opensc could return 1 even on success.
+        assert!(
+            [0, 1].contains(&exit_code),
+            "Unexpectedexitcode: {exit_code}"
         );
     };
     cfg_if! {
@@ -187,10 +206,14 @@ fn generate_key() {
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
         p.expect(Eof).unwrap();
-        // Non zero exit code?
-        assert_eq!(
-            p.get_process().wait().unwrap(),
-            WaitStatus::Exited(p.get_process().pid(), 1)
+        let WaitStatus::Exited(pid, exit_code) = p.get_process().wait().unwrap() else {
+            panic!("Got wrong wait status");
+        };
+        assert_eq!(pid, p.get_process().pid());
+        // Some old versions on opensc could return 1 even on success.
+        assert!(
+            [0, 1].contains(&exit_code),
+            "Unexpectedexitcode: {exit_code}"
         );
     };
     cfg_if! {

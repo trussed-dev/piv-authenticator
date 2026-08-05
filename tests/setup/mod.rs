@@ -1,4 +1,3 @@
-#[allow(unused)]
 pub const COMMAND_SIZE: usize = 3072;
 
 #[macro_export]

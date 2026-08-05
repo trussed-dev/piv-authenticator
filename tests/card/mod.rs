@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use dev_vpicc::{virt::with_ram_client, vpicc::VpiccCard};
 use piv_authenticator::{Authenticator, Options};
 
@@ -8,14 +10,15 @@ use std::panic::{catch_unwind, resume_unwind, UnwindSafe};
 use std::process::Command;
 use std::sync::Mutex;
 
+pub fn dangerous_real_card_enabled() -> bool {
+    option_env!("DANGEROUS_TEST_RUN_REAL_CARD") == Some("true")
+}
+
 static VSC_MUTEX: Mutex<()> = Mutex::new(());
 
-#[cfg_attr(feature = "dangerous-test-real-card", expect(unused))]
 pub const WITH_UUID: Options = Options::new().uuid(Some([0; 16]));
-#[cfg_attr(feature = "dangerous-test-real-card", expect(unused))]
 pub const WITHOUT_UUID: Options = Options::new();
 
-#[cfg_attr(feature = "dangerous-test-real-card", expect(unused))]
 pub fn with_vsc<F: FnOnce() -> R, R>(options: Options, f: F) -> R {
     let Ok(_lock) = VSC_MUTEX.lock() else {
         panic!("Some other test failed, this test is therefore ignored")
@@ -53,7 +56,6 @@ pub fn with_vsc<F: FnOnce() -> R, R>(options: Options, f: F) -> R {
     result
 }
 
-#[cfg_attr(not(feature = "dangerous-test-real-card"), expect(unused))]
 pub fn with_lock_and_reset<F: UnwindSafe + FnOnce() -> R, R: UnwindSafe>(f: F) {
     let lock = VSC_MUTEX.lock();
     let res = catch_unwind(f);

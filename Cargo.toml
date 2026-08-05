@@ -36,7 +36,6 @@ trussed-chunked = "0.3.0"
 trussed-hpke = "0.3.0"
 trussed-wrap-key-to-file = "0.3.0"
 littlefs2-core = "0.1.0"
-cfg-if = "1.0.0"
 
 [dev-dependencies]
 dev-vpicc = { path = "dev-vpicc" }
@@ -73,8 +72,6 @@ log-debug = []
 log-info = []
 log-warn = []
 log-error = []
-
-dangerous-test-real-card = []
 
 [patch.crates-io]
 trussed = { git = "https://github.com/trussed-dev/trussed", rev = "0f8df68be879acdde1f8cf428c11e5d29692a47b" }

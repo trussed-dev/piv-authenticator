@@ -17,7 +17,7 @@ test:
 
 .PHONY: dangerous-test-real-card
 dangerous-test-real-card:
-	cargo test --features $(TEST_FEATURES),dangerous-test-real-card
+	DANGEROUS_TEST_RUN_REAL_CARD=true cargo test --features $(TEST_FEATURES)
 
 .PHONY: check
 check:

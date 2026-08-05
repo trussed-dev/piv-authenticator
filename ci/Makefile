@@ -1,6 +1,6 @@
 -include config.mk
 
-TAG := registry.git.nitrokey.com/nitrokey/piv-authenticator/piv-authenticator-build
+TAG := ghcr.io/trussed-dev/piv-authenticator-build
 DOCKER ?= docker
 FUZZ_JOBS?=$(shell nproc)
 FUZZ_DURATION?="0"

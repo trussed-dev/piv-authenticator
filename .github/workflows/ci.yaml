@@ -13,10 +13,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/trussed-dev/piv-authenticator-build
-
+    container: ghcr.io/trussed-dev/piv-authenticator
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@master
+      - name: start pcscd
+        run: pcscd
       - name: Install rust
         run: rustup show active-toolchain || rustup toolchain install
       - name: Run checks

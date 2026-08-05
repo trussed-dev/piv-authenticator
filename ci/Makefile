@@ -1,6 +1,6 @@
 -include config.mk
 
-TAG := ghcr.io/trussed-dev/piv-authenticator-build
+TAG := ghcr.io/trussed-dev/piv-authenticator:latest
 DOCKER ?= docker
 FUZZ_JOBS?=$(shell nproc)
 FUZZ_DURATION?="0"

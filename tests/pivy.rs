@@ -4,7 +4,6 @@ mod card;
 
 use card::*;
 
-use cfg_if::cfg_if;
 use expectrl::process::unix::WaitStatus;
 use expectrl::{spawn, Eof, Expect, Regex};
 
@@ -82,13 +81,11 @@ fn list() {
             WaitStatus::Exited(p.get_process().pid(), 0)
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -119,13 +116,11 @@ fn generate() {
             WaitStatus::Exited(p.get_process().pid(), 0)
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
     #[cfg(feature = "rsa")]
     {
@@ -142,13 +137,11 @@ fn generate() {
                 WaitStatus::Exited(p.get_process().pid(), 0)
             );
         };
-        cfg_if! {
-            if #[cfg(not(feature = "dangerous-test-real-card"))]{
-                with_vsc(WITH_UUID, test);
-                with_vsc(WITHOUT_UUID, test);
-            } else {
+        if card::dangerous_real_card_enabled() {
             with_lock_and_reset(test)
-            }
+        } else {
+            with_vsc(WITHOUT_UUID, test);
+            with_vsc(WITH_UUID, test);
         }
     }
 }
@@ -190,13 +183,11 @@ fn ecdh_inner(key: &str, requires_pin: bool) {
 
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 
     let test = || {
@@ -233,13 +224,11 @@ fn ecdh_inner(key: &str, requires_pin: bool) {
 
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -347,13 +336,11 @@ fn sign_inner(key: &str, requires_pin: bool) {
         test_rsa();
     };
 
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -440,13 +427,11 @@ fn large_cert() {
         assert_eq!(buf.strip_suffix('\n').unwrap(), LARGE_CERT);
         assert_eq!(p.wait().unwrap().code(), Some(0));
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -460,12 +445,10 @@ fn bad_admin_key() {
         assert_eq!(output.status.code(), Some(2));
     };
 
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }

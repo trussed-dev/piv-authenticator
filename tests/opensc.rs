@@ -4,7 +4,6 @@ use std::process::Command;
 
 use card::*;
 
-use cfg_if::cfg_if;
 use expectrl::process::unix::WaitStatus;
 use expectrl::{spawn, Eof, Expect};
 
@@ -32,13 +31,11 @@ fn list() {
             "Unexpectedexitcode: {exit_code}"
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))] {
-            with_vsc(WITHOUT_UUID, test);
-            with_vsc(WITH_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -65,13 +62,11 @@ fn admin_mutual() {
             "Unexpectedexitcode: {exit_code}"
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -97,13 +92,11 @@ fn admin_card() {
             "Unexpectedexitcode: {exit_code}"
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -125,13 +118,11 @@ fn admin_mutual_bad_key() {
             WaitStatus::Exited(p.get_process().pid(), 75)
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -153,13 +144,11 @@ fn admin_card_bad_key() {
             WaitStatus::Exited(p.get_process().pid(), 75)
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }
 
@@ -185,13 +174,11 @@ fn generate_key() {
             "Unexpectedexitcode: {exit_code}"
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 
     let test = || {
@@ -214,12 +201,10 @@ fn generate_key() {
             "Unexpectedexitcode: {exit_code}"
         );
     };
-    cfg_if! {
-        if #[cfg(not(feature = "dangerous-test-real-card"))]{
-            with_vsc(WITH_UUID, test);
-            with_vsc(WITHOUT_UUID, test);
-        } else {
-            with_lock_and_reset(test)
-        }
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
+        with_vsc(WITH_UUID, test);
     }
 }

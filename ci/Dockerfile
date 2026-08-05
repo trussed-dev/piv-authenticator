@@ -22,5 +22,7 @@ COPY --from=0 pivy-0.12.1/pivy-tool /bin/pivy-tool
 
 WORKDIR /app
 
+LABEL org.opencontainers.image.source https://github.com/trussed-dev/piv-authenticator
+
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]

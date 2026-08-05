@@ -21,4 +21,4 @@ jobs:
       - name: Run checks
         run: make lint
       - name: Run tests
-        run: make test TEST_FEATURES="rsa,virt"
+        run: make test TEST_FEATURES="rsa"

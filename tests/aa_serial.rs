@@ -5,7 +5,7 @@ use expectrl::{spawn, Eof, Expect};
 const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
 const SERIAL: &str = env!("PIV_DANGEROUS_TEST_CARD_PIV_SERIAL");
 
-mod card;
+pub mod card;
 
 #[test]
 fn test_serial_number() {

@@ -1,4 +1,4 @@
-mod card;
+pub mod card;
 
 use std::process::Command;
 

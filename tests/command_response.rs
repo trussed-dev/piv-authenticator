@@ -1,4 +1,4 @@
-mod setup;
+pub mod setup;
 
 use std::borrow::Cow;
 

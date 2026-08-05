@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use dev_vpicc::{virt::with_ram_client, vpicc::VpiccCard};
 use piv_authenticator::{Authenticator, Options};
 

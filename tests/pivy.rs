@@ -1,6 +1,6 @@
 #![allow(clippy::zombie_processes, clippy::result_large_err)]
 
-mod card;
+pub mod card;
 
 use card::*;
 

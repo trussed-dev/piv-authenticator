@@ -3,9 +3,9 @@
 -include variables.mk
 
 export RUST_LOG ?= info,cargo_tarpaulin=off
-TEST_FEATURES ?=vpicc,pivy-tests,opensc-tests,rsa
+TEST_FEATURES ?= rsa
 export PIV_DANGEROUS_TEST_CARD_READER ?= Virtual PCD 00 00
-export PIV_DANGEROUS_TEST_CARD_PIV_SERIAL ?= 04 B2 BB FB 54 40 4A E3 9B B8 6A E3 CA 82 9C 24
+export PIV_DANGEROUS_TEST_CARD_PIV_SERIAL ?= 99 37 9A 79 9E DC 48 1E A5 3E 11 CF EF 74 47 62
 
 .PHONY: build-cortex-m4
 build-cortex-m4:
@@ -36,7 +36,7 @@ tarpaulin:
 
 .PHONY: vpicc-example
 vpicc-example:
-	cargo run --example vpicc --features vpicc,rsa
+	cargo run --example vpicc
 	
 .PHONY: ci
 ci: lint tarpaulin

@@ -1,4 +1,5 @@
-use piv_authenticator::{virt::with_ram_client, vpicc::VpiccCard, Authenticator, Options};
+use dev_vpicc::{virt::with_ram_client, vpicc::VpiccCard};
+use piv_authenticator::{Authenticator, Options};
 
 use std::{sync::mpsc, thread::sleep, time::Duration};
 use stoppable_thread::spawn;

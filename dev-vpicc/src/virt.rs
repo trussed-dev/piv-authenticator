@@ -3,7 +3,7 @@
 pub mod dispatch {
 
     use trussed::{
-        api::{reply, request, Reply, Request},
+        api::{Reply, Request, reply, request},
         backend::{Backend as _, BackendId},
         error::Error,
         platform::Platform,
@@ -15,7 +15,6 @@ pub mod dispatch {
     use trussed_auth_backend::{AuthBackend, AuthContext, FilesystemLayout, MAX_HW_KEY_LEN};
     use trussed_chunked::ChunkedExtension;
     use trussed_hpke::HpkeExtension;
-    #[cfg(feature = "rsa")]
     use trussed_rsa_alloc::SoftwareRsa;
     use trussed_staging::{StagingBackend, StagingContext};
     use trussed_wrap_key_to_file::WrapKeyToFileExtension;
@@ -24,7 +23,6 @@ pub mod dispatch {
     pub const BACKENDS: &[BackendId<Backend>] = &[
         BackendId::Custom(Backend::Staging),
         BackendId::Custom(Backend::Auth),
-        #[cfg(feature = "rsa")]
         BackendId::Custom(Backend::Rsa),
         BackendId::Core,
     ];
@@ -32,7 +30,6 @@ pub mod dispatch {
     #[derive(Debug, Clone, Copy)]
     pub enum Backend {
         Auth,
-        #[cfg(feature = "rsa")]
         Rsa,
         Staging,
     }
@@ -129,7 +126,6 @@ pub mod dispatch {
                     request,
                     resources,
                 ),
-                #[cfg(feature = "rsa")]
                 Backend::Rsa => SoftwareRsa.request(&mut ctx.core, &mut (), request, resources),
             }
         }
@@ -182,7 +178,6 @@ pub mod dispatch {
                     }
                     Extension::Auth => Err(Error::RequestNotAvailable),
                 }
-                #[cfg(feature = "rsa")]
                 Backend::Rsa => Err(Error::RequestNotAvailable),
             }
         }

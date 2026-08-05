@@ -1,10 +1,12 @@
-use iso7816::{command::FromSliceError, Command, Status};
+use iso7816::{Command, Status, command::FromSliceError};
 
 use crate::virt::VirtClient;
 
 use std::convert::{TryFrom, TryInto};
 
-use crate::Authenticator;
+use piv_authenticator::Authenticator;
+
+use log::{trace, warn};
 
 const REQUEST_LEN: usize = 7609;
 const RESPONSE_LEN: usize = 7609;

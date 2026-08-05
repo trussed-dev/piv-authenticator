@@ -1,5 +1,3 @@
-#![cfg(all(feature = "vpicc", feature = "opensc-tests"))]
-
 mod card;
 
 use std::process::Command;

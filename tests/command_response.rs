@@ -1,5 +1,3 @@
-#![cfg(feature = "virt")]
-
 mod setup;
 
 use std::borrow::Cow;

@@ -1,4 +1,3 @@
-#![cfg(all(feature = "vpicc", feature = "pivy-tests"))]
 #![allow(clippy::zombie_processes, clippy::result_large_err)]
 
 mod card;

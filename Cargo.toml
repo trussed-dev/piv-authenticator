@@ -1,3 +1,7 @@
+[workspace]
+resolver = "3"
+members = ["dev-vpicc"]
+
 [package]
 name = "piv-authenticator"
 version = "0.6.0"
@@ -9,7 +13,7 @@ documentation = "https://docs.rs/piv-authenticator"
 
 [[example]]
 name = "vpicc"
-required-features = ["vpicc"]
+required-features = []
 
 [dependencies]
 apdu-app = { version = "0.2", optional = true }
@@ -20,28 +24,24 @@ heapless = "0.9.1"
 hex-literal = "1"
 iso7816 = "0.2.0"
 serde = { version = "1", default-features = false, features = ["derive"] }
-trussed = { version = "0.1", default-features = false, features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "shared-secret", "serde-extensions", "tdes", "x255"], optional = true }
 trussed-auth = "0.5"
-trussed-auth-backend = { version = "0.1.0", optional = true }
 untrusted = "0.9"
-vpicc = { version = "0.1.0", optional = true }
 log = "0.4"
 heapless-bytes = "0.5.0"
 subtle = { version = "2", default-features = false }
 # TODO: only enable rsa features when needed
 trussed-core = { version = "0.2", features = ["aes256-cbc", "chacha8-poly1305", "crypto-client", "ed255", "filesystem-client", "p256", "p384", "rsa2048", "rsa3072", "rsa4096", "shared-secret", "tdes", "x255"] }
 trussed-rsa-types = { version = "0.2", optional = true }
-trussed-rsa-alloc = { version = "0.4", features = ["raw"], optional = true }
 trussed-chunked = "0.3.0"
 trussed-hpke = "0.3.0"
 trussed-wrap-key-to-file = "0.3.0"
-trussed-staging = { version = "0.4", features = ["chunked", "hpke", "wrap-key-to-file"], default-features = false, optional = true }
 littlefs2-core = "0.1.0"
 cfg-if = "1.0.0"
 
 [dev-dependencies]
+dev-vpicc = { path = "dev-vpicc" }
+vpicc = "0.1.0"
 rand_core = { version = "0.10" }
-trussed = { version = "0.1.0", features = ["virt"] }
 env_logger = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = { version = "0.11", features = ["std"] }
@@ -62,12 +62,6 @@ asn1 = "0.24.1"
 [features]
 default = []
 apdu-dispatch = ["dep:apdu-app"]
-strict-pin = []
-std = []
-vpicc = ["std", "dep:vpicc", "virt", "dep:trussed-auth-backend"]
-virt = ["std", "trussed/virt", "dep:trussed-staging", "dep:trussed-auth-backend", "dep:trussed-rsa-alloc"]
-pivy-tests = []
-opensc-tests = []
 alloc = []
 rsa = ["dep:trussed-rsa-types", "alloc"]
 delog  = ["dep:delog"]

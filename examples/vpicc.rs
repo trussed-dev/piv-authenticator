@@ -8,14 +8,15 @@
 
 // TODO: add CLI
 
-use piv_authenticator::{virt::with_ram_client, Authenticator, Options};
+use dev_vpicc::{virt::with_ram_client, vpicc::VpiccCard};
+use piv_authenticator::{Authenticator, Options};
 
 fn main() {
     env_logger::init();
 
     with_ram_client("piv-authenticator", |client| {
         let card = Authenticator::new(client, Options::default());
-        let mut vpicc_card = piv_authenticator::vpicc::VpiccCard::new(card);
+        let mut vpicc_card = VpiccCard::new(card);
         let vpicc = vpicc::connect().expect("failed to connect to vpicc");
         vpicc
             .run(&mut vpicc_card)

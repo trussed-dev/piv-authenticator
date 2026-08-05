@@ -8,10 +8,8 @@ macro_rules! cmd {
     };
 }
 
-use piv_authenticator::{
-    virt::{with_ram_client, VirtClient},
-    Authenticator, Options,
-};
+use dev_vpicc::virt::{with_ram_client, VirtClient};
+use piv_authenticator::{Authenticator, Options};
 
 pub type Piv<'a> = piv_authenticator::Authenticator<VirtClient<'a>>;
 

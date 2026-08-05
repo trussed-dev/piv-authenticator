@@ -1,4 +1,4 @@
-#![cfg_attr(not(any(test, feature = "std")), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 #[cfg(not(feature = "delog"))]
 #[macro_use]
@@ -26,11 +26,6 @@ pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 use trussed_chunked::ChunkedClient;
 use trussed_hpke::HpkeClient;
 use trussed_wrap_key_to_file::WrapKeyToFileClient;
-
-#[cfg(feature = "virt")]
-pub mod virt;
-#[cfg(feature = "vpicc")]
-pub mod vpicc;
 
 use core::convert::TryInto;
 

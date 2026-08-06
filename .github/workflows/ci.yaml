@@ -20,10 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@master
       - name: start pcscd
-        run: pcscd
+        run: pcscd -d -f --disable-polkit
+        id: pcscd
+        background: true
       - name: Install rust
         run: rustup show active-toolchain || rustup toolchain install
       - name: Run checks
         run: make lint
       - name: Run tests
         run: make test TEST_FEATURES="rsa"
+      - name: Stop pcscd
+        cancel: pcscd

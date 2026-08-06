@@ -9,7 +9,7 @@ RUN cd pivy-0.12.1 && make pivy-tool
 
 FROM docker.io/rust:latest
 
-RUN apt update && apt install --yes scdaemon libclang-dev llvm python3-pip vsmartcard-vpcd pkg-config nettle-dev libpcsclite-dev opensc libbsd-dev 
+RUN apt update && apt install --yes scdaemon libclang-dev llvm python3-pip vsmartcard-vpicc pkg-config nettle-dev libpcsclite-dev opensc libbsd-dev 
 
 RUN rustup component add clippy rustfmt && rustup target add thumbv7em-none-eabi
 RUN cargo install cargo-tarpaulin --profile release && rm -rf "$CARGO_HOME"/registry

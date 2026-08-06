@@ -43,25 +43,6 @@ const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
 
 const EXPECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(30));
 
-#[derive(Default)]
-struct LogWriter(Vec<u8>);
-
-impl Write for LogWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.0.flush()
-    }
-}
-
-impl Drop for LogWriter {
-    fn drop(&mut self) {
-        io::stdout().write_all(&self.0).unwrap();
-    }
-}
-
 #[test_log::test]
 fn list() {
     let test = || {

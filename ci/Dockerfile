@@ -13,8 +13,6 @@ RUN apt update && apt install --yes scdaemon libclang-dev llvm python3-pip vsmar
 
 RUN rustup component add clippy rustfmt && rustup target add thumbv7em-none-eabi
 RUN cargo install cargo-tarpaulin --profile release && rm -rf "$CARGO_HOME"/registry
-# initialize cargo cache
-RUN cargo search
 
 ENV CARGO_HOME=/app/.cache/cargo
 

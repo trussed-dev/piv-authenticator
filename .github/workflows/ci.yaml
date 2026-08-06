@@ -25,9 +25,17 @@ jobs:
         background: true
       - name: Install rust
         run: rustup show active-toolchain || rustup toolchain install
-      - name: Run checks
-        run: make lint
       - name: Run tests
-        run: make test TEST_FEATURES="rsa"
+        run: make ci
+      - name: Upload tarpaulin html report
+        uses: actions/upload-artifact@v7
+        with:
+          name: tarpaulin-html-report
+          path: tarpaulin-report.html
+      - name: Upload tarpaulin xml report
+        uses: actions/upload-artifact@v7
+        with:
+          name: tarpaulin-xml-report
+          path: tarpaulin-report.xml
       - name: Stop pcscd
         cancel: pcscd

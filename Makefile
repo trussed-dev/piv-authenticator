@@ -32,12 +32,12 @@ lint:
 	
 .PHONY: tarpaulin
 tarpaulin:
-	cargo tarpaulin --features $(TEST_FEATURES) -o Html -o Xml
+	cargo tarpaulin --engine Llvm --features $(TEST_FEATURES) -o Html -o Xml
 
 .PHONY: vpicc-example
 vpicc-example:
 	cargo run --example vpicc
 	
 .PHONY: ci
-ci: lint tarpaulin
+ci: lint test
 	

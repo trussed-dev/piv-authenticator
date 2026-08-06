@@ -4,6 +4,7 @@ use piv_authenticator::{Authenticator, Options};
 use std::{sync::mpsc, thread::sleep, time::Duration};
 use stoppable_thread::spawn;
 
+use std::io::{self, Write};
 use std::panic::{catch_unwind, resume_unwind, UnwindSafe};
 use std::process::Command;
 use std::sync::Mutex;
@@ -80,4 +81,23 @@ pub fn with_lock_and_reset<F: UnwindSafe + FnOnce() -> R, R: UnwindSafe>(f: F) {
     assert!(output.status.success());
 
     drop(lock);
+}
+
+#[derive(Default)]
+pub struct LogWriter(pub Vec<u8>);
+
+impl Write for LogWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl Drop for LogWriter {
+    fn drop(&mut self) {
+        io::stdout().write_all(&self.0).unwrap();
+    }
 }

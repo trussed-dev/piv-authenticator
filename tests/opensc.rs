@@ -15,7 +15,9 @@ const EXPECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(30));
 #[test_log::test]
 fn list() {
     let test = || {
-        let mut p = spawn("piv-tool -n").unwrap();
+        let p = spawn("piv-tool -n").unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
@@ -46,7 +48,9 @@ fn admin_mutual() {
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
             .args(["-A", "M:9B:03"]);
-        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        let p = expectrl::session::Session::spawn(command).unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
@@ -77,7 +81,9 @@ fn admin_card() {
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
             .args(["-A", "A:9B:03"]);
-        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        let p = expectrl::session::Session::spawn(command).unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
@@ -107,7 +113,9 @@ fn admin_mutual_bad_key() {
         command
             .env("PIV_EXT_AUTH_KEY", "tests/bad_admin_key")
             .args(["-A", "M:9B:03"]);
-        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        let p = expectrl::session::Session::spawn(command).unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
@@ -133,7 +141,9 @@ fn admin_card_bad_key() {
         command
             .env("PIV_EXT_AUTH_KEY", "tests/bad_admin_key")
             .args(["-A", "A:9B:03"]);
-        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        let p = expectrl::session::Session::spawn(command).unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
@@ -159,7 +169,9 @@ fn generate_key() {
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
             .args(["-A", "M:9B:03", "-G", "9A:11"]);
-        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        let p = expectrl::session::Session::spawn(command).unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();
@@ -186,7 +198,9 @@ fn generate_key() {
         command
             .env("PIV_EXT_AUTH_KEY", "tests/default_admin_key")
             .args(["-A", "M:9B:03", "-G", "9A:07"]);
-        let mut p = expectrl::session::Session::spawn(command).unwrap();
+        let p = expectrl::session::Session::spawn(command).unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
         p.set_expect_timeout(EXPECT_TIMEOUT);
         p.expect(format!("Using reader with a card: {CARD}"))
             .unwrap();

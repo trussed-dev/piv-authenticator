@@ -6,15 +6,22 @@ const CARD: &str = env!("PIV_DANGEROUS_TEST_CARD_READER");
 const SERIAL: &str = env!("PIV_DANGEROUS_TEST_CARD_PIV_SERIAL");
 
 pub mod card;
+use card::*;
 
 #[test]
 fn test_serial_number() {
-    if !card::dangerous_real_card_enabled() {
-        return;
+    let test = || {
+        let p = spawn("piv-tool --serial").unwrap();
+        let mut logger = LogWriter(Vec::new());
+        let mut p = expectrl::session::log(p, &mut logger).unwrap();
+        p.expect(format!("Using reader with a card: {CARD}"))
+            .unwrap();
+        p.expect(SERIAL).unwrap();
+        p.expect(Eof).unwrap();
+    };
+    if card::dangerous_real_card_enabled() {
+        with_lock_and_reset(test)
+    } else {
+        with_vsc(WITHOUT_UUID, test);
     }
-    let mut p = spawn("piv-tool --serial").unwrap();
-    p.expect(format!("Using reader with a card: {CARD}"))
-        .unwrap();
-    p.expect(SERIAL).unwrap();
-    p.expect(Eof).unwrap();
 }

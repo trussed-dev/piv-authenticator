@@ -73,12 +73,6 @@ log-info = []
 log-warn = []
 log-error = []
 
-[patch.crates-io]
-trussed = { git = "https://github.com/trussed-dev/trussed", rev = "0f8df68be879acdde1f8cf428c11e5d29692a47b" }
-trussed-auth-backend = { git = "https://github.com/trussed-dev/trussed-auth", tag = "backend-v0.1.0" }
-trussed-rsa-alloc = { git = "https://github.com/trussed-dev/trussed-rsa-backend.git", tag = "v0.4.0" }
-trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "v0.4.0" }
-
 [profile.dev.package.rsa]
 opt-level = 2
 

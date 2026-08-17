@@ -4,7 +4,7 @@ members = ["dev-vpicc"]
 
 [package]
 name = "piv-authenticator"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 edition = "2021"
 license = "Apache-2.0 OR MIT"

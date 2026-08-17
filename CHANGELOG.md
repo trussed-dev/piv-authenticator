@@ -2,9 +2,15 @@
 
 ## [Unreleased][]
 
-[Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.0...HEAD
 
 -
+
+## [v0.7.0][] (2026-08-17)
+
+[v0.7.0]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.7.0
+
+- Move the test setup into a local dependency, use released dependencies and prepare a release to crates.io.
 
 ## [v0.6.0][] (2026-03-25)
 

@@ -10,6 +10,7 @@ edition = "2021"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/nitrokey/piv-authenticator"
 documentation = "https://docs.rs/piv-authenticator"
+description = "PIV authenticator"
 
 [[example]]
 name = "vpicc"

@@ -14,6 +14,29 @@
         ]
     ),
     IoTest(
+        name: "Select resets the security state",
+        cmd_resp: [
+            VerifyApplicationPin(),
+            // VERIFY with no data reports success while the pin is verified
+            IoData(input: "00 20 00 80"),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            Select,
+            // after re-selecting, the pin is no longer verified
+            IoData(input: "00 20 00 80", expected_status: RemainingRetries(3)),
+            // and the management authentication is gone too
+            PutData(
+                input: "5C 01 7E 53 10 000102030405060708090A0B0C0D0E0F",
+                expected_status: SecurityStatusNotSatisfied,
+            ),
+        ]
+    ),
+    IoTest(
         name: "Bad management key",
         cmd_resp: [
             AuthenticateManagement(

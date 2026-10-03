@@ -403,6 +403,15 @@ pub enum Container {
     BiometricInformationTemplatesGroupTemplate,
     SecureMessagingCertificateSigner,
     PairingCodeReferenceDataContainer,
+
+    // Yubico vendor objects: Windows reads its trusted root certificates from these five
+    // containers (a PKCS#7 blob split across them), written by client tools such as
+    // certutil through ordinary PUT DATA
+    MsRoots1,
+    MsRoots2,
+    MsRoots3,
+    MsRoots4,
+    MsRoots5,
 }
 
 // these are just the "contact" rules, need to model "contactless" also
@@ -487,6 +496,12 @@ impl TryFrom<&[u8]> for Container {
             _ if tag == hex!("5FC121") => CardholderIrisImages,
             _ if tag == hex!("5FC122") => SecureMessagingCertificateSigner,
             _ if tag == hex!("5FC123") => PairingCodeReferenceDataContainer,
+
+            _ if tag == hex!("5FFF11") => MsRoots1,
+            _ if tag == hex!("5FFF12") => MsRoots2,
+            _ if tag == hex!("5FFF13") => MsRoots3,
+            _ if tag == hex!("5FFF14") => MsRoots4,
+            _ if tag == hex!("5FFF15") => MsRoots5,
 
             _ if tag == hex!("7E") => DiscoveryObject,
             _ if tag == hex!("7F61") => BiometricInformationTemplatesGroupTemplate,

@@ -5,6 +5,8 @@
 [Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.1...HEAD
 
 - Answer NotFound to GET DATA for an unknown data object tag
+- Add the Yubico msroots data objects (5FFF11 to 5FFF15), from which Windows reads its
+  trusted root certificates
 
 ## [v0.7.1][] (2026-11-20)
 

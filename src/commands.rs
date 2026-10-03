@@ -370,10 +370,11 @@ impl<'l> TryFrom<iso7816::command::CommandView<'l>> for Command<'l> {
             (0x00, Instruction::Unknown(0x01), 0x00, 0x00) => {
                 Self::YkExtension(YubicoPivExtension::GetSerial)
             }
-            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFE) => {
+            // P2 0xFF sets the key without a touch requirement, 0xFE with one
+            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFF) => {
                 Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Never))
             }
-            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFF) => {
+            (0x00, Instruction::Unknown(0xff), 0xFF, 0xFE) => {
                 Self::YkExtension(YubicoPivExtension::SetManagementKey(TouchPolicy::Always))
             }
             (0x00, Instruction::Unknown(0xfe), p1, p2) => Self::YkExtension(

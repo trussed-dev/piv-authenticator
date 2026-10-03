@@ -49,6 +49,7 @@ pub struct Options {
     label: &'static [u8],
     url: &'static [u8],
     uuid: Option<[u8; 16]>,
+    version: [u8; 3],
 }
 
 impl Default for Options {
@@ -64,6 +65,7 @@ impl Options {
             label: NITROKEY_APPLICATION_LABEL,
             url: NITROKEY_APPLICATION_URL,
             uuid: None,
+            version: [6, 6, 6],
         }
     }
 
@@ -78,6 +80,17 @@ impl Options {
     }
     pub const fn uuid(self, uuid: Option<[u8; 16]>) -> Self {
         Self { uuid, ..self }
+    }
+    /// The firmware version reported by the Yubico GET VERSION extension.
+    ///
+    /// Clients gate features on this: ykman and yubico-piv-tool assume a 3DES
+    /// default management key below 5.7 and AES-192 from 5.7 on, GET METADATA
+    /// is only used from 5.3 on, and yubikey.rs refuses serial retrieval for
+    /// any major version but 4 and 5. Deployments that want to interoperate
+    /// with the Yubico ecosystem should report a version whose feature set
+    /// matches what this app implements, e.g. 5.4.0.
+    pub const fn version(self, version: [u8; 3]) -> Self {
+        Self { version, ..self }
     }
 }
 
@@ -202,8 +215,7 @@ where
             }
 
             YubicoPivExtension::GetVersion => {
-                // make up a version, be >= 5.0.0
-                reply.extend_from_slice(&[0x06, 0x06, 0x06]).ok();
+                reply.extend_from_slice(&self.options.version).ok();
             }
 
             YubicoPivExtension::Attest(_slot) => return Err(Status::FunctionNotSupported),

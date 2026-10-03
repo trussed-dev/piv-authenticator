@@ -14,6 +14,25 @@
         ]
     ),
     IoTest(
+        name: "Version from the options",
+        version: Some((5, 4, 0)),
+        cmd_resp: [
+            IoData(
+                input: "00 FD 00 00 00",
+                output: Data("05 04 00"),
+            ),
+        ]
+    ),
+    IoTest(
+        name: "Default version",
+        cmd_resp: [
+            IoData(
+                input: "00 FD 00 00 00",
+                output: Data("06 06 06"),
+            ),
+        ]
+    ),
+    IoTest(
         name: "Bad management key",
         cmd_resp: [
             AuthenticateManagement(

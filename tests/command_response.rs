@@ -182,6 +182,18 @@ struct IoTest {
     cmd_resp: Vec<IoCmd>,
     #[serde(default)]
     uuid_config: UuidConfig,
+    /// Firmware version the app is configured to report, if any
+    #[serde(default)]
+    version: Option<(u8, u8, u8)>,
+}
+
+impl IoTest {
+    fn options(&self, base: piv_authenticator::Options) -> piv_authenticator::Options {
+        match self.version {
+            Some((major, minor, patch)) => base.version([major, minor, patch]),
+            None => base,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -800,22 +812,25 @@ fn command_response() {
         println!("Running {}", t.name);
         if matches!(t.uuid_config, UuidConfig::None | UuidConfig::WithBoth(_)) {
             println!("Running {} without uuid", t.name);
-            setup::piv(setup::WITHOUT_UUID, |card| {
+            setup::piv(t.options(setup::WITHOUT_UUID), |card| {
                 for io in &t.cmd_resp {
                     io.run(card);
                 }
             });
         }
         match t.uuid_config {
-            UuidConfig::WithUuid(uuid) | UuidConfig::WithBoth(uuid) => {
+            UuidConfig::WithUuid(ref uuid) | UuidConfig::WithBoth(ref uuid) => {
                 println!("Running {} with uuid {uuid:?}", t.name);
-                let uuid = (&*parse_hex(&uuid)).try_into().unwrap();
+                let uuid = (&*parse_hex(uuid)).try_into().unwrap();
 
-                setup::piv(piv_authenticator::Options::new().uuid(Some(uuid)), |card| {
-                    for io in &t.cmd_resp {
-                        io.run(card);
-                    }
-                });
+                setup::piv(
+                    t.options(piv_authenticator::Options::new().uuid(Some(uuid))),
+                    |card| {
+                        for io in &t.cmd_resp {
+                            io.run(card);
+                        }
+                    },
+                );
             }
             _ => {}
         }

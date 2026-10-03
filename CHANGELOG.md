@@ -4,7 +4,8 @@
 
 [Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.0...HEAD
 
--
+- Make the firmware version reported by the Yubico GET VERSION extension configurable
+  through `Options` (the default stays 6.6.6)
 
 ## [v0.7.0][] (2026-08-17)
 

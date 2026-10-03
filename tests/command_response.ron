@@ -14,6 +14,17 @@
         ]
     ),
     IoTest(
+        name: "Malformed pin burns a retry",
+        cmd_resp: [
+            // eight 0xFF bytes can never match, but count like a wrong pin
+            VerifyApplicationPin(pin: "FFFFFFFFFFFFFFFF", expected_status: RemainingRetries(2)),
+            VerifyApplicationPin(pin: "FFFFFFFFFFFFFFFF", expected_status: RemainingRetries(1)),
+            // the correct pin still verifies and resets the counter
+            VerifyApplicationPin(),
+            VerifyApplicationPin(pin: "FFFFFFFFFFFFFFFF", expected_status: RemainingRetries(2)),
+        ]
+    ),
+    IoTest(
         name: "Bad management key",
         cmd_resp: [
             AuthenticateManagement(

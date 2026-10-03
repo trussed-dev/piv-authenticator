@@ -166,10 +166,11 @@ impl TryFrom<VerifyArguments<'_>> for Verify {
         }
         Ok(match (logout.0, data.len()) {
             (false, 0) => Verify::Status(key_reference),
-            (false, 8) => Verify::Login(VerifyLogin::PivPin(
-                data.try_into()
-                    .map_err(|_| Status::IncorrectDataParameter)?,
-            )),
+            // A malformed PIN of the right length can never match the stored
+            // one, so it burns a retry like a wrong PIN
+            (false, 8) => Verify::Login(VerifyLogin::PivPin(Pin(data
+                .try_into()
+                .map_err(|_| Status::IncorrectDataParameter)?))),
             (false, _) => return Err(Status::IncorrectDataParameter),
             (true, 0) => Verify::Logout(key_reference),
             (true, _) => return Err(Status::IncorrectDataParameter),

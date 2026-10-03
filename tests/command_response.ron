@@ -14,6 +14,26 @@
         ]
     ),
     IoTest(
+        name: "Select by RID",
+        cmd_resp: [
+            // Yubico ecosystem clients select with only the 5 byte RID
+            IoData(
+                input: "00 A4 04 00 05 A000000308",
+                output: NonZero,
+            ),
+            // the full AID still works
+            IoData(
+                input: "00 A4 04 00 0B A000000308 00001000 0100",
+                output: NonZero,
+            ),
+            // a different PIX under the same RID is not answered by the app
+            IoData(
+                input: "00 A4 04 00 0B A000000308 00002000 0100",
+                expected_status: NotFound,
+            ),
+        ]
+    ),
+    IoTest(
         name: "Bad management key",
         cmd_resp: [
             AuthenticateManagement(

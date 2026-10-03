@@ -23,7 +23,7 @@ delog = { version = "0.1.5", optional = true }
 flexiber = { version = "0.2", features = ["derive", "heapless"] }
 heapless = "0.9.1"
 hex-literal = "1"
-iso7816 = "0.2.0"
+iso7816 = "0.2.2"
 serde = { version = "1", default-features = false, features = ["derive"] }
 trussed-auth = "0.5"
 untrusted = "0.9"

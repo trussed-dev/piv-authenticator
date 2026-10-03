@@ -8,6 +8,8 @@
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
+- Truncate the application identifier at the 5 byte RID so SELECT with a partial
+  AID is answered
 
 ## [v0.7.0][] (2026-08-17)
 

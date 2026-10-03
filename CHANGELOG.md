@@ -4,7 +4,8 @@
 
 [Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.0...HEAD
 
--
+- Fix the PUK being initialized with the PIN's retry counter (3) instead of its own
+  default (5)
 
 ## [v0.7.0][] (2026-08-17)
 

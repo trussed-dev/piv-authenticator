@@ -873,7 +873,7 @@ impl Persistent {
         try_syscall!(client.set_pin(
             PinType::Puk,
             default_puk.clone(),
-            Some(Self::PIN_RETRIES_DEFAULT),
+            Some(Self::PUK_RETRIES_DEFAULT),
             true
         ))
         .map_err(|_err| {

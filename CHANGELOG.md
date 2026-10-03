@@ -8,6 +8,8 @@
 - Add the Yubico msroots data objects (5FFF11 to 5FFF15), from which Windows reads its
   trusted root certificates.
 - Add the MSCMAP data object used by windows to store the container names and the default container.
+- Truncate the application identifier at the 5 byte RID so SELECT with a partial
+  AID is answered.
 
 ## [v0.7.1][] (2026-11-20)
 

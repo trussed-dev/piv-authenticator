@@ -14,6 +14,17 @@
         ]
     ),
     IoTest(
+        name: "Change reference data reports remaining retries",
+        cmd_resp: [
+            ChangePuk(old: "3131313131313131", new: "0102030405060708", expected_status: RemainingRetries(4)),
+            ChangePin(old: "3131313131313131", new: "313131313131FFFF", expected_status: RemainingRetries(2)),
+            ChangePin(old: "3131313131313131", new: "313131313131FFFF", expected_status: RemainingRetries(1)),
+            ChangePin(old: "3131313131313131", new: "313131313131FFFF", expected_status: OperationBlocked),
+            // once blocked, even the correct pin is refused
+            ChangePin(new: "313131313131FFFF", expected_status: OperationBlocked),
+        ]
+    ),
+    IoTest(
         name: "Bad management key",
         cmd_resp: [
             AuthenticateManagement(

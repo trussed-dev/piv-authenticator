@@ -1051,7 +1051,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         &mut self,
         algo: AsymmetricAlgorithms,
         key: AsymmetricKeyReference,
-        #[cfg_attr(not(feature = "rsa"), allow(unused))] data: &[u8],
+        data: &[u8],
         mut _reply: Reply<'_>,
     ) -> Result {
         if !self
@@ -1095,6 +1095,43 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 );
                 Ok(())
             }
+            (AsymmetricAlgorithms::P256 | AsymmetricAlgorithms::P384, _) => {
+                // The private scalar comes in DO 0x06, zero-padded to the curve's scalar size
+                let scalar = tlv::get_do(&[0x06], data).ok_or(Status::IncorrectDataParameter)?;
+                let expected_len = algo.scalar_len().ok_or(Status::FunctionNotSupported)?;
+                if scalar.len() != expected_len {
+                    warn!(
+                        "ECC import with scalar of length {}, expected {expected_len}",
+                        scalar.len()
+                    );
+                    return Err(Status::IncorrectDataParameter);
+                }
+                // The software backend accepts the zero scalar, real ones do not
+                if scalar.iter().all(|&b| b == 0) {
+                    warn!("ECC import with the zero scalar");
+                    return Err(Status::IncorrectDataParameter);
+                }
+                let id = try_syscall!(self.trussed.unsafe_inject_key(
+                    algo.key_mechanism(),
+                    scalar,
+                    key.storage(self.options.storage),
+                    KeySerialization::Raw
+                ))
+                .map_err(|_err| {
+                    warn!("Failed ECC import: {_err:?}");
+                    Status::IncorrectDataParameter
+                })?
+                .key;
+                self.state.persistent.replace_asymmetric_key(
+                    key,
+                    algo,
+                    id,
+                    self.trussed,
+                    self.options.storage,
+                );
+                Ok(())
+            }
+            #[cfg(feature = "rsa")]
             _ => Err(Status::FunctionNotSupported),
         }
     }

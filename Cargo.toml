@@ -46,6 +46,8 @@ env_logger = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = { version = "0.11", features = ["std"] }
 hex  = "0.4"
+p256 = { version = "0.13", features = ["ecdsa"] }
+p384 = { version = "0.13", features = ["ecdsa"] }
 test-log = "0.2.11"
 ron  = "0.8"
 des = "0.9"

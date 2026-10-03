@@ -197,8 +197,14 @@ where
         info!("yubico extension: {:?}", instruction);
         match instruction {
             YubicoPivExtension::GetSerial => {
-                // make up a 4-byte serial
-                reply.extend_from_slice(&[0x00, 0x52, 0xf7, 0x43]).ok();
+                // derive a stable per-device serial from the uuid; fall back to
+                // a made-up constant on platforms that do not provide one
+                let serial = self
+                    .options
+                    .uuid
+                    .map(|uuid| [uuid[0], uuid[1], uuid[2], uuid[3]])
+                    .unwrap_or([0x00, 0x52, 0xf7, 0x43]);
+                reply.extend_from_slice(&serial).ok();
             }
 
             YubicoPivExtension::GetVersion => {

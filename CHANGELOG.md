@@ -8,6 +8,7 @@
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
+- Derive the GET SERIAL response from the device uuid instead of a shared constant
 
 ## [v0.7.0][] (2026-08-17)
 

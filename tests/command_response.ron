@@ -488,6 +488,26 @@
         ]
     ),
     IoTest(
+        name: "Serial derived from the uuid",
+        uuid_config: WithUuid("00112233445566778899AABBCCDDEEFF"),
+        cmd_resp: [
+            IoData(
+                input: "00 F8 00 00 00",
+                output: Data("00 11 22 33"),
+            ),
+        ]
+    ),
+    IoTest(
+        name: "Serial without a uuid",
+        uuid_config: None,
+        cmd_resp: [
+            IoData(
+                input: "00 F8 00 00 00",
+                output: Data("00 52 F7 43"),
+            ),
+        ]
+    ),
+    IoTest(
         name: "Protected DOS",
         uuid_config: WithBoth("00112233445566778899AABBCCDDEEFF"),
         cmd_resp: [

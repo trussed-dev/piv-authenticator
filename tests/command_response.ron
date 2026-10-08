@@ -256,6 +256,71 @@
         ]
     ),
     IoTest(
+        name: "Empty PUT DATA deletes",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            PutData(
+                input: "5C 03 5FC10B 53 04 00010203",
+            ),
+            GetData(
+                input: "5C 03 5FC10B",
+                output: Data("53 04 00010203")
+            ),
+            PutData(
+                input: "5C 03 5FC10B 53 00",
+            ),
+            GetData(
+                input: "5C 03 5FC10B",
+                output: All(),
+                expected_status: NotFound
+            ),
+            PutData(
+                input: "5C 03 5FC10D 53 04 00010203",
+            ),
+            GetData(
+                input: "5C 03 5FC10C",
+                output: Data("53 08 C1 01 01 C2 01 00 FE 00")
+            ),
+            PutData(
+                input: "5C 03 5FC10D 53 00",
+            ),
+            GetData(
+                input: "5C 03 5FC10C",
+                output: Data("53 08 C1 01 00 C2 01 00 FE 00")
+            ),
+            PutData(
+                input: "5C 03 5FC103 53 04 00010203",
+            ),
+            VerifyApplicationPin(),
+            GetData(
+                input: "5C 03 5FC103",
+                output: Data("53 04 00010203")
+            ),
+            PutData(
+                input: "5C 03 5FC103 53 00",
+            ),
+            GetData(
+                input: "5C 03 5FC103",
+                output: All(),
+                expected_status: NotFound
+            ),
+            PutData(
+                input: "5C 03 5FC102 53 00",
+            ),
+            GetData(
+                input: "5C 03 5FC102",
+                output: All(),
+                expected_status: NotFound
+            ),
+        ]
+    ),
+    IoTest(
         name: "PUT DATA",
         cmd_resp: [
             GetData(

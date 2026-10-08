@@ -8,6 +8,7 @@
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
+- Delete a data object on PUT DATA with an empty object
 
 ## [v0.7.0][] (2026-08-17)
 

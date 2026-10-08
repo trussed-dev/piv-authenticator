@@ -1181,7 +1181,8 @@ impl ContainerStorage {
 
     fn default(self) -> Option<Vec<u8, MAX_MESSAGE_LENGTH>> {
         match self.0 {
-            Container::CardHolderUniqueIdentifier => panic!("CHUID should alway be set"),
+            // Written at initialization, absent only once deleted
+            Container::CardHolderUniqueIdentifier => None,
             Container::CardCapabilityContainer => Some(Vec::from_slice(&CARD_CAP).unwrap()),
             Container::DiscoveryObject => Some(Vec::from_slice(&DISCOVERY_OBJECT).unwrap()),
             Container::PrintedInformation => Some(Vec::from_slice(&PRINTED_INFORMATION).unwrap()),
@@ -1247,6 +1248,17 @@ impl ContainerStorage {
             Ok(true)
         } else {
             Ok(false)
+        }
+    }
+
+    pub fn remove(self, client: &mut impl crate::Client, storage: Location) {
+        // Already absent is fine
+        try_syscall!(client.remove_file(storage, self.path())).ok();
+        if matches!(
+            self.0.contact_access_rule(),
+            ReadAccessRule::PinOrOcc | ReadAccessRule::Pin
+        ) {
+            try_syscall!(client.remove_file(storage, self.path_key())).ok();
         }
     }
 

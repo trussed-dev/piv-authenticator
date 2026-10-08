@@ -1012,6 +1012,11 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         };
 
         use state::ContainerStorage;
+        // An empty object deletes
+        if data.is_empty() {
+            ContainerStorage(container).remove(self.trussed, self.options.storage);
+            return Ok(());
+        }
         ContainerStorage(container).save(self.trussed, data, self.options.storage)
     }
 

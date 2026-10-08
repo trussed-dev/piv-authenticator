@@ -136,6 +136,14 @@ where
         use piv_types::Algorithms::*;
         info!("selecting PIV maybe");
 
+        // Selecting the application resets the security state
+        self.state.volatile.clear_pin_verified(&mut self.trussed);
+        self.state.volatile.app_security_status.pin_just_verified = false;
+        self.state
+            .volatile
+            .app_security_status
+            .administrator_verified = false;
+
         let application_property_template = piv_types::ApplicationPropertyTemplate::default()
             .with_application_label(self.options.label)
             .with_application_url(self.options.url)

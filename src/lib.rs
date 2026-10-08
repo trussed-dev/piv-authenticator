@@ -1039,6 +1039,11 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             }
         }
 
+        // Stay absent while there is nothing to report
+        if num_certs == 0 {
+            return Err(Status::NotFound);
+        }
+
         reply.expand(&[0xC1, 0x01])?;
         reply.expand(&[num_certs])?;
         reply.expand(&[0xC2, 0x01])?;

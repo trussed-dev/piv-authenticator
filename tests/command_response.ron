@@ -14,6 +14,31 @@
         ]
     ),
     IoTest(
+        name: "Key history stays absent while empty",
+        cmd_resp: [
+            GetData(
+                input: "5C 03 5FC10C",
+                output: All(),
+                expected_status: NotFound,
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            // with a certificate stored for a retired slot, the object appears
+            PutData(
+                input: "5C 03 5FC10D 53 04 DEADBEEF",
+            ),
+            GetData(
+                input: "5C 03 5FC10C",
+                output: Data("53 08 C1 01 01 C2 01 00 FE 00"),
+            ),
+        ]
+    ),
+    IoTest(
         name: "Bad management key",
         cmd_resp: [
             AuthenticateManagement(

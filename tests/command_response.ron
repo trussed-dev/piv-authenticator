@@ -256,6 +256,23 @@
         ]
     ),
     IoTest(
+        name: "Unknown data object",
+        cmd_resp: [
+            GetData(
+                input: "5C 03 5FFF00",
+                expected_status: NotFound
+            ),
+            GetData(
+                input: "5C 03 5FABCD",
+                expected_status: NotFound
+            ),
+            GetData(
+                input: "5C 03 5FC1FF",
+                expected_status: NotFound
+            ),
+        ]
+    ),
+    IoTest(
         name: "PUT DATA",
         cmd_resp: [
             GetData(

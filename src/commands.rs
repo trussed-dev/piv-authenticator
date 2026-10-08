@@ -111,8 +111,9 @@ impl TryFrom<&[u8]> for GetData {
         if tagged_slice.tag() != flexiber::Tag::application(0x1C) {
             return Err(Status::IncorrectDataParameter);
         }
+        // An unknown tag is an absent object
         let container = containers::Container::try_from(tagged_slice.as_bytes())
-            .map_err(|_| Status::IncorrectDataParameter)?;
+            .map_err(|_| Status::NotFound)?;
 
         info!("request to GetData for container {:?}", container);
         Ok(Self(container))

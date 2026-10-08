@@ -221,6 +221,16 @@ impl AsymmetricAlgorithms {
         }
     }
 
+    /// Length of the private scalar, none for RSA
+    pub fn scalar_len(self) -> Option<usize> {
+        match self {
+            #[cfg(feature = "rsa")]
+            Self::Rsa2048 | Self::Rsa3072 | Self::Rsa4096 => None,
+            Self::P256 => Some(32),
+            Self::P384 => Some(48),
+        }
+    }
+
     pub fn sign_serialization(self) -> SignatureSerialization {
         match self {
             #[cfg(feature = "rsa")]

@@ -132,6 +132,65 @@ fn tlv(tag: &[u8], data: &[u8]) -> Vec<u8> {
     buf
 }
 
+/// Parse one TLV with a single-byte tag, returning (tag, value, remainder)
+fn take_tlv(data: &[u8]) -> Option<(u8, &[u8], &[u8])> {
+    let tag = *data.first()?;
+    let (len, rest) = match *data.get(1)? {
+        len if len <= 0x7F => (len as usize, &data[2..]),
+        0x81 => (*data.get(2)? as usize, &data[3..]),
+        0x82 => (
+            u16::from_be_bytes([*data.get(2)?, *data.get(3)?]) as usize,
+            &data[4..],
+        ),
+        _ => return None,
+    };
+    (rest.len() >= len).then(|| (tag, &rest[..len], &rest[len..]))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Curve {
+    P256,
+    P384,
+}
+
+impl Curve {
+    fn of_scalar(scalar: &[u8]) -> Self {
+        match scalar.len() {
+            32 => Self::P256,
+            48 => Self::P384,
+            len => panic!("no supported curve has a {len} byte scalar"),
+        }
+    }
+
+    fn algorithm(self) -> Algorithm {
+        match self {
+            Self::P256 => Algorithm::P256,
+            Self::P384 => Algorithm::P384,
+        }
+    }
+
+    /// Verify a DER signature over `digest` against the key derived from `scalar`
+    fn verify(self, scalar: &[u8], digest: &[u8], signature: &[u8]) {
+        use p256::ecdsa::signature::hazmat::PrehashVerifier;
+        match self {
+            Self::P256 => {
+                let key = p256::ecdsa::SigningKey::from_slice(scalar).unwrap();
+                let signature = p256::ecdsa::Signature::from_der(signature).unwrap();
+                key.verifying_key()
+                    .verify_prehash(digest, &signature)
+                    .expect("bad P-256 signature");
+            }
+            Self::P384 => {
+                let key = p384::ecdsa::SigningKey::from_slice(scalar).unwrap();
+                let signature = p384::ecdsa::Signature::from_der(signature).unwrap();
+                key.verifying_key()
+                    .verify_prehash(digest, &signature)
+                    .expect("bad P-384 signature");
+            }
+        }
+    }
+}
+
 fn build_command(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8], le: u16) -> Vec<u8> {
     iso7816::command::CommandBuilder::new(cla.try_into().unwrap(), ins.into(), p1, p2, data, le)
         .serialize_to_vec()
@@ -320,6 +379,28 @@ enum IoCmd {
         #[serde(default)]
         expected_status: Status,
     },
+    ImportEccKey {
+        key_reference: u8,
+        /// Hex-encoded private scalar, zero-padded to the curve's scalar size
+        scalar: String,
+        /// Sent as given, to provoke a mismatch; derived from the scalar otherwise
+        #[serde(default)]
+        algo: Option<Algorithm>,
+        #[serde(default)]
+        expected_status: Status,
+    },
+    /// Sign a digest with an imported ECC key and verify the signature against
+    /// the verifying key recomputed from the imported scalar (ECDSA is
+    /// randomized, so the signature bytes cannot be matched directly)
+    SignEcc {
+        key_reference: u8,
+        /// Hex-encoded digest to sign (32 or 48 bytes, selects the curve)
+        data: String,
+        /// Hex-encoded private scalar that was imported into the slot
+        scalar: String,
+        #[serde(default)]
+        expected_status: Status,
+    },
     Sign {
         algo: u8,
         key_reference: u8,
@@ -415,6 +496,18 @@ impl IoCmd {
                 e,
                 expected_status,
             } => Self::run_import_rsa_key(p, q, e, *expected_status, card),
+            Self::ImportEccKey {
+                key_reference,
+                scalar,
+                algo,
+                expected_status,
+            } => Self::run_import_ecc_key(*key_reference, scalar, *algo, *expected_status, card),
+            Self::SignEcc {
+                key_reference,
+                data,
+                scalar,
+                expected_status,
+            } => Self::run_sign_ecc(*key_reference, data, scalar, *expected_status, card),
             Self::Sign {
                 algo,
                 key_reference,
@@ -479,6 +572,63 @@ impl IoCmd {
             expected_status,
             card,
         );
+    }
+
+    fn run_import_ecc_key(
+        key_reference: u8,
+        scalar: &str,
+        algo: Option<Algorithm>,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        let scalar = parse_hex(scalar);
+        let algo = algo.unwrap_or_else(|| Curve::of_scalar(&scalar).algorithm());
+        let data = tlv(&[0x06], &scalar);
+        Self::run_bytes(
+            &build_command(0x00, 0xFE, algo as u8, key_reference, &data, 0),
+            &MATCH_EMPTY,
+            expected_status,
+            card,
+        );
+    }
+
+    fn run_sign_ecc(
+        key_reference: u8,
+        data: &str,
+        scalar: &str,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        let digest = parse_hex(data);
+        let scalar = parse_hex(scalar);
+        let curve = Curve::of_scalar(&scalar);
+        let payload: Vec<u8> = [tlv(&[0x81], &digest), tlv(&[0x82], &[])]
+            .into_iter()
+            .flatten()
+            .collect();
+        let payload = tlv(&[0x7C], &payload);
+        let rep = Self::run_bytes(
+            &build_command(
+                0x00,
+                0x87,
+                curve.algorithm() as u8,
+                key_reference,
+                &payload,
+                0xFF,
+            ),
+            &MATCH_ANY,
+            expected_status,
+            card,
+        );
+        if expected_status != Status::Success {
+            return;
+        }
+        // response: 7C L 82 L <DER encoded signature>
+        let (tag, value, _) = take_tlv(&rep).expect("no dynamic authentication template");
+        assert_eq!(tag, 0x7C);
+        let (tag, signature, _) = take_tlv(value).expect("no response DO");
+        assert_eq!(tag, 0x82);
+        curve.verify(&scalar, &digest, signature);
     }
 
     fn run_set_administration_key(

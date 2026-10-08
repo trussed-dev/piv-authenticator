@@ -8,6 +8,10 @@
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
+- Support importing ECC keys (P-256 and P-384) through the Yubico IMPORT ASYMMETRIC KEY
+  extension, into any asymmetric key slot including the retired ones ([#16][])
+
+[#16]: https://github.com/trussed-dev/piv-authenticator/issues/16
 
 ## [v0.7.0][] (2026-08-17)
 

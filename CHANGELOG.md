@@ -8,6 +8,7 @@
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
+- Answer NotFound to GET DATA for an unknown data object tag
 
 ## [v0.7.0][] (2026-08-17)
 

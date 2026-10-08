@@ -488,6 +488,51 @@
         ]
     ),
     IoTest(
+        name: "msroots objects",
+        cmd_resp: [
+            GetData(
+                input: "5C 03 5FFF11",
+                output: All(),
+                expected_status: NotFound,
+            ),
+            PutData(
+                input: "5C 03 5FFF11 53 04 DEADBEEF",
+                expected_status: SecurityStatusNotSatisfied,
+            ),
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            PutData(
+                input: "5C 03 5FFF11 53 04 DEADBEEF",
+            ),
+            PutData(
+                input: "5C 03 5FFF15 53 02 CAFE",
+            ),
+            GetData(
+                input: "5C 03 5FFF11",
+                output: Data("53 04 DEADBEEF"),
+            ),
+            GetData(
+                input: "5C 03 5FFF15",
+                output: Data("53 02 CAFE"),
+            ),
+            // RESET wipes them like every other data object
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: RemainingRetries(2)),
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: RemainingRetries(1)),
+            VerifyApplicationPin(pin: "3131313131313131", expected_status: OperationBlocked),
+            Reset(),
+            GetData(
+                input: "5C 03 5FFF11",
+                output: All(),
+                expected_status: NotFound,
+            ),
+        ]
+    ),
+    IoTest(
         name: "Protected DOS",
         uuid_config: WithBoth("00112233445566778899AABBCCDDEEFF"),
         cmd_resp: [

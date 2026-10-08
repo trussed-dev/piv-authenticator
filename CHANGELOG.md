@@ -8,6 +8,8 @@
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
+- Add the Yubico msroots data objects (5FFF11 to 5FFF15), from which Windows reads its
+  trusted root certificates
 
 ## [v0.7.0][] (2026-08-17)
 

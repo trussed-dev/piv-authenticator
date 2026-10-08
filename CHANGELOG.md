@@ -4,6 +4,8 @@
 
 [Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.1...HEAD
 
+- Answer NotFound to GET DATA for an unknown data object tag
+
 ## [v0.7.1][] (2026-11-20)
 
 [v0.7.1]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.7.1

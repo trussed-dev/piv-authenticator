@@ -400,6 +400,10 @@
             VerifyApplicationPin(pin: "313233343536FFFF", expected_status: RemainingRetries(2)),
             ResetRetryCounter(puk: "FFFFFFFFFFFFFFFF", new_pin: "3132333435363738", expected_status: RemainingRetries(4)),
             VerifyApplicationPin(pin: "3132333435363738", expected_status: RemainingRetries(1)),
+            // a wrong puk burns a retry whatever the new pin looks like (how ykman blocks the puk)
+            ResetRetryCounter(puk: "FFFFFFFFFFFFFFFF", new_pin: "FFFFFFFFFFFFFFFF", expected_status: RemainingRetries(3)),
+            // a malformed new pin is rejected after the puk matched, before anything is stored
+            ResetRetryCounter(puk: "0102030405060708", new_pin: "FFFFFFFFFFFFFFFF", expected_status: IncorrectDataParameter),
             ResetRetryCounter(puk: "0102030405060708", new_pin: "3132333435363738"),
             VerifyApplicationPin(pin: "3132333435363738"),
             ChangePuk(

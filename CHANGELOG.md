@@ -10,6 +10,7 @@
   (0xFF means no touch, 0xFE means touch required)
 - Let a malformed PIN of the right length burn a retry instead of rejecting it as a
   format error
+- Validate the new PIN in RESET RETRY COUNTER
 
 ## [v0.7.0][] (2026-08-17)
 

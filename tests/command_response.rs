@@ -712,14 +712,14 @@ impl IoCmd {
 
     fn run_select(card: &mut setup::Piv) {
         let matcher = OutputMatcher::Bytes(Cow::Borrowed(&hex!(
-            "61 6c" // Card application property template
+            "61 6f" // Card application property template
                 "4f 06 000010000100" // Application identifier
                 "50 0c 4e6974726f6b657920504956" // Application label = b\"Nitrokey PIV\"
 
                 // URL = b\"https://github.com/Nitrokey/piv-authenticator\"
                 "5f50 2d 68747470733a2f2f6769746875622e636f6d2f4e6974726f6b65792f7069762d61757468656e74696361746f72"
                 // Cryptographic Algorithm Identifier Template
-                "ac 1b"
+                "ac 1e"
                     "80 01 03" // TDES - ECB
                     "80 01 0c" // AES256 - ECB
                     "80 01 11" // P-256
@@ -728,6 +728,7 @@ impl IoCmd {
                     "80 01 16" // RSA 4096
                     "80 01 14" // P384
                     "80 01 e0" // Ed25519
+                    "80 01 e1" // X25519
                     "06 01 00"
                 // Coexistent Tag Allocation Authority Template
                 "79 07"

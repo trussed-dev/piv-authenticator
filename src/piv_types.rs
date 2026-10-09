@@ -124,9 +124,9 @@ enum_u8! {
         // P521 = 0x15,
         // non-standard!
         Rsa4096 = 0x16,
-        // non-standard, the Yubico/piv-go/pivy identifier
+        // non-standard, the Yubico/piv-go/pivy identifiers
         Ed25519 = 0xE0,
-        // X25519 = 0xE1,
+        X25519 = 0xE1,
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
@@ -155,11 +155,11 @@ crate::container::enum_subset! {
 
         // Only append variants here: the variant index is persisted
         Ed25519,
+        X25519,
 
         // Not supported
         // Rsa1024 = 0x6,
         // P521 = 0x15,
-        // X25519 = 0xE1,
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
@@ -178,31 +178,42 @@ impl AsymmetricAlgorithms {
             Self::P256 => Mechanism::P256,
             Self::P384 => Mechanism::P384,
             Self::Ed25519 => Mechanism::Ed255,
+            Self::X25519 => Mechanism::X255,
         }
     }
 
+    /// Key agreement mechanism, `None` for algorithms that cannot do key agreement
     pub fn ecdh_mechanism(self) -> Option<Mechanism> {
         use AsymmetricAlgorithms::*;
         match self {
             P256 => Some(Mechanism::P256),
             P384 => Some(Mechanism::P384),
-            /* P521 | X25519 | X448 */
+            X25519 => Some(Mechanism::X255),
+            /* P521 | X448 */
             #[allow(unreachable_patterns)]
             _ => None,
         }
     }
 
-    pub fn sign_mechanism(self) -> Mechanism {
+    /// Whether the peer public key of a key agreement is a raw u-coordinate
+    /// (X25519) rather than a SEC1 uncompressed point
+    pub fn ecdh_peer_key_is_raw(self) -> bool {
+        matches!(self, Self::X25519)
+    }
+
+    /// Signature mechanism, `None` for algorithms that cannot sign
+    pub fn sign_mechanism(self) -> Option<Mechanism> {
         match self {
             #[cfg(feature = "rsa")]
-            Self::Rsa2048 => Mechanism::Rsa2048Raw,
+            Self::Rsa2048 => Some(Mechanism::Rsa2048Raw),
             #[cfg(feature = "rsa")]
-            Self::Rsa3072 => Mechanism::Rsa3072Raw,
+            Self::Rsa3072 => Some(Mechanism::Rsa3072Raw),
             #[cfg(feature = "rsa")]
-            Self::Rsa4096 => Mechanism::Rsa4096Raw,
-            Self::P256 => Mechanism::P256Prehashed,
-            Self::P384 => Mechanism::P384Prehashed,
-            Self::Ed25519 => Mechanism::Ed255,
+            Self::Rsa4096 => Some(Mechanism::Rsa4096Raw),
+            Self::P256 => Some(Mechanism::P256Prehashed),
+            Self::P384 => Some(Mechanism::P384Prehashed),
+            Self::Ed25519 => Some(Mechanism::Ed255),
+            Self::X25519 => None,
         }
     }
 
@@ -219,6 +230,8 @@ impl AsymmetricAlgorithms {
             Self::P256 => Some(32),
             Self::P384 => Some(48),
             Self::Ed25519 => None,
+            // cannot sign, `sign_mechanism` rejects it first
+            Self::X25519 => None,
         }
     }
 
@@ -229,6 +242,8 @@ impl AsymmetricAlgorithms {
             Self::P256 => SignatureSerialization::Asn1Der,
             Self::P384 => SignatureSerialization::Asn1Der,
             Self::Ed25519 => SignatureSerialization::Raw,
+            // cannot sign, `sign_mechanism` rejects it first
+            Self::X25519 => SignatureSerialization::Raw,
         }
     }
 

@@ -334,6 +334,92 @@
         ]
     ),
     IoTest(
+        name: "Generate X25519 key and agree",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            IoData(
+                input: "00 47 009D 05
+                                AC 03
+                                     80 01 E1",
+                // 7F49 22 { 86 20 <raw 32 byte public key> }
+                output: Len(37),
+            ),
+            VerifyApplicationPin(),
+            // Key agreement with a raw 32 byte peer key in 0x85
+            IoData(
+                input: "00 87 E1 9D 26
+                                7C 24
+                                     82 00
+                                     85 20 de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+                // 7C 22 { 82 20 <32 byte shared secret> }
+                output: Len(36),
+            ),
+            // X25519 keys cannot sign
+            Sign(
+                algo: 0xE1,
+                key_reference: 0x9D,
+                data: "72",
+                output: Len(0),
+                expected_status: ConditionsOfUseNotSatisfied,
+            ),
+        ]
+    ),
+    IoTest(
+        name: "Import X25519 key and agree",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            // RFC 7748 section 6.1: Alice's private key goes into 0x08 as with Yubico
+            IoData(
+                input: "00 FE E1 9D 22
+                                08 20 77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+                output: Len(0),
+            ),
+            VerifyApplicationPin(),
+            // Bob's public key gives the shared secret K of the RFC
+            IoData(
+                input: "00 87 E1 9D 26
+                                7C 24
+                                     82 00
+                                     85 20 de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+                output: Data("
+                    7C 22
+                        82 20
+                        4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742
+                "),
+            ),
+            // A peer key of the wrong length is rejected
+            IoData(
+                input: "00 87 E1 9D 16
+                                7C 14
+                                     82 00
+                                     85 10 de9edb7d7b7dc1b4d35b61c2ece43537",
+                output: Len(0),
+                expected_status: IncorrectDataParameter,
+            ),
+            // A low-order peer key (order 4) would yield an all-zero secret and is rejected
+            IoData(
+                input: "00 87 E1 9D 26
+                                7C 24
+                                     82 00
+                                     85 20 0100000000000000000000000000000000000000000000000000000000000000",
+                output: Len(0),
+                expected_status: IncorrectDataParameter,
+            ),
+        ]
+    ),
+    IoTest(
         name: "PUT DATA",
         cmd_resp: [
             GetData(

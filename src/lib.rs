@@ -140,7 +140,7 @@ where
             .with_application_label(self.options.label)
             .with_application_url(self.options.url)
             .with_supported_cryptographic_algorithms(&[
-                Tdes, Aes256, P256, Rsa2048, Rsa3072, Rsa4096, P384,
+                Tdes, Aes256, P256, Rsa2048, Rsa3072, Rsa4096, P384, Ed25519,
             ]);
 
         application_property_template
@@ -715,7 +715,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 let Some(key) = key? else {
                     return Err(Status::ConditionsOfUseNotSatisfied);
                 };
-                if key.alg.sign_len() != message.len() {
+                let message_ok = match key.alg.sign_input_len() {
+                    Some(len) => message.len() == len,
+                    // Arbitrary-length message, bounded by what trussed accepts
+                    None => message.len() <= trussed_core::config::MAX_MESSAGE_LENGTH,
+                };
+                if !message_ok {
                     return Err(Status::IncorrectDataParameter);
                 }
                 let response = syscall!(trussed.sign(
@@ -919,6 +924,21 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 reply.expand(&serialized_key)?;
                 reply.prepend_len(offset)?;
             }
+            // Raw 32 byte public key in 0x86, no SEC1 prefix
+            AsymmetricAlgorithms::Ed25519 => {
+                let serialized_key = syscall!(self.trussed.serialize_key(
+                    parsed_mechanism.key_mechanism(),
+                    public_key,
+                    KeySerialization::Raw
+                ))
+                .serialized_key;
+                reply.expand(&[0x7F, 0x49])?;
+                let offset = reply.len();
+                reply.expand(&[0x86])?;
+                reply.append_len(serialized_key.len())?;
+                reply.expand(&serialized_key)?;
+                reply.prepend_len(offset)?;
+            }
             #[cfg(feature = "rsa")]
             AsymmetricAlgorithms::Rsa2048
             | AsymmetricAlgorithms::Rsa3072
@@ -1051,7 +1071,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         &mut self,
         algo: AsymmetricAlgorithms,
         key: AsymmetricKeyReference,
-        #[cfg_attr(not(feature = "rsa"), allow(unused))] data: &[u8],
+        data: &[u8],
         mut _reply: Reply<'_>,
     ) -> Result {
         if !self
@@ -1085,6 +1105,33 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                     AsymmetricKeyReference::PivAuthentication.storage(self.options.storage),
                     KeySerialization::RsaParts
                 ))
+                .key;
+                self.state.persistent.replace_asymmetric_key(
+                    key,
+                    algo,
+                    id,
+                    self.trussed,
+                    self.options.storage,
+                );
+                Ok(())
+            }
+            // The 32 byte seed comes in 0x07
+            (AsymmetricAlgorithms::Ed25519, _) => {
+                let seed = tlv::get_do(&[0x07], data).ok_or(Status::IncorrectDataParameter)?;
+                if seed.len() != 32 {
+                    warn!("Ed25519 import with a key of length {}", seed.len());
+                    return Err(Status::IncorrectDataParameter);
+                }
+                let id = try_syscall!(self.trussed.unsafe_inject_key(
+                    algo.key_mechanism(),
+                    seed,
+                    key.storage(self.options.storage),
+                    KeySerialization::Raw
+                ))
+                .map_err(|_err| {
+                    warn!("Failed Ed25519 import: {_err:?}");
+                    Status::IncorrectDataParameter
+                })?
                 .key;
                 self.state.persistent.replace_asymmetric_key(
                     key,

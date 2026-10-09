@@ -124,8 +124,9 @@ enum_u8! {
         // P521 = 0x15,
         // non-standard!
         Rsa4096 = 0x16,
-        // Ed25519 = 0xE2,
-        // X25519 = 0xE3,
+        // non-standard, the Yubico/piv-go/pivy identifier
+        Ed25519 = 0xE0,
+        // X25519 = 0xE1,
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
@@ -152,17 +153,13 @@ crate::container::enum_subset! {
         // not standard
         P384,
 
+        // Only append variants here: the variant index is persisted
+        Ed25519,
+
         // Not supported
         // Rsa1024 = 0x6,
-        // Rsa3072 = 0xE0,
         // P521 = 0x15,
-
-        // non-standard! in piv-go though!
-        // Ed255_prev = 0x22,
-        // https://globalplatform.org/wp-content/uploads/2014/03/GPC_ISO_Framework_v1.0.pdf#page=15
-        // non-standard!
-        // Ed25519 = 0xE2,
-        // X25519 = 0xE3,
+        // X25519 = 0xE1,
         // Ed448 = 0xE4,
         // X448 = 0xE5,
 
@@ -180,6 +177,7 @@ impl AsymmetricAlgorithms {
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256,
             Self::P384 => Mechanism::P384,
+            Self::Ed25519 => Mechanism::Ed255,
         }
     }
 
@@ -188,7 +186,7 @@ impl AsymmetricAlgorithms {
         match self {
             P256 => Some(Mechanism::P256),
             P384 => Some(Mechanism::P384),
-            /* P384 | P521 | X25519 | X448 */
+            /* P521 | X25519 | X448 */
             #[allow(unreachable_patterns)]
             _ => None,
         }
@@ -204,20 +202,23 @@ impl AsymmetricAlgorithms {
             Self::Rsa4096 => Mechanism::Rsa4096Raw,
             Self::P256 => Mechanism::P256Prehashed,
             Self::P384 => Mechanism::P384Prehashed,
+            Self::Ed25519 => Mechanism::Ed255,
         }
     }
 
-    /// Accepted length for signature
-    pub fn sign_len(self) -> usize {
+    /// Required length of the data to sign: the digest for ECDSA, the padded
+    /// block for RSA. `None` for algorithms that sign a message of any length.
+    pub fn sign_input_len(self) -> Option<usize> {
         match self {
             #[cfg(feature = "rsa")]
-            Self::Rsa2048 => 256,
+            Self::Rsa2048 => Some(256),
             #[cfg(feature = "rsa")]
-            Self::Rsa3072 => 384,
+            Self::Rsa3072 => Some(384),
             #[cfg(feature = "rsa")]
-            Self::Rsa4096 => 512,
-            Self::P256 => 32,
-            Self::P384 => 48,
+            Self::Rsa4096 => Some(512),
+            Self::P256 => Some(32),
+            Self::P384 => Some(48),
+            Self::Ed25519 => None,
         }
     }
 
@@ -227,6 +228,7 @@ impl AsymmetricAlgorithms {
             Self::Rsa2048 | Self::Rsa3072 | Self::Rsa4096 => SignatureSerialization::Raw,
             Self::P256 => SignatureSerialization::Asn1Der,
             Self::P384 => SignatureSerialization::Asn1Der,
+            Self::Ed25519 => SignatureSerialization::Raw,
         }
     }
 

@@ -648,11 +648,16 @@ impl Persistent {
     pub fn reset_retry_counter<T: crate::Client>(
         &mut self,
         puk: &Puk,
-        new_pin: &Pin,
+        new_pin: &[u8; 8],
         client: &mut T,
     ) -> Result<bool, Status> {
         let Some(puk_key) = self.get_puk_key(puk, client)? else {
             return Ok(false);
+        };
+        // The PUK is compared first, like VERIFY would; a stored PIN has to be well formed
+        let Ok(new_pin) = Pin::try_from(new_pin.as_slice()) else {
+            syscall!(client.delete(puk_key));
+            return Err(Status::IncorrectDataParameter);
         };
 
         let Some(pin_key) = syscall!(client.unwrap_key_from_file(
@@ -669,7 +674,7 @@ impl Persistent {
             return Err(Status::UnspecifiedNonpersistentExecutionError);
         };
 
-        self.reset_pin(*new_pin, pin_key, client)?;
+        self.reset_pin(new_pin, pin_key, client)?;
         syscall!(client.delete(pin_key));
         syscall!(client.delete(puk_key));
         Ok(true)

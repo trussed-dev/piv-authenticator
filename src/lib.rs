@@ -878,14 +878,18 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             parsed_mechanism,
             self.trussed,
             self.options.storage,
-        );
+        )?;
 
-        let public_key = syscall!(self.trussed.derive_key(
+        let public_key = try_syscall!(self.trussed.derive_key(
             parsed_mechanism.key_mechanism(),
             secret_key,
             None,
             StorageAttributes::default().set_persistence(Location::Volatile)
         ))
+        .map_err(|_err| {
+            warn!("Failed to derive the public key: {_err:?}");
+            Status::IncorrectDataParameter
+        })?
         .key;
 
         match parsed_mechanism {
@@ -1076,7 +1080,9 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 let p = tlv::get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
                 let q = tlv::get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
                 let e = tlv::get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
-                let id = syscall!(self.trussed.unsafe_inject_key(
+                // The app can be built with `rsa` on a backend without it; that is an
+                // unsupported algorithm to the client, not a reason to panic
+                let id = try_syscall!(self.trussed.unsafe_inject_key(
                     algo.key_mechanism(),
                     &RsaImportFormat { e, p, q }.serialize().map_err(|_err| {
                         error!("Failed rsa import serialization: {_err:?}");
@@ -1085,6 +1091,10 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                     AsymmetricKeyReference::PivAuthentication.storage(self.options.storage),
                     KeySerialization::RsaParts
                 ))
+                .map_err(|_err| {
+                    warn!("Failed RSA import: {_err:?}");
+                    Status::IncorrectDataParameter
+                })?
                 .key;
                 self.state.persistent.replace_asymmetric_key(
                     key,

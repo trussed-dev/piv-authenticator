@@ -802,11 +802,18 @@ impl Persistent {
         alg: AsymmetricAlgorithms,
         client: &mut impl crate::Client,
         storage: Location,
-    ) -> KeyId {
-        let id = syscall!(client.generate_key(
+    ) -> Result<KeyId, Status> {
+        // A backend built without the mechanism answers MechanismNotAvailable; to the client
+        // that is an unsupported algorithm (6A80, like an unknown algorithm byte), not a
+        // reason to panic
+        let id = try_syscall!(client.generate_key(
             alg.key_mechanism(),
             StorageAttributes::default().set_persistence(key.storage(self.storage))
         ))
+        .map_err(|_err| {
+            warn!("Failed to generate a {alg:?} key: {_err:?}");
+            Status::IncorrectDataParameter
+        })?
         .key;
         let old = self.set_asymmetric_key(key, id, alg, storage, client);
         self.save(client);
@@ -820,7 +827,7 @@ impl Persistent {
                 // Old file was already overwritten
             }
         }
-        id
+        Ok(id)
     }
 
     pub fn replace_asymmetric_key(
@@ -1004,7 +1011,7 @@ impl Persistent {
             authentication_alg,
             client,
             options.storage,
-        );
+        )?;
 
         Self::init_pins(client, options)?;
         Ok(state)

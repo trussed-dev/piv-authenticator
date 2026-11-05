@@ -733,7 +733,7 @@ impl IoCmd {
                     "4f 05 a000000308"
         )));
         Self::run_bytes(
-            &hex!("00 A4 04 00 0C A000000308000010000100 00"),
+            &hex!("00 A4 04 00 0B A000000308000010000100 00"),
             &matcher,
             Status::Success,
             card,

@@ -22,7 +22,7 @@ pub mod dispatch {
     use trussed_staging::{StagingBackend, StagingContext};
     use trussed_wrap_key_to_file::WrapKeyToFileExtension;
 
-    /// Backends used by opcard
+    /// Backends used by piv
     pub const BACKENDS: &[BackendId<Backend>] = &[
         BackendId::Custom(Backend::Staging),
         BackendId::Custom(Backend::Auth),
@@ -70,14 +70,14 @@ pub mod dispatch {
         }
     }
 
-    /// Dispatch implementation with the backends required by opcard
+    /// Dispatch implementation with the backends required by piv
     #[derive(Debug)]
     pub struct Dispatch {
         auth: AuthBackend,
         staging: StagingBackend,
     }
 
-    /// Dispatch context for the backends required by opcard
+    /// Dispatch context for the backends required by piv
     #[derive(Default)]
     pub struct DispatchContext {
         auth: AuthContext,
@@ -208,11 +208,57 @@ pub mod dispatch {
     }
 }
 
-use std::path::PathBuf;
-use trussed::virt::{self, Client, StorageConfig, StoreConfig};
+use littlefs2::path;
+use regex::RegexSet;
+use std::{sync::LazyLock, vec::Vec};
+use trussed::{
+    Platform as _,
+    store::{DynFilesystem, Store},
+    types::{Path, PathBuf},
+    virt::{self, Client, Platform, StorageConfig, StoreConfig},
+};
 use trussed_core::types::Bytes;
 
-/// Client type using a dispatcher with the backends required by opcard
+fn dump_directory(fs: &dyn DynFilesystem, path: &Path, collector: &mut Vec<PathBuf>) {
+    fs.read_dir_and_then(path, &mut |entries| {
+        for entry in entries {
+            let entry = entry?;
+            if entry.file_type().is_file() {
+                collector.push(entry.path().into());
+            } else if entry.file_name() != path!(".") && entry.file_name() != path!("..") {
+                assert!(entry.file_type().is_dir());
+                dump_directory(fs, entry.path(), collector);
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn dump_fs(fs: &dyn DynFilesystem) -> Vec<PathBuf> {
+    let mut collector = Vec::new();
+    dump_directory(fs, path!("/"), &mut collector);
+    collector
+}
+
+static VALID_PATHS: LazyLock<RegexSet> = LazyLock::new(|| {
+    RegexSet::new([
+        r"^/trussed/data/rng-state.bin$",
+        r"^/backend-auth/data/salt$",
+        r"^/piv/backend-auth/dat/pin.0\d$",
+    ])
+    .unwrap()
+});
+
+fn cleanup(platform: &mut Platform<'_>) {
+    let store = platform.store();
+    let mut vfs = dump_fs(store.vfs());
+
+    vfs.retain(|p| !VALID_PATHS.is_match(p.as_str()));
+    assert_eq!(vfs, Vec::new());
+}
+
+/// Client type using a dispatcher with the backends required by piv
 pub type VirtClient<'a> = Client<'a, dispatch::Dispatch>;
 
 /// Run a client using a provided store
@@ -222,21 +268,23 @@ where
 {
     #[allow(clippy::unwrap_used)]
     virt::with_platform(store, |platform| {
-        platform.run_client_with_backends(
-            client_id,
-            dispatch::Dispatch::with_hw_key(Bytes::from(b"some bytes")),
-            dispatch::BACKENDS,
-            f,
-        )
+        platform
+            .cleanup(Box::new(cleanup))
+            .run_client_with_backends(
+                client_id,
+                dispatch::Dispatch::with_hw_key(Bytes::from(b"some bytes")),
+                dispatch::BACKENDS,
+                f,
+            )
     })
 }
 
-/// Run the backend with the extensions required by opcard
+/// Run the backend with the extensions required by piv
 /// using storage backed by a file
 pub fn with_fs_client<P, R, F>(internal: P, client_id: &str, f: F) -> R
 where
     F: FnOnce(VirtClient<'_>) -> R,
-    P: Into<PathBuf>,
+    P: Into<std::path::PathBuf>,
 {
     let store = StoreConfig {
         internal: StorageConfig::filesystem(internal.into()),
@@ -246,7 +294,7 @@ where
     with_client(store, client_id, f)
 }
 
-/// Run the backend with the extensions required by opcard
+/// Run the backend with the extensions required by piv
 /// using a RAM file storage
 pub fn with_ram_client<R, F>(client_id: &str, f: F) -> R
 where

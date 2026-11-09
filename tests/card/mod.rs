@@ -1,5 +1,6 @@
 use dev_vpicc::{virt::with_ram_client, vpicc::VpiccCard};
 use piv_authenticator::{Authenticator, Options};
+use vpicc::VSmartCard;
 
 use std::{sync::mpsc, thread::sleep, time::Duration};
 use stoppable_thread::spawn;
@@ -27,7 +28,7 @@ pub fn with_vsc<F: FnOnce() -> R, R>(options: Options, f: F) -> R {
 
     let (tx, rx) = mpsc::channel();
     let handle = spawn(move |stopped| {
-        with_ram_client("opcard", |client| {
+        with_ram_client("piv", |client| {
             let card = Authenticator::new(client, options);
             let mut vpicc_card = VpiccCard::new(card);
             let mut result = Ok(());
@@ -37,6 +38,7 @@ pub fn with_vsc<F: FnOnce() -> R, R>(options: Options, f: F) -> R {
                     tx.send(()).expect("failed to send message");
                 }
             }
+            vpicc_card.power_off();
             result
         })
     });

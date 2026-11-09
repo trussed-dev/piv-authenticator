@@ -130,7 +130,9 @@ where
 
     // TODO: we'd like to listen on multiple AIDs.
     // The way apdu-dispatch currently works, this would deselect, resetting security indicators.
-    pub fn deselect(&mut self) {}
+    pub fn deselect(&mut self) {
+        self.state.volatile.clear(&mut self.trussed);
+    }
 
     pub fn select(&mut self, mut reply: Reply<'_>) -> Result {
         use piv_types::Algorithms::*;
@@ -976,6 +978,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         reply.expand(tag)?;
         match container {
             Container::KeyHistoryObject => {
+                read_valid.clear(self.trussed);
                 let offset = reply.len();
                 self.get_key_history_object(reply.lend())?;
                 reply.prepend_len(offset)?;
@@ -986,8 +989,10 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                     self.trussed,
                     self.options.storage,
                     reply.lend(),
-                    read_valid,
+                    &read_valid,
                 );
+
+                read_valid.clear(self.trussed);
 
                 if !res? {
                     return Err(Status::NotFound);
@@ -1082,13 +1087,15 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 let p = tlv::get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
                 let q = tlv::get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
                 let e = tlv::get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
+                let storage =
+                    AsymmetricKeyReference::PivAuthentication.storage(self.options.storage);
                 let id = syscall!(self.trussed.unsafe_inject_key(
                     algo.key_mechanism(),
                     &RsaImportFormat { e, p, q }.serialize().map_err(|_err| {
                         error!("Failed rsa import serialization: {_err:?}");
                         Status::UnspecifiedNonpersistentExecutionError
                     })?,
-                    AsymmetricKeyReference::PivAuthentication.storage(self.options.storage),
+                    storage,
                     KeySerialization::RsaParts
                 ))
                 .key;
@@ -1099,6 +1106,10 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                     self.trussed,
                     self.options.storage,
                 );
+                if storage == Location::Volatile {
+                    info!("Volatile id: {id:?}");
+                    syscall!(self.trussed.delete(id));
+                }
                 Ok(())
             }
             _ => Err(Status::FunctionNotSupported),
@@ -1106,7 +1117,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
     }
 }
 
-/// Super trait with all trussed extensions required by opcard
+/// Super trait with all trussed extensions required by piv
 pub trait Client:
     CryptoClient
     + FilesystemClient

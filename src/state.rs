@@ -1,5 +1,5 @@
 use core::convert::{TryFrom, TryInto};
-use core::mem;
+use core::mem::{self, ManuallyDrop};
 
 use flexiber::EncodableHeapless;
 use heapless::Vec;
@@ -239,8 +239,13 @@ impl Keys {
         };
 
         if let Some(key_id) = user_public_key {
+            info!("User public key: {key_id:?}");
             syscall!(client.clear(key_id));
         }
+        error!(
+            "{:?}",
+            syscall!(client.exists(new.alg.key_mechanism(), new.id))
+        );
         old
     }
 }
@@ -440,7 +445,7 @@ pub struct Volatile {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GlobalSecurityStatus {}
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ReadValid {
     /// Container can be read in plain text
     Plain,
@@ -450,6 +455,22 @@ pub enum ReadValid {
     ///
     /// The key is stored in volatile storage and must be deleted after use
     Encrypted(KeyId),
+}
+
+impl ReadValid {
+    pub fn clear(self, trussed: &mut impl crate::Client) {
+        let this = ManuallyDrop::new(self);
+        if let Self::Encrypted(key_id) = &*this {
+            syscall!(trussed.delete(*key_id));
+        }
+    }
+}
+
+#[cfg(debug_assertions)]
+impl Drop for ReadValid {
+    fn drop(&mut self) {
+        panic!("ReadValid must be cleared befor drop");
+    }
 }
 
 impl Volatile {
@@ -484,6 +505,11 @@ impl Volatile {
 
     pub fn pin_verified(&self) -> bool {
         self.app_security_status.pin_verified.is_verified()
+    }
+
+    pub fn clear(&mut self, client: &mut impl crate::Client) {
+        self.clear_pin_verified(client);
+        *self = Self::default();
     }
 
     pub fn clear_pin_verified(&mut self, client: &mut impl crate::Client) {
@@ -1071,12 +1097,12 @@ fn load_if_exists_streaming(
     location: Location,
     path: &PathBuf,
     mut buffer: Reply<'_>,
-    encryption: Option<KeyId>,
+    encryption: Option<&KeyId>,
 ) -> Result<bool, Status> {
     let offset = buffer.len();
     match encryption {
         Some(key) => {
-            try_syscall!(client.start_encrypted_chunked_read(location, path.clone(), key,))
+            try_syscall!(client.start_encrypted_chunked_read(location, path.clone(), *key))
                 .map_err(|_err| {
                     error!("Encrypted {path} couldn't be read: {_err:?}");
                     Status::UnspecifiedPersistentExecutionError
@@ -1221,7 +1247,7 @@ impl ContainerStorage {
         client: &mut impl crate::Client,
         storage: Location,
         mut reply: Reply<'_>,
-        read_valid: ReadValid,
+        read_valid: &ReadValid,
     ) -> Result<bool, Status> {
         let encryption = match read_valid {
             ReadValid::Plain => None,

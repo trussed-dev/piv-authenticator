@@ -3,6 +3,7 @@
 -include variables.mk
 
 export RUST_LOG ?= info,cargo_tarpaulin=off
+# export RUST_BACKTRACE ?= 1
 TEST_FEATURES ?= rsa
 export PIV_DANGEROUS_TEST_CARD_READER ?= Virtual PCD 00 00
 export PIV_DANGEROUS_TEST_CARD_PIV_SERIAL ?= 99 37 9A 79 9E DC 48 1E A5 3E 11 CF EF 74 47 62

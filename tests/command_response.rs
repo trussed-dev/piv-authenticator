@@ -804,6 +804,7 @@ fn command_response() {
                 for io in &t.cmd_resp {
                     io.run(card);
                 }
+                card.deselect();
             });
         }
         match t.uuid_config {
@@ -815,6 +816,7 @@ fn command_response() {
                     for io in &t.cmd_resp {
                         io.run(card);
                     }
+                    card.deselect();
                 });
             }
             _ => {}

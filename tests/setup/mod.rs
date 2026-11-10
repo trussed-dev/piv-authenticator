@@ -15,7 +15,7 @@ pub type Piv<'a> = piv_authenticator::Authenticator<VirtClient<'a>>;
 pub const WITHOUT_UUID: Options = Options::new();
 
 pub fn piv<R>(options: Options, test: impl FnOnce(&mut Piv<'_>) -> R) -> R {
-    with_ram_client("test", |client| {
+    with_ram_client("piv", |client| {
         let mut piv_app = Authenticator::new(client, options);
         test(&mut piv_app)
     })

@@ -26,7 +26,6 @@ hex-literal = "1"
 iso7816 = "0.2.0"
 serde = { version = "1", default-features = false, features = ["derive"] }
 trussed-auth = "0.5"
-untrusted = "0.9"
 log = "0.4"
 heapless-bytes = "0.5.0"
 subtle = { version = "2", default-features = false }

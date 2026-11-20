@@ -2,13 +2,18 @@
 
 ## [Unreleased][]
 
-[Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/trussed-dev/piv-authenticator/compare/v0.7.1...HEAD
+
+## [v0.7.1][] (2026-11-20)
+
+[v0.7.1]: https://github.com/trussed-dev/piv-authenticator/releases/tag/v0.7.1
 
 - Fix the PUK being initialized with the PIN's retry counter (3) instead of its own
   default (5)
 - Fix the inverted parsing of the touch requirement in SET MANAGEMENT KEY's P2
   (0xFF means no touch, 0xFE means touch required)
 - Derive the GET SERIAL response from the device uuid instead of a shared constant
+- Fix memory leak in import key
 
 ## [v0.7.0][] (2026-08-17)
 

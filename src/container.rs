@@ -404,6 +404,7 @@ pub enum Container {
     SecureMessagingCertificateSigner,
     PairingCodeReferenceDataContainer,
 
+    MsCmap,
     // Yubico vendor objects: Windows reads its trusted root certificates from these five
     // containers (a PKCS#7 blob split across them), written by client tools such as
     // certutil through ordinary PUT DATA
@@ -497,6 +498,7 @@ impl TryFrom<&[u8]> for Container {
             _ if tag == hex!("5FC122") => SecureMessagingCertificateSigner,
             _ if tag == hex!("5FC123") => PairingCodeReferenceDataContainer,
 
+            _ if tag == hex!("5FFF10") => MsCmap,
             _ if tag == hex!("5FFF11") => MsRoots1,
             _ if tag == hex!("5FFF12") => MsRoots2,
             _ if tag == hex!("5FFF13") => MsRoots3,

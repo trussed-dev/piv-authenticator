@@ -1194,6 +1194,7 @@ impl ContainerStorage {
             }
             Container::SecureMessagingCertificateSigner => "SecureMessagingCertificateSigner.key",
             Container::PairingCodeReferenceDataContainer => "PairingCodeReferenceDataContainer.key",
+            Container::MsCmap => "MsCmap.key",
             Container::MsRoots1 => "MsRoots1.key",
             Container::MsRoots2 => "MsRoots2.key",
             Container::MsRoots3 => "MsRoots3.key",

@@ -6,7 +6,8 @@
 
 - Answer NotFound to GET DATA for an unknown data object tag
 - Add the Yubico msroots data objects (5FFF11 to 5FFF15), from which Windows reads its
-  trusted root certificates
+  trusted root certificates.
+- Add the MSCMAP data object used by windows to store the container names and the default container.
 
 ## [v0.7.1][] (2026-11-20)
 

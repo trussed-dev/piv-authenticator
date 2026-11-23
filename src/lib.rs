@@ -377,7 +377,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             .persistent
             .change_pin(&old_pin, &new_pin, self.trussed)
         {
-            return Err(Status::VerificationFailed);
+            // report the remaining retries like VERIFY does
+            let remaining = self.state.persistent.remaining_pin_retries(self.trussed);
+            if remaining == 0 {
+                return Err(Status::OperationBlocked);
+            }
+            return Err(Status::RemainingRetries(remaining));
         }
         assert!(self
             .state
@@ -393,7 +398,11 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             .persistent
             .change_puk(&old_puk, &new_puk, self.trussed)
         {
-            return Err(Status::VerificationFailed);
+            let remaining = self.state.persistent.remaining_puk_retries(self.trussed);
+            if remaining == 0 {
+                return Err(Status::OperationBlocked);
+            }
+            return Err(Status::RemainingRetries(remaining));
         }
         Ok(())
     }

@@ -5,6 +5,7 @@
 
 use core::convert::{TryFrom, TryInto};
 
+use iso7816::tlv::Tag;
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
@@ -260,23 +261,28 @@ pub enum PutData<'data> {
 impl<'data> TryFrom<&'data [u8]> for PutData<'data> {
     type Error = Status;
     fn try_from(data: &'data [u8]) -> Result<Self, Self::Error> {
-        use crate::tlv::take_do;
-        let (tag, inner, rem) = take_do(data).ok_or_else(|| {
+        use iso7816::tlv::take_data_object;
+        const DISCOVERY_DATA_OBJECT_TAG: Tag = Tag::from_u16(0x7E);
+        const BIT_GROUP_TEMPLATE_TAG: Tag = Tag::from_u16(0x7F61);
+        const CONTAINER_TAG: Tag = Tag::from_u16(0x5C);
+        let (tag, inner, rem) = take_data_object(data).ok_or_else(|| {
             warn!("Failed to parse PUT DATA: {:02x?}", data);
             Status::IncorrectDataParameter
         })?;
-        if matches!(tag, 0x7E | 0x7F61) && !rem.is_empty() {
+        if matches!(tag, DISCOVERY_DATA_OBJECT_TAG | BIT_GROUP_TEMPLATE_TAG) && !rem.is_empty() {
             warn!("Empty remainder expected, got: {:02x?}", rem);
         }
 
         let container: Container = match tag {
-            0x7E => return Ok(PutData::DiscoveryObject(inner)),
-            0x7F61 => return Ok(PutData::BitGroupTemplate(inner)),
-            0x5C => Container::try_from(inner).map_err(|_| Status::IncorrectDataParameter)?,
+            DISCOVERY_DATA_OBJECT_TAG => return Ok(PutData::DiscoveryObject(inner)),
+            BIT_GROUP_TEMPLATE_TAG => return Ok(PutData::BitGroupTemplate(inner)),
+            CONTAINER_TAG => {
+                Container::try_from(inner).map_err(|_| Status::IncorrectDataParameter)?
+            }
             _ => return Err(Status::IncorrectDataParameter),
         };
 
-        let (tag, inner, rem) = take_do(rem).ok_or_else(|| {
+        let (tag, inner, rem) = take_data_object(rem).ok_or_else(|| {
             warn!(
                 "Failed to parse PUT DATA's second field: {:02x?}, {:02x?}",
                 data, rem
@@ -288,7 +294,7 @@ impl<'data> TryFrom<&'data [u8]> for PutData<'data> {
             warn!("Empty second remainder expected, got: {:02x?}", rem);
         }
 
-        if tag != 0x53 {
+        if tag != Tag::from_u16(0x53) {
             warn!("Expected 0x53 tag, got: 0x{:02x?}", rem);
         }
 

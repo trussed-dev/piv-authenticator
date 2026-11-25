@@ -19,9 +19,9 @@ mod dispatch;
 pub mod piv_types;
 mod reply;
 pub mod state;
-mod tlv;
 
 use heapless::VecView;
+use iso7816::tlv::{self, Tag};
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 use trussed_chunked::ChunkedClient;
 use trussed_hpke::HpkeClient;
@@ -472,16 +472,16 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
             exponentiation: Option<&'i [u8]>,
         }
 
-        let input = tlv::get_do(&[0x007C], data).ok_or_else(|| {
+        let input = tlv::get_data_object(&[0x007C].map(Tag::from_u16), data).ok_or_else(|| {
             warn!("No 0x7C do in GENERAL AUTHENTICATE");
             Status::IncorrectDataParameter
         })?;
 
         let parsed = Auth {
-            witness: tlv::get_do(&[0x80], input),
-            challenge: tlv::get_do(&[0x81], input),
-            response: tlv::get_do(&[0x82], input),
-            exponentiation: tlv::get_do(&[0x85], input),
+            witness: tlv::get_data_object(&[0x80].map(Tag::from_u16), input),
+            challenge: tlv::get_data_object(&[0x81].map(Tag::from_u16), input),
+            response: tlv::get_data_object(&[0x82].map(Tag::from_u16), input),
+            exponentiation: tlv::get_data_object(&[0x85].map(Tag::from_u16), input),
         };
 
         debug!(
@@ -869,7 +869,7 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
         //     PINPolicyAlways: 0x03,
         // }
 
-        let Some([mechanism]) = tlv::get_do(&[0xAC, 0x80], data) else {
+        let Some([mechanism]) = tlv::get_data_object(&[0xAC, 0x80].map(Tag::from_u16), data) else {
             warn!("Generate assymetric key pair without mechanism");
             return Err(Status::IncorrectDataParameter);
         };
@@ -1082,9 +1082,12 @@ impl<T: Client> LoadedAuthenticator<'_, T> {
                 AsymmetricKeyReference::PivAuthentication,
             ) => {
                 use trussed_rsa_types::RsaImportFormat;
-                let p = tlv::get_do(&[0x01], data).ok_or(Status::IncorrectDataParameter)?;
-                let q = tlv::get_do(&[0x02], data).ok_or(Status::IncorrectDataParameter)?;
-                let e = tlv::get_do(&[0x03], data).ok_or(Status::IncorrectDataParameter)?;
+                let p = tlv::get_data_object(&[0x01].map(Tag::from_u16), data)
+                    .ok_or(Status::IncorrectDataParameter)?;
+                let q = tlv::get_data_object(&[0x02].map(Tag::from_u16), data)
+                    .ok_or(Status::IncorrectDataParameter)?;
+                let e = tlv::get_data_object(&[0x03].map(Tag::from_u16), data)
+                    .ok_or(Status::IncorrectDataParameter)?;
                 let storage =
                     AsymmetricKeyReference::PivAuthentication.storage(self.options.storage);
                 let id = syscall!(self.trussed.unsafe_inject_key(

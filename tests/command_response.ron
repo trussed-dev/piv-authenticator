@@ -288,7 +288,10 @@
             ),
             GetMetadata(
                 key_reference: 0x9E,
-                output: Data("01 01 11 02 02 01 00"),
+                output: All([
+                    StartsWith("01 01 11 02 02 01 00 04 46"),
+                    Len(79),
+                ]),
             ),
         ]
     ),

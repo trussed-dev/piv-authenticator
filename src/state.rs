@@ -132,7 +132,50 @@ pub struct Keys {
     // TODO secure_messaging
 }
 
+#[derive(Debug)]
+pub struct KeyToDelete {
+    pub id: KeyId,
+    pub should_delete: bool,
+}
+
+impl KeyToDelete {
+    pub fn delete_if_needed(&mut self, client: &mut impl crate::Client) {
+        if !self.should_delete {
+            return;
+        }
+        syscall!(client.delete(self.id));
+        self.should_delete = false;
+    }
+}
+
+impl Drop for KeyToDelete {
+    fn drop(&mut self) {
+        debug_assert!(!self.should_delete);
+    }
+}
+
 impl Keys {
+    pub fn public_key_for_reference(
+        &self,
+        key: AsymmetricKeyReference,
+        client: &mut impl crate::Client,
+    ) -> Option<KeyToDelete> {
+        match key {
+            AsymmetricKeyReference::CardAuthentication => {
+                self.card_authentication.map(|k| KeyToDelete {
+                    id: syscall!(client.derive_key(
+                        k.alg.key_mechanism(),
+                        k.id,
+                        None,
+                        StorageAttributes::new().set_persistence(Location::Volatile)
+                    ))
+                    .key,
+                    should_delete: true,
+                })
+            }
+            _ => None,
+        }
+    }
     pub fn algorithm_for_reference(
         &self,
         key: AsymmetricKeyReference,

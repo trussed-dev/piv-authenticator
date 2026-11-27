@@ -198,6 +198,7 @@ enum OutputMatcher {
         #[serde(default)] Cow<'static, [OutputMatcher]>,
         #[serde(default)] (),
     ),
+    StartsWith(Cow<'static, str>),
     /// HEX data
     Data(Cow<'static, str>),
     Bytes(Cow<'static, [u8]>),
@@ -223,11 +224,18 @@ impl OutputMatcher {
                 println!("Validating output with {expected}");
                 data == parse_hex(expected)
             }
+            Self::StartsWith(expected) => {
+                println!("Validating output starts with {expected}");
+                data.starts_with(&parse_hex(expected))
+            }
             Self::Bytes(expected) => {
                 println!("Validating output with {expected:02x?}");
                 data == &**expected
             }
-            Self::Len(len) => data.len() == *len,
+            Self::Len(len) => {
+                println!("Validating output len {} with {len}", data.len());
+                data.len() == *len
+            }
             Self::All(matchers, _) => matchers.iter().filter(|m| !m.validate(data)).count() == 0,
             Self::Any(matchers, _) => matchers.iter().filter(|m| m.validate(data)).count() != 0,
         }
@@ -339,6 +347,12 @@ enum IoCmd {
         puk: String,
         new_pin: String,
     },
+    GetMetadata {
+        key_reference: u8,
+        output: OutputMatcher,
+        #[serde(default)]
+        expected_status: Status,
+    },
 }
 
 const MATCH_EMPTY: OutputMatcher = OutputMatcher::Len(0);
@@ -429,7 +443,26 @@ impl IoCmd {
                 puk,
                 new_pin,
             } => Self::run_reset_retry_counter(*expected_status, puk, new_pin, card),
+            Self::GetMetadata {
+                key_reference,
+                output,
+                expected_status,
+            } => Self::run_get_metadata(*key_reference, output, *expected_status, card),
         }
+    }
+
+    fn run_get_metadata(
+        key_reference: u8,
+        output: &OutputMatcher,
+        expected_status: Status,
+        card: &mut setup::Piv,
+    ) {
+        Self::run_bytes(
+            &build_command(0x00, 0xF7, 0x00, key_reference, &[], 0xFF),
+            output,
+            expected_status,
+            card,
+        );
     }
 
     fn run_sign(

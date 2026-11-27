@@ -114,7 +114,7 @@ generate_into_key_with_alg!(AsymmetricAlgorithms, AdministrationAlgorithm);
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Keys {
     // // 9a "PIV Authentication Key" (YK: PIV Authentication)
-    pub authentication_alg: AsymmetricAlgorithms,
+    pub piv_authentication_alg: AsymmetricAlgorithms,
     // 9b "PIV Card Application Administration Key" (YK: PIV Management)
     pub administration: KeyWithAlg<AdministrationAlgorithm>,
     pub is_admin_default: bool,
@@ -132,14 +132,91 @@ pub struct Keys {
     // TODO secure_messaging
 }
 
+#[derive(Debug)]
+pub struct KeyToDelete {
+    pub id: KeyId,
+    pub should_delete: bool,
+}
+
+impl KeyToDelete {
+    pub fn delete_if_needed(&mut self, client: &mut impl crate::Client) {
+        if !self.should_delete {
+            return;
+        }
+        syscall!(client.delete(self.id));
+        self.should_delete = false;
+    }
+}
+
+impl Drop for KeyToDelete {
+    fn drop(&mut self) {
+        debug_assert!(!self.should_delete);
+    }
+}
+
 impl Keys {
+    pub fn public_key_for_reference(
+        &self,
+        key: AsymmetricKeyReference,
+        client: &mut impl crate::Client,
+    ) -> Option<KeyToDelete> {
+        match key {
+            AsymmetricKeyReference::CardAuthentication => {
+                self.card_authentication.map(|k| KeyToDelete {
+                    id: syscall!(client.derive_key(
+                        k.alg.key_mechanism(),
+                        k.id,
+                        None,
+                        StorageAttributes::new().set_persistence(Location::Volatile)
+                    ))
+                    .key,
+                    should_delete: true,
+                })
+            }
+            _ => None,
+        }
+    }
+    pub fn algorithm_for_reference(
+        &self,
+        key: AsymmetricKeyReference,
+    ) -> Option<AsymmetricAlgorithms> {
+        match key {
+            AsymmetricKeyReference::PivAuthentication => Some(self.piv_authentication_alg),
+            AsymmetricKeyReference::DigitalSignature => self.signature_alg,
+            AsymmetricKeyReference::KeyManagement => self.key_management_alg,
+            AsymmetricKeyReference::CardAuthentication => self.card_authentication.map(|v| v.alg),
+            AsymmetricKeyReference::Retired01 => self.retired_keys[0],
+            AsymmetricKeyReference::Retired02 => self.retired_keys[1],
+            AsymmetricKeyReference::Retired03 => self.retired_keys[2],
+            AsymmetricKeyReference::Retired04 => self.retired_keys[3],
+            AsymmetricKeyReference::Retired05 => self.retired_keys[4],
+            AsymmetricKeyReference::Retired06 => self.retired_keys[5],
+            AsymmetricKeyReference::Retired07 => self.retired_keys[6],
+            AsymmetricKeyReference::Retired08 => self.retired_keys[7],
+            AsymmetricKeyReference::Retired09 => self.retired_keys[8],
+            AsymmetricKeyReference::Retired10 => self.retired_keys[9],
+            AsymmetricKeyReference::Retired11 => self.retired_keys[10],
+            AsymmetricKeyReference::Retired12 => self.retired_keys[11],
+            AsymmetricKeyReference::Retired13 => self.retired_keys[12],
+            AsymmetricKeyReference::Retired14 => self.retired_keys[13],
+            AsymmetricKeyReference::Retired15 => self.retired_keys[14],
+            AsymmetricKeyReference::Retired16 => self.retired_keys[15],
+            AsymmetricKeyReference::Retired17 => self.retired_keys[16],
+            AsymmetricKeyReference::Retired18 => self.retired_keys[17],
+            AsymmetricKeyReference::Retired19 => self.retired_keys[18],
+            AsymmetricKeyReference::Retired20 => self.retired_keys[19],
+        }
+    }
+
     pub fn asymetric_for_reference(
         &self,
         key: AsymmetricKeyReference,
     ) -> KeyOrEncryptedWithAlg<AsymmetricAlgorithms> {
         use KeyOrEncryptedWithAlg::{Encrypted, Plain};
         match key {
-            AsymmetricKeyReference::PivAuthentication => Encrypted(Some(self.authentication_alg)),
+            AsymmetricKeyReference::PivAuthentication => {
+                Encrypted(Some(self.piv_authentication_alg))
+            }
             AsymmetricKeyReference::DigitalSignature => Encrypted(self.signature_alg),
             AsymmetricKeyReference::KeyManagement => Encrypted(self.key_management_alg),
             AsymmetricKeyReference::CardAuthentication => Plain(self.card_authentication),
@@ -206,7 +283,7 @@ impl Keys {
 
                 KeyOrEncryptedWithAlg::Encrypted(match key {
                     AsymmetricKeyReference::PivAuthentication => {
-                        Some(mem::replace(&mut self.authentication_alg, new.alg))
+                        Some(mem::replace(&mut self.piv_authentication_alg, new.alg))
                     }
                     AsymmetricKeyReference::KeyManagement => {
                         self.key_management_alg.replace(new.alg)
@@ -242,8 +319,8 @@ impl Keys {
             info!("User public key: {key_id:?}");
             syscall!(client.clear(key_id));
         }
-        error!(
-            "{:?}",
+        info!(
+            "Set asymmetric key for reference {key:?} {:?}",
             syscall!(client.exists(new.alg.key_mechanism(), new.id))
         );
         old
@@ -312,15 +389,39 @@ impl Drop for UseValidKey {
 }
 
 impl LoadedState<'_> {
-    pub fn key_exists(
-        &self,
-        client: &mut impl crate::Client,
-        options: &crate::Options,
-        key: AsymmetricKeyReference,
-    ) -> bool {
-        syscall!(client.entry_metadata(options.storage, key.name().into()))
-            .metadata
-            .is_some()
+    pub fn key_exists(&self, key: AsymmetricKeyReference) -> bool {
+        match key {
+            AsymmetricKeyReference::PivAuthentication => true,
+            AsymmetricKeyReference::DigitalSignature => {
+                self.persistent.keys.signature_alg.is_some()
+            }
+            AsymmetricKeyReference::KeyManagement => {
+                self.persistent.keys.key_management_alg.is_some()
+            }
+            AsymmetricKeyReference::CardAuthentication => {
+                self.persistent.keys.card_authentication.is_some()
+            }
+            AsymmetricKeyReference::Retired01 => self.persistent.keys.retired_keys[0].is_some(),
+            AsymmetricKeyReference::Retired02 => self.persistent.keys.retired_keys[1].is_some(),
+            AsymmetricKeyReference::Retired03 => self.persistent.keys.retired_keys[2].is_some(),
+            AsymmetricKeyReference::Retired04 => self.persistent.keys.retired_keys[3].is_some(),
+            AsymmetricKeyReference::Retired05 => self.persistent.keys.retired_keys[4].is_some(),
+            AsymmetricKeyReference::Retired06 => self.persistent.keys.retired_keys[5].is_some(),
+            AsymmetricKeyReference::Retired07 => self.persistent.keys.retired_keys[6].is_some(),
+            AsymmetricKeyReference::Retired08 => self.persistent.keys.retired_keys[7].is_some(),
+            AsymmetricKeyReference::Retired09 => self.persistent.keys.retired_keys[8].is_some(),
+            AsymmetricKeyReference::Retired10 => self.persistent.keys.retired_keys[9].is_some(),
+            AsymmetricKeyReference::Retired11 => self.persistent.keys.retired_keys[10].is_some(),
+            AsymmetricKeyReference::Retired12 => self.persistent.keys.retired_keys[11].is_some(),
+            AsymmetricKeyReference::Retired13 => self.persistent.keys.retired_keys[12].is_some(),
+            AsymmetricKeyReference::Retired14 => self.persistent.keys.retired_keys[13].is_some(),
+            AsymmetricKeyReference::Retired15 => self.persistent.keys.retired_keys[14].is_some(),
+            AsymmetricKeyReference::Retired16 => self.persistent.keys.retired_keys[15].is_some(),
+            AsymmetricKeyReference::Retired17 => self.persistent.keys.retired_keys[16].is_some(),
+            AsymmetricKeyReference::Retired18 => self.persistent.keys.retired_keys[17].is_some(),
+            AsymmetricKeyReference::Retired19 => self.persistent.keys.retired_keys[18].is_some(),
+            AsymmetricKeyReference::Retired20 => self.persistent.keys.retired_keys[19].is_some(),
+        }
     }
 
     pub fn with_valid_key<C: crate::Client>(
@@ -822,6 +923,7 @@ impl Persistent {
             .set_asymetric_for_reference(key, KeyWithAlg { id, alg }, storage, client)
     }
 
+    #[must_use]
     pub fn generate_asymmetric_key(
         &mut self,
         key: AsymmetricKeyReference,
@@ -985,7 +1087,7 @@ impl Persistent {
             alg: YUBICO_DEFAULT_MANAGEMENT_KEY_ALG,
         };
 
-        let authentication_alg = AsymmetricAlgorithms::P256;
+        let piv_authentication_alg = AsymmetricAlgorithms::P256;
         let guid = options.uuid.unwrap_or_else(|| {
             let mut guid: [u8; 16] = syscall!(client.random_bytes(16))
                 .bytes
@@ -1011,7 +1113,7 @@ impl Persistent {
             .ok();
 
         let keys = Keys {
-            authentication_alg,
+            piv_authentication_alg,
             administration,
             is_admin_default: true,
             signature_alg: None,
@@ -1025,14 +1127,16 @@ impl Persistent {
             timestamp: 0,
             storage: options.storage,
         };
-        state.generate_asymmetric_key(
-            AsymmetricKeyReference::CardAuthentication,
-            authentication_alg,
+        Self::init_pins(client, options)?;
+
+        let piv_aut_key = state.generate_asymmetric_key(
+            AsymmetricKeyReference::PivAuthentication,
+            piv_authentication_alg,
             client,
             options.storage,
         );
+        syscall!(client.clear(piv_aut_key));
 
-        Self::init_pins(client, options)?;
         Ok(state)
     }
 

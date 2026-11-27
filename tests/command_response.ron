@@ -247,12 +247,52 @@
                 ),
                 mutual: false,
             ),
+            GetMetadata(
+                key_reference: 0x9A,
+                // PIV Authentication is always there
+                output: Data("01 01 11 02 02 02 00"),
+            ),
             IoData(
                 input: "00 47 009A 05
                                 AC 03
                                      80 01 11",
                 output: Len(70),
-            )
+            ),
+            GetMetadata(
+                key_reference: 0x9A,
+                output: Data("01 01 11 02 02 02 00"),
+            ),
+        ]
+    ),
+    IoTest(
+        name: "Generate Card Authentication key",
+        cmd_resp: [
+            AuthenticateManagement(
+                key: (
+                    algorithm: Tdes,
+                    key: "0102030405060708 0102030405060708 0102030405060708"
+                ),
+                mutual: false,
+            ),
+            GetMetadata(
+                key_reference: 0x9E,
+                output: Data(""),
+                expected_status: NotFound,
+            ),
+            IoData(
+                input: "00 47 009E 05
+                                AC 03
+                                     80 01 11",
+                output: Len(70),
+                expected_status: Success,
+            ),
+            GetMetadata(
+                key_reference: 0x9E,
+                output: All([
+                    StartsWith("01 01 11 02 02 01 00 04 46"),
+                    Len(79),
+                ]),
+            ),
         ]
     ),
     IoTest(

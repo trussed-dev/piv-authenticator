@@ -19,7 +19,7 @@ macro_rules! enum_subset {
         $vis enum $name {
             $(
                 $(#[cfg($inner)])?
-                $var,
+                $var = $sup::$var as u8,
             )*
         }
 

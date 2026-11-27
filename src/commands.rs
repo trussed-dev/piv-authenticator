@@ -9,14 +9,14 @@ use iso7816::tlv::Tag;
 // use flexiber::Decodable;
 use iso7816::{Instruction, Status};
 
-use crate::container::{Container, KeyReference};
+use crate::container::Container;
 
 use crate::state::TouchPolicy;
 use crate::AsymmetricAlgorithms;
 pub use crate::{
     container::{
         self as containers, AsymmetricKeyReference, AttestKeyReference, AuthenticateKeyReference,
-        ChangeReferenceKeyReference, GenerateKeyReference, VerifyKeyReference,
+        ChangeReferenceKeyReference, GenerateKeyReference, KeyReference, VerifyKeyReference,
     },
     piv_types, Pin, Puk,
 };

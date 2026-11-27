@@ -21,7 +21,8 @@ mod reply;
 pub mod state;
 
 use heapless::VecView;
-use iso7816::tlv::{self, Tag};
+use iso7816::command::DataStream;
+use iso7816::tlv::{self, Tag, Tlv};
 pub use piv_types::{AsymmetricAlgorithms, Pin, Puk};
 use trussed_chunked::ChunkedClient;
 use trussed_hpke::HpkeClient;
@@ -31,7 +32,7 @@ use core::convert::TryInto;
 
 use flexiber::EncodableHeapless;
 use heapless_bytes::Bytes;
-use iso7816::Status;
+use iso7816::Status::{self, KeyReferenceNotFound};
 use trussed_auth::AuthClient;
 use trussed_core::mechanisms::Tdes;
 use trussed_core::types::{KeySerialization, Location, Mechanism, PathBuf, StorageAttributes};
@@ -42,6 +43,8 @@ use constants::*;
 pub type Result<O = ()> = iso7816::Result<O>;
 use reply::Reply;
 use state::{AdministrationAlgorithm, CommandCache, KeyWithAlg, LoadedState, State, TouchPolicy};
+
+use crate::container::SecurityCondition;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
@@ -241,13 +244,14 @@ where
                     .yubico_set_administration_key(data, touch_policy, reply)?;
             }
 
-            YubicoPivExtension::GetMetadata(KeyReference::CardAuthentication) => {
-                let this = self.load()?;
-                if this.state.persistent.keys.card_authentication.is_some() {
-                    reply.expand(&[0x02, 0x02, 0x01, 0x00])?;
+            YubicoPivExtension::GetMetadata(reference) => {
+                let mut this = self.load()?;
+                if let Ok(key) = reference.try_into() {
+                    return this.asymmetric_key_metadata(key, reply);
+                } else {
+                    return Err(KeyReferenceNotFound);
                 }
             }
-            YubicoPivExtension::GetMetadata(_reference) => { /* TODO */ }
             YubicoPivExtension::ImportAsymmetricKey(algo, key) => {
                 self.load()?.import_asymmetric_key(algo, key, data, reply)?;
             }
@@ -258,6 +262,38 @@ where
 }
 
 impl<T: Client> LoadedAuthenticator<'_, T> {
+    pub fn asymmetric_key_metadata(
+        &mut self,
+        key: AsymmetricKeyReference,
+        reply: Reply<'_>,
+    ) -> Result {
+        info!("Getting metadata for {key:?}");
+        if !self.state.key_exists(key) {
+            info!("Key does not exist");
+            return Err(Status::NotFound);
+        }
+        let Some(algorithm) = self.state.persistent.keys.algorithm_for_reference(key) else {
+            error!("No algorithm despite key existing");
+            return Err(Status::UnspecifiedNonpersistentExecutionError);
+        };
+
+        let pin_policy = match key.use_security_condition() {
+            SecurityCondition::Pin => 0x02,
+            SecurityCondition::PinAlways => 0x03,
+            SecurityCondition::Always => 0x01,
+        };
+        [
+            Some(Tlv::new(
+                Tag::from_u8(0x01),
+                &[algorithm as u8] as &dyn DataStream<_>,
+            )),
+            Some(Tlv::new(Tag::from_u8(0x2), &[pin_policy, 0])),
+        ]
+        .to_writer(reply.0)
+        .map_err(|_| Status::NotEnoughMemory)?;
+        Ok(())
+    }
+
     pub fn yubico_set_administration_key(
         &mut self,
         data: &[u8],
